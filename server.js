@@ -28,7 +28,7 @@ app.use(cors());
 const DEFAULT_MERCHANT = process.env.MERCHANT_WALLET || 'CEBiKkD8q6F28byTb9iVqPUiojv9n5bHEW5wEJJpVAQE';
 const CLUSTER = process.env.CLUSTER || 'mainnet-beta';
 const RPC_URL = process.env.RPC_URL || solanaWeb3.clusterApiUrl(CLUSTER);
-const WEB3_STORAGE_TOKEN = process.env.WEB3_STORAGE_TOKEN || '';
+const WEB3_STORAGE_TOKEN = process.env.WEB3_STORAGE_TOKEN || 'bafybeifbx7bugc37iv7pre4zjw5r6mlw22ixec7jjlnkahxz2jeele4fkm';
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'production';
 
