@@ -1,8 +1,8 @@
-﻿/**
- * server.js - PRODUCTION VERSION
+/**
+ * server.js - PRODUCTION VERSION with Web3.Storage
  * 
  * Express server para Solana Million Grid
- * - Subida de logos (local o IPFS)
+ * - Subida de logos a IPFS (Web3.Storage) o local
  * - Verificación de transacciones on-chain
  * - Rate limiting y seguridad
  * - Backups automáticos
@@ -26,8 +26,9 @@ app.use(cors());
 // CONFIGURACIÓN (usar .env en producción)
 // ============================================
 const DEFAULT_MERCHANT = process.env.MERCHANT_WALLET || 'CEBiKkD8q6F28byTb9iVqPUiojv9n5bHEW5wEJJpVAQE';
-const CLUSTER = process.env.CLUSTER || 'mainnet-beta'; // ← Cambiar de mainnet-beta a devnet
+const CLUSTER = process.env.CLUSTER || 'mainnet-beta';
 const RPC_URL = process.env.RPC_URL || solanaWeb3.clusterApiUrl(CLUSTER);
+const WEB3_STORAGE_TOKEN = process.env.WEB3_STORAGE_TOKEN || '';
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'production';
 
@@ -36,6 +37,21 @@ const UPLOADS_DIR = path.resolve(__dirname, 'uploads');
 const BACKUPS_DIR = path.resolve(__dirname, 'backups');
 const LAMPORTS_PER_SOL = solanaWeb3.LAMPORTS_PER_SOL || 1000000000;
 const MEMO_PROGRAM_ID = new solanaWeb3.PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
+
+// Web3.Storage client
+let web3Client = null;
+if (WEB3_STORAGE_TOKEN) {
+  try {
+    const { Web3Storage, File } = require('web3.storage');
+    web3Client = new Web3Storage({ token: WEB3_STORAGE_TOKEN });
+    console.log('✅ Web3.Storage configurado - logos se subirán a IPFS');
+  } catch (err) {
+    console.error('⚠️ Error cargando web3.storage:', err.message);
+    console.log('   Se usará almacenamiento local');
+  }
+} else {
+  console.log('⚠️ WEB3_STORAGE_TOKEN no configurado - usando almacenamiento local');
+}
 
 // Crear directorios necesarios
 [UPLOADS_DIR, BACKUPS_DIR].forEach(dir => {
@@ -55,6 +71,7 @@ console.log('🚀 Configuración:');
 console.log(`   Cluster: ${CLUSTER}`);
 console.log(`   RPC: ${RPC_URL}`);
 console.log(`   Merchant: ${DEFAULT_MERCHANT}`);
+console.log(`   Storage: ${web3Client ? 'IPFS (Web3.Storage)' : 'Local'}`);
 console.log(`   Entorno: ${NODE_ENV}`);
 
 // ============================================
@@ -153,6 +170,21 @@ backupSales();
 // ============================================
 // MULTER PARA SUBIDA DE ARCHIVOS
 // ============================================
+const memoryUpload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB máximo
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Tipo de archivo no permitido. Solo imágenes.'));
+    }
+  }
+});
+
 const diskUpload = multer({ 
   dest: UPLOADS_DIR,
   limits: {
@@ -169,39 +201,94 @@ const diskUpload = multer({
 });
 
 // ============================================
-// API: SUBIR LOGO
+// API: SUBIR LOGO (IPFS o Local)
 // ============================================
-app.post('/api/upload-logo', diskUpload.single('file'), (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ ok: false, error: 'No se recibió ningún archivo' });
-    }
-    
-    const originalName = req.file.originalname;
-    const tmpPath = req.file.path;
-    
-    // Generar nombre único
-    const timestamp = Date.now();
-    const ext = path.extname(originalName);
-    const safeName = originalName.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const finalName = `${timestamp}_${safeName}`;
-    const targetPath = path.join(UPLOADS_DIR, finalName);
-    
-    fs.renameSync(tmpPath, targetPath);
-    
-    const url = `/uploads/${encodeURIComponent(finalName)}`;
-    console.log(`📤 Logo subido: ${finalName}`);
-    
-    return res.json({ 
-      ok: true, 
-      url, 
-      name: finalName 
+app.post('/api/upload-logo', (req, res, next) => {
+  // Si hay web3.storage, usar memoria y subir a IPFS
+  if (web3Client) {
+    memoryUpload.single('file')(req, res, async (err) => {
+      if (err) {
+        console.error('❌ Error en upload:', err);
+        return res.status(500).json({ ok: false, error: err.message });
+      }
+      
+      try {
+        if (!req.file) {
+          return res.status(400).json({ ok: false, error: 'No se recibió ningún archivo' });
+        }
+        
+        const { File } = require('web3.storage');
+        const file = new File([req.file.buffer], req.file.originalname, { 
+          type: req.file.mimetype 
+        });
+        
+        console.log(`📤 Subiendo a IPFS: ${req.file.originalname}...`);
+        
+        const cid = await web3Client.put([file], { wrapWithDirectory: false });
+        const url = `https://${cid}.ipfs.w3s.link/${encodeURIComponent(req.file.originalname)}`;
+        
+        console.log(`✅ Logo en IPFS: ${cid}`);
+        console.log(`   URL: ${url}`);
+        
+        return res.json({ 
+          ok: true, 
+          url, 
+          cid,
+          name: req.file.originalname,
+          ipfs: true
+        });
+        
+      } catch (err) {
+        console.error('❌ Error subiendo a IPFS:', err);
+        return res.status(500).json({ 
+          ok: false, 
+          error: `Error subiendo a IPFS: ${err.message}` 
+        });
+      }
     });
-  } catch (err) {
-    console.error('❌ Error subiendo logo:', err);
-    return res.status(500).json({ 
-      ok: false, 
-      error: err.message || 'Error al subir el archivo' 
+  } 
+  // Si no hay web3.storage, guardar localmente
+  else {
+    diskUpload.single('file')(req, res, (err) => {
+      if (err) {
+        console.error('❌ Error en upload:', err);
+        return res.status(500).json({ ok: false, error: err.message });
+      }
+      
+      try {
+        if (!req.file) {
+          return res.status(400).json({ ok: false, error: 'No se recibió ningún archivo' });
+        }
+        
+        const originalName = req.file.originalname;
+        const tmpPath = req.file.path;
+        
+        // Generar nombre único
+        const timestamp = Date.now();
+        const ext = path.extname(originalName);
+        const safeName = originalName.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const finalName = `${timestamp}_${safeName}`;
+        const targetPath = path.join(UPLOADS_DIR, finalName);
+        
+        fs.renameSync(tmpPath, targetPath);
+        
+        const url = `/uploads/${encodeURIComponent(finalName)}`;
+        console.log(`📤 Logo guardado localmente: ${finalName}`);
+        
+        return res.json({ 
+          ok: true, 
+          url, 
+          name: finalName,
+          ipfs: false
+        });
+        
+      } catch (err) {
+        console.error('❌ Error guardando archivo:', err);
+        return res.status(500).json({ 
+          ok: false, 
+          error: err.message || 'Error al subir el archivo' 
+        });
+      }
     });
   }
 });
@@ -318,7 +405,7 @@ app.post('/api/verify-purchase', async (req, res) => {
     }
     
     console.log(`   ✅ Transacción encontrada`);
-    console.log(`   🔗 Solscan: https://solscan.io/tx/${signature}`);
+    console.log(`   🔗 Explorer: https://solscan.io/tx/${signature}?cluster=${CLUSTER}`);
     
     // Verificar que el merchant esté en la transacción
     const accountKeys = tx.transaction.message.accountKeys.map(k => k.toString());
@@ -397,7 +484,7 @@ app.post('/api/verify-purchase', async (req, res) => {
       message: 'Compra verificada y registrada', 
       sale, 
       memoMatches,
-      explorerUrl: `https://solscan.io/tx/${signature}`
+      explorerUrl: `https://solscan.io/tx/${signature}?cluster=${CLUSTER}`
     });
     
   } catch (err) {
@@ -465,6 +552,7 @@ app.get('/api/health', (req, res) => {
     ok: true, 
     status: 'healthy',
     cluster: CLUSTER,
+    storage: web3Client ? 'ipfs' : 'local',
     timestamp: new Date().toISOString()
   });
 });
