@@ -541,18 +541,341 @@ app.post('/api/restore-images', express.json(), (req, res) => {
   }
 });
 
+// Restaurar sales.json desde backups (protegido si RESTORE_SECRET está definido)
+app.post('/api/restore-sales', express.json(), (req, res) => {
+  try {
+    const backup = req.body?.backup;
+    if (!backup) return res.status(400).json({ ok: false, error: 'Falta parámetro backup' });
+
+    const RESTORE_SECRET = process.env.RESTORE_SECRET || '';
+    if (RESTORE_SECRET) {
+      const secret = req.headers['x-restore-secret'] || req.body?.secret;
+      if (!secret || secret !== RESTORE_SECRET) {
+        return res.status(403).json({ ok: false, error: 'Forbidden' });
+      }
+    }
+
+    const src = path.join(BACKUPS_DIR, backup);
+    if (!fs.existsSync(src)) return res.status(404).json({ ok: false, error: 'Backup no encontrado' });
+
+    fs.copyFileSync(src, SALES_FILE);
+    console.log(`✅ sales.json restaurado desde ${backup}`);
+    return res.json({ ok: true, message: 'sales.json restaurado', backup });
+  } catch (err) {
+    console.error('❌ Error restaurando sales.json:', err);
+    return res.status(500).json({ ok: false, error: 'Error interno' });
+  }
+});
+
 // ============================================
-// (El resto del fichero - parseMemo, verify-purchase, stats, etc.)
+// PARSEAR MEMO (usa string MEMO_PROGRAM_ID_STR)
 // ============================================
-// He conservado todas las funcionalidades previas (parseMemoFromParsedTx, areBlocksAvailable,
-// /api/verify-purchase, /api/sales, /api/stats, health, SPA fallback, error handler, graceful shutdown).
-// Para mantener la respuesta concisa no repito esas funciones aquí, asumiendo que las tienes
-// copiadas íntegramente en tu server.js original (si quieres, puedo enviar el fichero completo
-// con TODO incluido; dime si prefieres la versión completa).
-//
-// IMPORTANTE: Si pegas este archivo parcial, asegura que el resto de funciones (parseMemoFromParsedTx,
-// verify-purchase, etc.) permanezcan exactamente como antes en tu server.js original.
-//
+function parseMemoFromParsedTx(tx) {
+  try {
+    const instructions = tx.transaction.message.instructions;
+
+    for (const ix of instructions) {
+      if (ix.programId && ix.programId.toString() === MEMO_PROGRAM_ID_STR) {
+        try {
+          // Intentar desde ix.data (base64)
+          if (ix.data) {
+            const buffer = Buffer.from(ix.data, 'base64');
+            const txt = buffer.toString('utf8');
+            try {
+              return { raw: txt, json: JSON.parse(txt) };
+            } catch {
+              return { raw: txt, json: null };
+            }
+          }
+        } catch (err) {
+          console.warn('⚠️ No se pudo decodificar el memo:', err.message);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('❌ Error parseando memo:', err);
+  }
+  return null;
+}
+
+// ============================================
+// VALIDAR QUE BLOQUES NO ESTÉN OCUPADOS
+// ============================================
+function areBlocksAvailable(selection) {
+  const sales = readSales();
+
+  for (const sale of sales.sales) {
+    const s = sale.metadata?.selection;
+    if (!s) continue;
+
+    // Comprobar overlap/colisión
+    const noOverlap = (
+      selection.minBlockX + selection.blocksX <= s.minBlockX ||
+      selection.minBlockX >= s.minBlockX + s.blocksX ||
+      selection.minBlockY + selection.blocksY <= s.minBlockY ||
+      selection.minBlockY >= s.minBlockY + s.blocksY
+    );
+
+    if (!noOverlap) {
+      return false; // Hay overlap = bloques ocupados
+    }
+  }
+
+  return true; // Todos los bloques están libres
+}
+
+// ============================================
+// API: VERIFICAR COMPRA
+// ============================================
+app.post('/api/verify-purchase', async (req, res) => {
+  const { signature, expectedAmountSOL, metadata } = req.body || {};
+
+  console.log(`\n🔍 Verificando compra:`);
+  console.log(`   Signature: ${signature}`);
+  console.log(`   Proyecto: ${metadata?.name}`);
+  console.log(`   Monto esperado: ${expectedAmountSOL} SOL`);
+
+  if (!signature || expectedAmountSOL === undefined || !metadata) {
+    return res.status(400).json({
+      ok: false,
+      error: 'Faltan parámetros requeridos'
+    });
+  }
+
+  // Validar que los bloques estén disponibles
+  if (metadata.selection && !areBlocksAvailable(metadata.selection)) {
+    console.log(`❌ Bloques ya ocupados`);
+    return res.status(400).json({
+      ok: false,
+      error: 'Los bloques seleccionados ya están ocupados. Refresca la página.'
+    });
+  }
+
+  try {
+    console.log('   ⏳ Obteniendo transacción parseada...');
+
+    const tx = await connection.getParsedTransaction(signature, {
+      commitment: 'confirmed',
+      maxSupportedTransactionVersion: 0
+    });
+
+    if (!tx || !tx.meta) {
+      console.log(`❌ Transacción no encontrada`);
+      return res.status(404).json({
+        ok: false,
+        error: 'Transacción no encontrada o aún no confirmada. Espera unos segundos.'
+      });
+    }
+
+    console.log(`   ✅ Transacción encontrada`);
+    console.log(`   🔗 Explorer: https://solscan.io/tx/${signature}?cluster=${CLUSTER}`);
+
+    if (tx.meta.err) {
+      console.log(`❌ Transacción falló en la blockchain`);
+      return res.status(400).json({
+        ok: false,
+        error: 'La transacción falló en la blockchain'
+      });
+    }
+
+    const instructions = tx.transaction.message.instructions;
+    let transferFound = false;
+    let amountReceived = 0;
+
+    console.log(`   🔍 Analizando ${instructions.length} instrucciones...`);
+
+    for (const ix of instructions) {
+      if (ix.programId && ix.programId.toString() === '11111111111111111111111111111111') {
+        console.log('      ✓ Instrucción del System Program encontrada');
+
+        if (ix.parsed && ix.parsed.type === 'transfer') {
+          const info = ix.parsed.info;
+          console.log(`      📤 De: ${info.source}`);
+          console.log(`      📥 A: ${info.destination}`);
+          console.log(`      💵 Monto: ${info.lamports} lamports`);
+
+          if (info.destination === DEFAULT_MERCHANT) {
+            transferFound = true;
+            amountReceived = info.lamports / LAMPORTS_PER_SOL;
+            console.log(`      ✅ Transferencia al merchant confirmada: ${amountReceived} SOL`);
+            break;
+          } else {
+            console.log(`      ⚠️ Destino no coincide.`);
+            console.log(`         Esperado: ${DEFAULT_MERCHANT}`);
+            console.log(`         Recibido: ${info.destination}`);
+          }
+        }
+      }
+    }
+
+    if (!transferFound) {
+      console.log(`❌ No se encontró transferencia válida al merchant`);
+      return res.status(400).json({
+        ok: false,
+        error: 'No se encontró transferencia válida al merchant wallet'
+      });
+    }
+
+    const tolerance = 0.00001;
+    const difference = Math.abs(amountReceived - expectedAmountSOL);
+
+    console.log(`   💰 Verificando monto:`);
+    console.log(`      Esperado: ${expectedAmountSOL} SOL`);
+    console.log(`      Recibido: ${amountReceived} SOL`);
+    console.log(`      Diferencia: ${difference} SOL`);
+    console.log(`      Tolerancia: ${tolerance} SOL`);
+
+    if (difference > tolerance) {
+      console.log(`❌ Monto insuficiente`);
+      return res.status(400).json({
+        ok: false,
+        error: `Monto insuficiente: se recibieron ${amountReceived.toFixed(4)} SOL, se esperaban ${expectedAmountSOL} SOL`
+      });
+    }
+
+    console.log(`   ✅ Verificación de monto exitosa`);
+
+    const memo = parseMemoFromParsedTx(tx);
+    let memoMatches = false;
+
+    if (memo && memo.json && metadata.selection) {
+      const selMemo = memo.json.selection || {};
+      const selReq = metadata.selection || {};
+      memoMatches = (
+        selMemo.minBlockX === selReq.minBlockX &&
+        selMemo.minBlockY === selReq.minBlockY &&
+        selMemo.blocksX === selReq.blocksX &&
+        selMemo.blocksY === selReq.blocksY
+      );
+      console.log(`   📝 Memo parseado: ${memoMatches ? '✅ coincide' : '⚠️ no coincide'}`);
+    }
+
+    const buyer = tx.transaction.message.accountKeys[0].pubkey
+      ? tx.transaction.message.accountKeys[0].pubkey.toString()
+      : tx.transaction.message.accountKeys[0].toString();
+
+    const sale = {
+      signature,
+      buyer,
+      amountSOL: amountReceived,
+      merchant: DEFAULT_MERCHANT,
+      metadata,
+      memo: memo ? memo.raw : null,
+      memoParsed: memo ? memo.json : null,
+      memoMatches,
+      timestamp: new Date().toISOString(),
+      blockTime: tx.blockTime
+    };
+
+    appendSale(sale);
+
+    console.log(`✅ Compra verificada y guardada\n`);
+
+    return res.json({
+      ok: true,
+      message: 'Compra verificada y registrada',
+      sale,
+      memoMatches,
+      explorerUrl: `https://solscan.io/tx/${signature}?cluster=${CLUSTER}`
+    });
+
+  } catch (err) {
+    console.error('❌ Error verificando transacción:', err);
+    console.error('Error completo:', {
+      message: err?.message,
+      name: err?.name,
+      stack: NODE_ENV === 'development' ? err?.stack : '(hidden in production)'
+    });
+
+    return res.status(500).json({
+      ok: false,
+      error: err?.message || 'Error al verificar la transacción',
+      details: NODE_ENV === 'development' ? err?.stack : undefined
+    });
+  }
+});
+
+// ============================================
+// API: OBTENER VENTAS
+// ============================================
+app.get('/api/sales', (req, res) => {
+  try {
+    const sales = readSales();
+    res.json(sales);
+  } catch (err) {
+    console.error('❌ Error obteniendo ventas:', err);
+    res.status(500).json({
+      ok: false,
+      error: 'Error al obtener las ventas'
+    });
+  }
+});
+
+// ============================================
+// API: ESTADÍSTICAS
+// ============================================
+app.get('/api/stats', (req, res) => {
+  try {
+    const sales = readSales();
+    const totalSales = sales.sales.length;
+    const totalSOL = sales.sales.reduce((sum, s) => sum + (s.amountSOL || 0), 0);
+    const totalPixels = sales.sales.reduce((sum, s) => {
+      const sel = s.metadata?.selection;
+      if (!sel) return sum;
+      return sum + (sel.blocksX * sel.blocksY * 100); // 100 pixels por bloque
+    }, 0);
+
+    res.json({
+      ok: true,
+      stats: {
+        totalSales,
+        totalSOL: totalSOL.toFixed(2),
+        totalPixels,
+        percentageSold: ((totalPixels / 1000000) * 100).toFixed(2)
+      }
+    });
+  } catch (err) {
+    console.error('❌ Error obteniendo stats:', err);
+    res.status(500).json({
+      ok: false,
+      error: 'Error al obtener estadísticas'
+    });
+  }
+});
+
+// ============================================
+// HEALTH CHECK
+// ============================================
+app.get('/api/health', (req, res) => {
+  res.json({
+    ok: true,
+    status: 'healthy',
+    cluster: CLUSTER,
+    storage: UPLOADS_DIR,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// ============================================
+// FALLBACK SPA
+// ============================================
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// ============================================
+// MANEJO DE ERRORES GLOBAL
+// ============================================
+app.use((err, req, res, next) => {
+  console.error('❌ Error no manejado:', err);
+  res.status(500).json({
+    ok: false,
+    error: NODE_ENV === 'production'
+      ? 'Error interno del servidor'
+      : err.message
+  });
+});
+
 // ============================================
 // INICIAR SERVIDOR
 // ============================================
