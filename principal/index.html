@@ -1,0 +1,159 @@
+# crear la carpeta (si no existe)
+mkdir -p principal
+
+# crear/editar el archivo con heredoc (reemplaza los placeholders luego)
+cat > principal/index.html <<'EOF'
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Solana Million Grid</title>
+  <style>
+    /* Estilos mínimos; pega tus estilos reales si quieres */
+    body{background:#0a0a0a;color:#fff;font-family:sans-serif;margin:0}
+    header{padding:12px;background:#222;color:gold;display:flex;justify-content:space-between}
+    #gridWrapper{padding:20px;display:flex;justify-content:center}
+    #modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);align-items:center;justify-content:center}
+    #modalInner{background:#222;padding:20px;border-radius:10px;border:2px solid gold;width:420px;max-width:95%}
+    input,button{font-size:14px;padding:8px}
+  </style>
+</head>
+<body>
+  <header>
+    <div>🎨 Solana Million Grid</div>
+    <div>
+      <button id="connectWallet">Conectar Wallet</button>
+      <span id="walletAddr"></span>
+    </div>
+  </header>
+
+  <div id="gridWrapper">
+    <!-- Pega aquí tu canvas/grid real. Este es un placeholder -->
+    <div>
+      <p style="color:gold">Grid placeholder (reemplaza con tu canvas)</p>
+      <button id="confirmBtn">✓ Comprar Selección</button>
+    </div>
+  </div>
+
+  <div id="modal">
+    <div id="modalInner">
+      <h3 style="color:gold;margin:0 0 12px 0;text-align:center">🎨 Comprar Píxeles</h3>
+      <div class="price-display">Precio total: <span id="totalPrice">0.00</span> SOL</div>
+
+      <div id="projectForm">
+        <div style="margin-bottom:10px">
+          <label style="color:#ccc;display:block">Nombre del Proyecto</label>
+          <input type="text" id="projectName" placeholder="Mi Proyecto">
+        </div>
+
+        <div style="margin-bottom:10px">
+          <label style="color:#ccc;display:block">URL del Proyecto</label>
+          <input type="url" id="projectURL" placeholder="https://tusitio.com">
+        </div>
+
+        <div style="margin-bottom:10px">
+          <label style="color:#ccc;display:block">Logo (PNG/JPG/WebP, máx 5MB)</label>
+          <input type="file" id="projectLogo" accept="image/*">
+        </div>
+
+        <div id="paymentStatus" style="min-height:18px;color:#fff;margin-bottom:8px"></div>
+
+        <div style="display:flex;gap:8px">
+          <button id="payBtn" style="flex:1;background:gold;color:#000">💰 Pagar y Registrar</button>
+          <button id="closeModal" style="flex:1;background:#666;color:#fff">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+  <script>
+    // ---------- CONFIGURA ESTOS VALORES ----------
+    const CLOUDINARY_CLOUD_NAME = '<TU_CLOUD_NAME>';
+    const CLOUDINARY_UPLOAD_PRESET = '<TU_UNSIGNED_PRESET>';
+    const MERCHANT_WALLET = '3d7w4r4irLaKVYd4dLjpoiehJVawbbXWFWb1bCk9nGCo';
+    const API_BASE = window.location.origin;
+    const PRICE_PER_BLOCK = 0.0001;
+    // ---------------------------------------------
+
+    // Elementos UI mínimos
+    const confirmBtn = document.getElementById('confirmBtn');
+    const paymentStatus = document.getElementById('paymentStatus');
+    const modal = document.getElementById('modal');
+    const closeModal = document.getElementById('closeModal');
+    const payBtn = document.getElementById('payBtn');
+
+    // Simulación de selection (para demo solo)
+    let selection = { blocksX: 1, blocksY: 1, minBlockX:0, minBlockY:0, soldInSelection: 0 };
+
+    confirmBtn.addEventListener('click', () => {
+      const totalPrice = (selection.blocksX * selection.blocksY * PRICE_PER_BLOCK).toFixed(4);
+      document.getElementById('totalPrice').textContent = totalPrice;
+      modal.style.display = 'flex';
+      const logoInput = document.getElementById('projectLogo');
+      if (!logoInput.files || logoInput.files.length === 0) {
+        setTimeout(() => logoInput.click(), 180);
+      }
+    });
+
+    closeModal.addEventListener('click', () => {
+      modal.style.display = 'none';
+      paymentStatus.textContent = '';
+    });
+
+    // Subir a Cloudinary (unsigned preset) - desde el navegador
+    async function uploadLogoToServer(file) {
+      if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
+        throw new Error('Cloudinary no configurado. Define CLOUDINARY_CLOUD_NAME y CLOUDINARY_UPLOAD_PRESET.');
+      }
+      const maxMB = 5;
+      if (file.size > maxMB * 1024 * 1024) throw new Error(`El logo supera ${maxMB}MB`);
+      if (!/^image\//.test(file.type)) throw new Error('El archivo debe ser una imagen');
+
+      const form = new FormData();
+      form.append('file', file);
+      form.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+
+      const url = `https://api.cloudinary.com/v1_1/${encodeURIComponent(CLOUDINARY_CLOUD_NAME)}/upload`;
+      const res = await fetch(url, { method: 'POST', body: form });
+      const json = await res.json();
+      if (!res.ok) {
+        const errMsg = json?.error?.message || JSON.stringify(json);
+        throw new Error('Error subiendo a Cloudinary: ' + errMsg);
+      }
+      return { ok: true, url: json.secure_url, public_id: json.public_id, raw: json };
+    }
+
+    // Helper para mostrar status en modal
+    function showStatus(msg, type='info') {
+      paymentStatus.textContent = msg;
+      paymentStatus.className = type;
+    }
+
+    // Flujo payBtn (sube logo → simula pago → avisa y cierra)
+    payBtn.addEventListener('click', async () => {
+      const name = document.getElementById('projectName').value.trim();
+      const url = document.getElementById('projectURL').value.trim();
+      const logoFile = document.getElementById('projectLogo').files[0];
+
+      if (!name || !url) { alert('Completa nombre y URL'); return; }
+      if (!logoFile) { alert('Selecciona un logo'); return; }
+
+      try {
+        payBtn.disabled = true;
+        showStatus('📤 Subiendo logo...', 'warning');
+
+        const uploadRes = await uploadLogoToServer(logoFile);
+        const logoUrl = uploadRes.url;
+        showStatus('✅ Logo subido. Preparando transacción...', 'warning');
+
+        // Aquí iría creación/firma de tx con Phantom y llamada a /api/verify-purchase
+        await new Promise(r => setTimeout(r, 1200));
+
+        showStatus('✅ Compra simulada. Todo OK', 'success');
+        setTimeout(() => {
+          modal.style.display = 'none';
+          document.getElementById('projectName').value = '';
+          document.getElementBy*
+
