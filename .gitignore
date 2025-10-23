@@ -10,3 +10,4 @@ uploads/*.jpg
 uploads/*.jpeg
 uploads/*.gif
 !uploads/.gitkeep
+.env echo /*.bak
