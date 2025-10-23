@@ -87,6 +87,9 @@ const DEFAULT_MEMO_PROGRAM = 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLmfcHr';
 const MEMO_PROGRAM_ID_STR = (process.env.MEMO_PROGRAM_ID || DEFAULT_MEMO_PROGRAM).toString().trim();
 console.log('   MEMO_PROGRAM_ID raw value:', process.env.MEMO_PROGRAM_ID);
 console.log('   MEMO_PROGRAM_ID used value:', MEMO_PROGRAM_ID_STR);
+// Inicializar conexión a RPC (usada por /api/verify-purchase)
+const connection = new solanaWeb3.Connection(RPC_URL, { commitment: 'confirmed' });
+console.log('   RPC_URL usada para connection:', RPC_URL);
 
 // Crear directorios necesarios (UPLOADS_DIR ahora puede ser persistente)
 [UPLOADS_DIR, BACKUPS_DIR].forEach(dir => {
