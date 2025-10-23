@@ -43,7 +43,21 @@ const SALES_FILE = path.resolve(__dirname, 'sales.json');
 const UPLOADS_DIR = path.resolve(__dirname, 'uploads');
 const BACKUPS_DIR = path.resolve(__dirname, 'backups');
 const LAMPORTS_PER_SOL = solanaWeb3.LAMPORTS_PER_SOL || 1000000000;
-const MEMO_PROGRAM_ID = new solanaWeb3.PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLmfcHr');
+
+// VALIDACIÓN/CREACIÓN segura de MEMO_PROGRAM_ID (evita "Invalid public key input")
+const DEFAULT_MEMO_PROGRAM = 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLmfcHr';
+let MEMO_PROGRAM_ID;
+try {
+  const memoEnv = (process.env.MEMO_PROGRAM_ID || DEFAULT_MEMO_PROGRAM).toString().trim();
+  console.log('   MEMO_PROGRAM_ID raw value:', process.env.MEMO_PROGRAM_ID);
+  console.log('   MEMO_PROGRAM_ID used value:', memoEnv);
+  MEMO_PROGRAM_ID = new solanaWeb3.PublicKey(memoEnv);
+} catch (err) {
+  console.error('❌ Error creando PublicKey para MEMO_PROGRAM_ID. Valor problemático:', process.env.MEMO_PROGRAM_ID);
+  console.error('Detalle del error:', err && err.message ? err.message : err);
+  // Re-lanzar para que el proceso muestre el error y podamos verlo en el log de despliegue
+  throw err;
+}
 
 // Crear directorios necesarios
 [UPLOADS_DIR, BACKUPS_DIR].forEach(dir => {
