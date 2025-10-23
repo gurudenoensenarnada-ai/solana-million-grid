@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8" />
@@ -276,7 +276,6 @@
   </style>
 </head>
 <body>
-  <!-- Loading Screen -->
   <div id="loading">
     <div style="text-align:center;">
       <div class="spinner"></div>
@@ -284,7 +283,6 @@
     </div>
   </div>
 
-  <!-- Header -->
   <header>
     <div class="logo">🎨 Solana Million Grid</div>
     <div>
@@ -293,7 +291,6 @@
     </div>
   </header>
 
-  <!-- Info -->
   <div id="info">
     <div id="stats">
       <div class="stat-item">
@@ -311,16 +308,13 @@
     </div>
   </div>
 
-  <!-- Selection Info -->
   <div id="selectionInfo"></div>
 
-  <!-- Buttons -->
   <div id="buttons">
     <button id="confirmBtn" class="btn-primary" disabled>✓ Comprar Selección</button>
     <button id="cancelBtn" class="btn-secondary">✗ Cancelar</button>
   </div>
 
-  <!-- Grid -->
   <div id="gridWrapper">
     <div id="gridContainer">
       <canvas id="canvas" width="1000" height="1000"></canvas>
@@ -329,7 +323,6 @@
     </div>
   </div>
 
-  <!-- Modal -->
   <div id="modal">
     <div class="modal-content">
       <div id="modalInner">
@@ -369,21 +362,14 @@
   <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
   
   <script>
-  // ============================================
-  // CONFIGURACIÓN
-  // ============================================
   const CANVAS_SIZE = 1000;
   const BLOCK_SIZE = 10;
   const BLOCKS_PER_SIDE = CANVAS_SIZE / BLOCK_SIZE;
   const PRICE_PER_BLOCK = 0.1;
   const MERCHANT_WALLET = 'CEBiKkD8q6F28byTb9iVqPUiojv9n5bHEW5wEJJpVAQE';
   const API_BASE = window.location.origin;
-  const CLUSTER = 'mainnet-beta'; // Cambiar a 'devnet' para pruebas
-  //const CLUSTER = 'devnet'; // ← Ya debería estar así
+  const CLUSTER = 'mainnet-beta';
 
-  // ============================================
-  // ELEMENTOS DEL DOM
-  // ============================================
   const canvas = document.getElementById('canvas');
   const ctx = canvas.getContext('2d');
   const gridContainer = document.getElementById('gridContainer');
@@ -398,9 +384,6 @@
   const confirmBtn = document.getElementById('confirmBtn');
   const cancelBtn = document.getElementById('cancelBtn');
 
-  // ============================================
-  // ESTADO GLOBAL
-  // ============================================
   let blockData = new Array(BLOCKS_PER_SIDE * BLOCKS_PER_SIDE).fill(null);
   let soldPixels = 0;
   let totalSales = 0;
@@ -410,9 +393,6 @@
   let connection = new solanaWeb3.Connection('https://mainnet.helius-rpc.com/?api-key=cfadb209-0424-4c46-86cf-aa6f3f0c8d01');
   let userPublicKey = null;
 
-  // ============================================
-  // FUNCIONES DE DIBUJO
-  // ============================================
   function drawGrid() {
     ctx.fillStyle = '#555';
     ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
@@ -446,590 +426,4 @@
   function getMousePosInCanvas(e) {
     const rect = canvas.getBoundingClientRect();
     const rawX = Math.floor((e.clientX - rect.left) * (CANVAS_SIZE / rect.width));
-    const rawY = Math.floor((e.clientY - rect.top) * (CANVAS_SIZE / rect.height));
-    return { rawX, rawY, rect };
-  }
-
-  // ============================================
-  // CARGAR DATOS DEL SERVIDOR
-  // ============================================
-  async function loadGridFromServer() {
-    try {
-      const res = await fetch(`${API_BASE}/api/sales`);
-      const json = await res.json();
-      
-      if (!json || !json.sales) throw new Error('Error cargando ventas');
-      
-      const { sales } = json;
-      totalSales = sales.length;
-      totalSalesSpan.textContent = totalSales;
-      
-      blockData = new Array(BLOCKS_PER_SIDE * BLOCKS_PER_SIDE).fill(null);
-      soldPixels = 0;
-      
-      // Agrupar por proyecto
-      const projects = {};
-      sales.forEach(sale => {
-        const meta = sale.metadata;
-        if (!meta || !meta.selection) return;
-        
-        const key = `${meta.name}_${meta.logo}`;
-        if (!projects[key]) {
-          projects[key] = {
-            name: meta.name,
-            url: meta.url,
-            logo: meta.logo,
-            blocks: []
-          };
-        }
-        
-        const sel = meta.selection;
-        for (let by = sel.minBlockY; by < sel.minBlockY + sel.blocksY; by++) {
-          for (let bx = sel.minBlockX; bx < sel.minBlockX + sel.blocksX; bx++) {
-            projects[key].blocks.push({ x: bx, y: by });
-          }
-        }
-      });
-      
-      const projectList = Object.values(projects);
-      for (const project of projectList) {
-        await loadProjectOnGrid(project);
-      }
-      
-      soldPixels = Object.values(blockData).filter(b => b !== null).length * BLOCK_SIZE * BLOCK_SIZE;
-      soldPixelsSpan.textContent = soldPixels.toLocaleString();
-      drawSoldOverlays();
-      
-      console.log(`✅ Cargadas ${sales.length} ventas, ${projectList.length} proyectos`);
-      
-    } catch (err) {
-      console.error('Error cargando grid:', err);
-      showStatus('Error cargando el grid. Recarga la página.', 'error');
-    } finally {
-      loadingEl.style.display = 'none';
-    }
-  }
-
-  function loadProjectOnGrid(project) {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      
-      img.onload = function() {
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        project.blocks.forEach(b => {
-          if (b.x < minX) minX = b.x;
-          if (b.y < minY) minY = b.y;
-          if (b.x > maxX) maxX = b.x;
-          if (b.y > maxY) maxY = b.y;
-        });
-        
-        const drawX = minX * BLOCK_SIZE;
-        const drawY = minY * BLOCK_SIZE;
-        const drawWidth = (maxX - minX + 1) * BLOCK_SIZE;
-        const drawHeight = (maxY - minY + 1) * BLOCK_SIZE;
-        
-        ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
-        
-        project.blocks.forEach(b => {
-          const idx = blockIndex(b.x, b.y);
-          blockData[idx] = {
-            name: project.name,
-            url: project.url,
-            logo: project.logo
-          };
-        });
-        
-        resolve();
-      };
-      
-      img.onerror = function() {
-        console.warn('No se pudo cargar imagen:', project.logo);
-        project.blocks.forEach(b => {
-          const idx = blockIndex(b.x, b.y);
-          blockData[idx] = {
-            name: project.name,
-            url: project.url,
-            logo: project.logo
-          };
-        });
-        resolve();
-      };
-      
-      img.src = project.logo;
-    });
-  }
-
-  // ============================================
-  // WALLET CONNECTION
-  // ============================================
-  async function connectWallet() {
-    if (!window.solana) {
-      alert('Por favor instala Phantom Wallet: https://phantom.app');
-      return;
-    }
-    
-    try {
-      connectBtn.disabled = true;
-      connectBtn.textContent = 'Conectando...';
-      
-      const resp = await window.solana.connect();
-      userPublicKey = resp.publicKey;
-      walletAddrSpan.textContent = userPublicKey.toString().slice(0, 4) + '...' + userPublicKey.toString().slice(-4);
-      connectBtn.textContent = 'Conectado ✓';
-      connectBtn.style.background = '#28a745';
-      
-      console.log('✅ Wallet conectada:', userPublicKey.toString());
-    } catch (err) {
-      console.error(err);
-      alert('Error conectando wallet: ' + err.message);
-      connectBtn.disabled = false;
-      connectBtn.textContent = 'Conectar Wallet';
-    }
-  }
-
-  function disconnectWallet() {
-    if (window.solana && window.solana.disconnect) window.solana.disconnect();
-    userPublicKey = null;
-    walletAddrSpan.textContent = '';
-    connectBtn.textContent = 'Conectar Wallet';
-    connectBtn.style.background = '';
-  }
-
-  connectBtn.onclick = connectWallet;
-
-  // ============================================
-  // EVENTOS DEL CANVAS
-  // ============================================
-  canvas.addEventListener('mousedown', (e) => {
-    const { rawX, rawY } = getMousePosInCanvas(e);
-    startX = Math.floor(rawX / BLOCK_SIZE) * BLOCK_SIZE;
-    startY = Math.floor(rawY / BLOCK_SIZE) * BLOCK_SIZE;
-    isDragging = true;
-    selection = null;
-    selectionInfo.textContent = '';
-    selectionOverlay.style.display = 'none';
-    confirmBtn.disabled = true;
-  });
-
-  canvas.addEventListener('mousemove', (e) => {
-    handleMove(e);
-    handleHover(e);
-  });
-
-  canvas.addEventListener('mouseup', (e) => {
-    handleUp(e);
-  });
-
-  canvas.addEventListener('mouseleave', () => {
-    isDragging = false;
-  });
-
-  function handleMove(e) {
-    if (!isDragging) return;
-    
-    const { rawX, rawY } = getMousePosInCanvas(e);
-    endX = Math.floor(rawX / BLOCK_SIZE) * BLOCK_SIZE;
-    endY = Math.floor(rawY / BLOCK_SIZE) * BLOCK_SIZE;
-    
-    const minX = Math.min(startX, endX);
-    const maxX = Math.max(startX, endX);
-    const minY = Math.min(startY, endY);
-    const maxY = Math.max(startY, endY);
-    
-    const width = maxX - minX + BLOCK_SIZE;
-    const height = maxY - minY + BLOCK_SIZE;
-    const blocksX = width / BLOCK_SIZE;
-    const blocksY = height / BLOCK_SIZE;
-    const blocksTotal = blocksX * blocksY;
-    
-    const minBlockX = minX / BLOCK_SIZE;
-    const minBlockY = minY / BLOCK_SIZE;
-    const maxBlockX = maxX / BLOCK_SIZE;
-    const maxBlockY = maxY / BLOCK_SIZE;
-    
-    let soldInSelection = 0;
-    for (let by = minBlockY; by <= maxBlockY; by++) {
-      for (let bx = minBlockX; bx <= maxBlockX; bx++) {
-        if (isBlockSold(bx, by)) soldInSelection++;
-      }
-    }
-    
-    const freeBlocks = blocksTotal - soldInSelection;
-    const totalPrice = (freeBlocks * PRICE_PER_BLOCK).toFixed(2);
-    
-    if (soldInSelection > 0) {
-      selectionInfo.innerHTML = `⚠️ Selección: ${blocksX}×${blocksY} bloques | <span class="error">Ocupados: ${soldInSelection}</span> | Disponibles: ${freeBlocks} | Precio: ${totalPrice} SOL`;
-      selectionOverlay.style.border = '3px solid #dc3545';
-      selectionOverlay.style.boxShadow = '0 0 10px #dc3545';
-    } else {
-      selectionInfo.innerHTML = `✓ Selección: ${blocksX}×${blocksY} bloques | Precio: ${(blocksTotal * PRICE_PER_BLOCK).toFixed(2)} SOL`;
-      selectionOverlay.style.border = '3px solid cyan';
-      selectionOverlay.style.boxShadow = '0 0 10px cyan';
-    }
-    
-    const scale = canvas.getBoundingClientRect().width / CANVAS_SIZE;
-    selectionOverlay.style.display = 'block';
-    selectionOverlay.style.left = (minX * scale) + 'px';
-    selectionOverlay.style.top = (minY * scale) + 'px';
-    selectionOverlay.style.width = (width * scale) + 'px';
-    selectionOverlay.style.height = (height * scale) + 'px';
-  }
-
-  function handleUp(e) {
-    if (!isDragging) return;
-    isDragging = false;
-    
-    if (endX === undefined || endY === undefined) {
-      selection = null;
-      return;
-    }
-    
-    const minX = Math.min(startX, endX);
-    const maxX = Math.max(startX, endX);
-    const minY = Math.min(startY, endY);
-    const maxY = Math.max(startY, endY);
-    
-    const minBlockX = minX / BLOCK_SIZE;
-    const minBlockY = minY / BLOCK_SIZE;
-    const maxBlockX = maxX / BLOCK_SIZE;
-    const maxBlockY = maxY / BLOCK_SIZE;
-    
-    let soldInSelection = 0;
-    for (let by = minBlockY; by <= maxBlockY; by++) {
-      for (let bx = minBlockX; bx <= maxBlockX; bx++) {
-        if (isBlockSold(bx, by)) soldInSelection++;
-      }
-    }
-    
-    selection = {
-      minBlockX,
-      minBlockY,
-      maxBlockX,
-      maxBlockY,
-      blocksX: maxBlockX - minBlockX + 1,
-      blocksY: maxBlockY - minBlockY + 1,
-      soldInSelection
-    };
-    
-    confirmBtn.disabled = soldInSelection > 0;
-  }
-
-  function handleHover(e) {
-    if (isDragging) {
-      tooltip.style.display = 'none';
-      return;
-    }
-    
-    const { rawX, rawY, rect } = getMousePosInCanvas(e);
-    const bx = Math.floor(rawX / BLOCK_SIZE);
-    const by = Math.floor(rawY / BLOCK_SIZE);
-    
-    if (bx < 0 || by < 0 || bx >= BLOCKS_PER_SIDE || by >= BLOCKS_PER_SIDE) {
-      tooltip.style.display = 'none';
-      return;
-    }
-    
-    const data = blockData[blockIndex(bx, by)];
-    if (data) {
-      tooltip.textContent = `🚀 ${data.name}`;
-      const scale = rect.width / CANVAS_SIZE;
-      tooltip.style.left = (bx * BLOCK_SIZE * scale + 10) + 'px';
-      tooltip.style.top = (by * BLOCK_SIZE * scale - 30) + 'px';
-      tooltip.style.display = 'block';
-    } else {
-      tooltip.style.display = 'none';
-    }
-  }
-
-  // ============================================
-  // BOTONES
-  // ============================================
-  confirmBtn.addEventListener('click', () => {
-    if (!selection) {
-      alert('Selecciona un área primero');
-      return;
-    }
-    if (selection.soldInSelection > 0) {
-      alert(`${selection.soldInSelection} bloques ya están ocupados. Selecciona otra área.`);
-      return;
-    }
-    
-    const blocksTotal = selection.blocksX * selection.blocksY;
-    const totalPrice = (blocksTotal * PRICE_PER_BLOCK).toFixed(2);
-    document.getElementById('totalPrice').textContent = totalPrice;
-    document.getElementById('modal').style.display = 'block';
-  });
-
-  cancelBtn.addEventListener('click', () => {
-    selection = null;
-    selectionOverlay.style.display = 'none';
-    selectionInfo.textContent = '';
-    confirmBtn.disabled = true;
-  });
-
-  document.getElementById('closeModal').addEventListener('click', () => {
-    document.getElementById('modal').style.display = 'none';
-    document.getElementById('paymentStatus').textContent = '';
-  });
-
-  // ============================================
-  // SUBIR LOGO
-  // ============================================
-  async function uploadLogoToServer(file) {
-    const fd = new FormData();
-    fd.append('file', file);
-    const res = await fetch(`${API_BASE}/api/upload-logo`, {
-      method: 'POST',
-      body: fd
-    });
-    const data = await res.json();
-    if (!res.ok || !data.ok) {
-      throw new Error(data.error || 'Error subiendo logo');
-    }
-    return data;
-  }
-
-  // ============================================
-  // PAGAR
-  // ============================================
-  function showStatus(message, type = 'info') {
-    const statusEl = document.getElementById('paymentStatus');
-    statusEl.textContent = message;
-    statusEl.className = type;
-  }
-
-  document.getElementById('payBtn').addEventListener('click', async () => {
-    const name = document.getElementById('projectName').value.trim();
-    const url = document.getElementById('projectURL').value.trim();
-    const logoFile = document.getElementById('projectLogo').files[0];
-    const payBtn = document.getElementById('payBtn');
-    
-    if (!selection) {
-      alert('No hay selección');
-      return;
-    }
-    if (selection.soldInSelection > 0) {
-      alert('Bloques ocupados');
-      return;
-    }
-    if (!name || !url || !logoFile) {
-      alert('Completa todos los campos');
-      return;
-    }
-    if (!window.solana) {
-      alert('Phantom Wallet no detectado. Instálalo desde phantom.app');
-      return;
-    }
-    if (!userPublicKey) {
-      alert('Conecta tu wallet primero');
-      return;
-    }
-
-    try {
-      payBtn.disabled = true;
-      
-      // 1. Subir logo
-      showStatus('📤 Subiendo logo...', 'warning');
-      const uploadRes = await uploadLogoToServer(logoFile);
-      const logoUrl = uploadRes.url.startsWith('http') 
-        ? uploadRes.url 
-        : `${API_BASE}${uploadRes.url}`;
-      
-      console.log('✅ Logo subido:', logoUrl);
-
-      // 2. Preparar metadata
-      const metadata = {
-        name,
-        url,
-        logo: logoUrl,
-        selection: {
-          minBlockX: selection.minBlockX,
-          minBlockY: selection.minBlockY,
-          blocksX: selection.blocksX,
-          blocksY: selection.blocksY
-        },
-        priceSOL: parseFloat((selection.blocksX * selection.blocksY * PRICE_PER_BLOCK).toFixed(9))
-      };
-
-      // 3. Crear transacción
-      showStatus('💳 Preparando transacción...', 'warning');
-
-      const fromPubkey = userPublicKey;
-      const toPubkey = new solanaWeb3.PublicKey(MERCHANT_WALLET);
-      const lamports = Math.round(metadata.priceSOL * solanaWeb3.LAMPORTS_PER_SOL);
-      
-      const transferIx = solanaWeb3.SystemProgram.transfer({
-        fromPubkey,
-        toPubkey,
-        lamports
-      });
-      
-      const MEMO_PROGRAM_ID = new solanaWeb3.PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
-      const encoder = new TextEncoder();
-      const memoData = encoder.encode(JSON.stringify(metadata));
-      const memoIx = new solanaWeb3.TransactionInstruction({
-        keys: [],
-        programId: MEMO_PROGRAM_ID,
-        data: memoData
-      });
-
-      const tx = new solanaWeb3.Transaction().add(transferIx, memoIx);
-      tx.feePayer = fromPubkey;
-      const { blockhash } = await connection.getLatestBlockhash('finalized');
-      tx.recentBlockhash = blockhash;
-
-      // 4. Firmar y enviar
-      showStatus('✍️ Firma la transacción en Phantom...', 'warning');
-      const { signature } = await window.solana.signAndSendTransaction(tx);
-      console.log('✅ Transacción enviada:', signature);
-
-      // 5. Confirmar
-      showStatus('⏳ Confirmando transacción...', 'warning');
-      await connection.confirmTransaction(signature, 'confirmed');
-      console.log('✅ Transacción confirmada');
-
-      // 6. Verificar en el servidor
-      showStatus('🔍 Verificando en el servidor...', 'warning');
-      const verifyRes = await fetch(`${API_BASE}/api/verify-purchase`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          signature,
-          expectedAmountSOL: metadata.priceSOL,
-          metadata
-        })
-      });
-      
-      const verifyJson = await verifyRes.json();
-      
-      if (verifyJson.ok) {
-        showStatus('✅ ¡Compra confirmada exitosamente!', 'success');
-        console.log('✅ Verificación exitosa:', verifyJson);
-        
-        // Mostrar en el grid
-        finalizeOnChainPurchase(metadata);
-        
-        // Cerrar modal después de 2 segundos
-        setTimeout(() => {
-          document.getElementById('modal').style.display = 'none';
-          document.getElementById('projectName').value = '';
-          document.getElementById('projectURL').value = '';
-          document.getElementById('projectLogo').value = '';
-          document.getElementById('paymentStatus').textContent = '';
-          selection = null;
-          selectionOverlay.style.display = 'none';
-          selectionInfo.textContent = '';
-          confirmBtn.disabled = true;
-          payBtn.disabled = false;
-        }, 2000);
-      } else {
-        throw new Error(verifyJson.error || 'Error en la verificación');
-      }
-
-    } catch (err) {
-      console.error('❌ Error:', err);
-      showStatus('❌ Error: ' + err.message, 'error');
-      alert('Error: ' + err.message);
-      payBtn.disabled = false;
-    }
-  });
-
-  // ============================================
-  // FINALIZAR COMPRA
-  // ============================================
-  function finalizeOnChainPurchase(metadata) {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    
-    img.onload = function() {
-      const drawX = selection.minBlockX * BLOCK_SIZE;
-      const drawY = selection.minBlockY * BLOCK_SIZE;
-      const drawWidth = selection.blocksX * BLOCK_SIZE;
-      const drawHeight = selection.blocksY * BLOCK_SIZE;
-      
-      ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
-
-      let newlySold = 0;
-      for (let by = selection.minBlockY; by <= selection.maxBlockY; by++) {
-        for (let bx = selection.minBlockX; bx <= selection.maxBlockX; bx++) {
-          const idx = blockIndex(bx, by);
-          if (blockData[idx] === null) {
-            blockData[idx] = {
-              name: metadata.name,
-              url: metadata.url,
-              logo: metadata.logo
-            };
-            newlySold++;
-          }
-        }
-      }
-      
-      soldPixels += newlySold * BLOCK_SIZE * BLOCK_SIZE;
-      soldPixelsSpan.textContent = soldPixels.toLocaleString();
-      totalSales++;
-      totalSalesSpan.textContent = totalSales;
-      drawSoldOverlays();
-    };
-    
-    img.onerror = function() {
-      console.warn('Error cargando imagen:', metadata.logo);
-    };
-    
-    img.src = metadata.logo;
-  }
-
-  // ============================================
-  // OVERLAYS
-  // ============================================
-  function drawSoldOverlays() {
-    const prev = gridContainer.querySelectorAll('.sold-overlay');
-    prev.forEach(p => p.remove());
-    
-    const rect = canvas.getBoundingClientRect();
-    const scale = rect.width / CANVAS_SIZE;
-    
-    for (let by = 0; by < BLOCKS_PER_SIDE; by++) {
-      for (let bx = 0; bx < BLOCKS_PER_SIDE; bx++) {
-        if (isBlockSold(bx, by)) {
-          const div = document.createElement('div');
-          div.className = 'sold-overlay';
-          div.style.left = (bx * BLOCK_SIZE * scale) + 'px';
-          div.style.top = (by * BLOCK_SIZE * scale) + 'px';
-          div.style.width = (BLOCK_SIZE * scale) + 'px';
-          div.style.height = (BLOCK_SIZE * scale) + 'px';
-          gridContainer.appendChild(div);
-        }
-      }
-    }
-  }
-
-  // ============================================
-  // CLICK EN PROYECTO
-  // ============================================
-  canvas.addEventListener('click', (e) => {
-    if (isDragging) return;
-    
-    const { rawX, rawY } = getMousePosInCanvas(e);
-    const bx = Math.floor(rawX / BLOCK_SIZE);
-    const by = Math.floor(rawY / BLOCK_SIZE);
-    const data = blockData[blockIndex(bx, by)];
-    
-    if (data && confirm(`🚀 ¿Visitar ${data.name}?`)) {
-      window.open(data.url, '_blank');
-    }
-  });
-
-  // ============================================
-  // RESIZE
-  // ============================================
-  window.addEventListener('resize', drawSoldOverlays);
-
-  // ============================================
-  // INICIALIZACIÓN
-  // ============================================
-  drawGrid();
-  loadGridFromServer();
-  </script>
-</body>
-</html>
+    const rawY = Math.floor((e.clientY - rect.top) * (CANVAS_SIZE / rect.hei
