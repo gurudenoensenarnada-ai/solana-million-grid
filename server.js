@@ -25,7 +25,7 @@ app.use(cors());
 // ============================================
 // CONFIGURACIÓN (usar .env en producción)
 // ============================================
-const DEFAULT_MERCHANT = process.env.MERCHANT_WALLET || 'CEBiKkD8q6F28byTb9iVqPUiojv9n5bHEW5wEJJpVAQE';
+const DEFAULT_MERCHANT = process.env.MERCHANT_WALLET || '3d7w4r4irLaKVYd4dLjpoiehJVawbbXWFWb1bCk9nGCo';
 const CLUSTER = process.env.CLUSTER || 'mainnet-beta';
 const RPC_URL = process.env.RPC_URL || solanaWeb3.clusterApiUrl(CLUSTER);
 const PORT = process.env.PORT || 3000;
