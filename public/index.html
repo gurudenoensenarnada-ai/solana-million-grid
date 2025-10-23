@@ -82,32 +82,19 @@
       border-radius: 8px;
       overflow: hidden;
       box-shadow: 0 0 30px rgba(255, 215, 0, 0.3);
-      background: #222;
     }
     #canvas { 
       display: block; 
       cursor: pointer;
       image-rendering: pixelated; 
       background: #555;
-      max-width: 100%;
-      height: auto;
-      display: block;
     }
-    /* overlayCanvas se posiciona encima del canvas principal para dibujar bloques vendidos */
-    #overlayCanvas {
-      position: absolute;
-      left: 0;
-      top: 0;
-      pointer-events: none;
-      image-rendering: pixelated;
-    }
-
     #selectionOverlay { 
       position: absolute; 
       pointer-events: none; 
       display: none; 
       z-index: 20; 
-      background: rgba(0, 255, 255, 0.06);
+      background: rgba(0, 255, 255, 0.1);
       border: 2px solid cyan;
       box-shadow: 0 0 10px cyan;
     }
@@ -300,7 +287,7 @@
     <div class="logo">🎨 Solana Million Grid</div>
     <div>
       <button id="connectWallet" class="connectBtn">Conectar Wallet</button>
-      <span id="walletAddr" style="margin-left:10px;color:#ddd;font-size:13px;cursor:pointer"></span>
+      <span id="walletAddr" style="margin-left:10px;color:#ddd;font-size:13px"></span>
     </div>
   </header>
 
@@ -331,8 +318,6 @@
   <div id="gridWrapper">
     <div id="gridContainer">
       <canvas id="canvas" width="1000" height="1000"></canvas>
-      <!-- overlayCanvas dibuja los bloques vendidos de forma eficiente -->
-      <canvas id="overlayCanvas" width="1000" height="1000"></canvas>
       <div id="selectionOverlay"></div>
       <div id="tooltip"></div>
     </div>
@@ -377,7 +362,6 @@
   <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
   
   <script>
-  // ====== Config ======
   const CANVAS_SIZE = 1000;
   const BLOCK_SIZE = 10;
   const BLOCKS_PER_SIDE = CANVAS_SIZE / BLOCK_SIZE;
@@ -385,13 +369,9 @@
   const MERCHANT_WALLET = '3d7w4r4irLaKVYd4dLjpoiehJVawbbXWFWb1bCk9nGCo';
   const API_BASE = window.location.origin;
   const CLUSTER = 'mainnet-beta';
-  // Nota: el key de Helius (si está aquí) y otros secretos idealmente deben estar en el servidor, no en el cliente.
 
-  // ====== Elementos ======
   const canvas = document.getElementById('canvas');
   const ctx = canvas.getContext('2d');
-  const overlayCanvas = document.getElementById('overlayCanvas');
-  const octx = overlayCanvas.getContext('2d');
   const gridContainer = document.getElementById('gridContainer');
   const soldPixelsSpan = document.getElementById('soldPixels');
   const totalSalesSpan = document.getElementById('totalSales');
@@ -404,7 +384,6 @@
   const confirmBtn = document.getElementById('confirmBtn');
   const cancelBtn = document.getElementById('cancelBtn');
 
-  // ====== Estado ======
   let blockData = new Array(BLOCKS_PER_SIDE * BLOCKS_PER_SIDE).fill(null);
   let soldPixels = 0;
   let totalSales = 0;
@@ -413,11 +392,8 @@
   let selection = null;
   let connection = new solanaWeb3.Connection('https://mainnet.helius-rpc.com/?api-key=cfadb209-0424-4c46-86cf-aa6f3f0c8d01');
   let userPublicKey = null;
-  let signingInProgress = false;
 
-  // ====== Draw grid base ======
   function drawGrid() {
-    // fondo + rejilla
     ctx.fillStyle = '#555';
     ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
     ctx.strokeStyle = '#333';
@@ -449,14 +425,11 @@
 
   function getMousePosInCanvas(e) {
     const rect = canvas.getBoundingClientRect();
-    const clientX = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
-    const clientY = (e.touches && e.touches[0]) ? e.touches[0].clientY : e.clientY;
-    const rawX = Math.floor((clientX - rect.left) * (CANVAS_SIZE / rect.width));
-    const rawY = Math.floor((clientY - rect.top) * (CANVAS_SIZE / rect.height));
+    const rawX = Math.floor((e.clientX - rect.left) * (CANVAS_SIZE / rect.width));
+    const rawY = Math.floor((e.clientY - rect.top) * (CANVAS_SIZE / rect.height));
     return { rawX, rawY, rect };
   }
 
-  // ====== Carga desde servidor ======
   async function loadGridFromServer() {
     try {
       const res = await fetch(`${API_BASE}/api/sales`);
@@ -510,14 +483,14 @@
       showStatus('Error cargando el grid. Recarga la página.', 'error');
     } finally {
       loadingEl.style.display = 'none';
-      syncOverlaySize();
     }
   }
 
   function loadProjectOnGrid(project) {
     return new Promise((resolve) => {
       const img = new Image();
-      img.crossOrigin = 'anonymous'; // importante: el servidor que sirve las imágenes debe habilitar CORS
+      img.crossOrigin = 'anonymous';
+      
       img.onload = function() {
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
         project.blocks.forEach(b => {
@@ -563,7 +536,6 @@
     });
   }
 
-  // ====== Wallet ======
   async function connectWallet() {
     if (!window.solana) {
       alert('Por favor instala Phantom Wallet: https://phantom.app');
@@ -574,14 +546,14 @@
       connectBtn.disabled = true;
       connectBtn.textContent = 'Conectando...';
       
-      const resp = await window.solana.connect({ onlyIfTrusted: false });
+      const resp = await window.solana.connect({ 
+        onlyIfTrusted: false
+      });
       
-      // Phantom devuelve resp.publicKey
       userPublicKey = resp.publicKey;
       walletAddrSpan.textContent = userPublicKey.toString().slice(0, 4) + '...' + userPublicKey.toString().slice(-4);
       connectBtn.textContent = 'Conectado ✓';
       connectBtn.style.background = '#28a745';
-      connectBtn.disabled = false;
       
       console.log('✅ Wallet conectada:', userPublicKey.toString());
       
@@ -593,12 +565,11 @@
       } else if (err.code === -32603) {
         alert('⚠️ Phantom bloqueó la conexión. Ve a Settings → Trusted Apps en Phantom y aprueba este sitio.');
       } else {
-        alert('Error conectando wallet: ' + (err.message || err));
+        alert('Error conectando wallet: ' + err.message);
       }
       
       connectBtn.disabled = false;
       connectBtn.textContent = 'Conectar Wallet';
-      connectBtn.style.background = '';
     }
   }
 
@@ -608,21 +579,10 @@
     walletAddrSpan.textContent = '';
     connectBtn.textContent = 'Conectar Wallet';
     connectBtn.style.background = '';
-    connectBtn.disabled = false;
   }
 
-  connectBtn.onclick = () => {
-    if (userPublicKey) {
-      disconnectWallet();
-    } else {
-      connectWallet();
-    }
-  };
-  walletAddrSpan.onclick = () => {
-    if (userPublicKey && confirm('¿Desconectar wallet?')) disconnectWallet();
-  };
+  connectBtn.onclick = connectWallet;
 
-  // ====== Interacción: selección (mouse + touch) ======
   canvas.addEventListener('mousedown', (e) => {
     const { rawX, rawY } = getMousePosInCanvas(e);
     startX = Math.floor(rawX / BLOCK_SIZE) * BLOCK_SIZE;
@@ -634,34 +594,12 @@
     confirmBtn.disabled = true;
   });
 
-  // Touch support
-  canvas.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    const { rawX, rawY } = getMousePosInCanvas(e);
-    startX = Math.floor(rawX / BLOCK_SIZE) * BLOCK_SIZE;
-    startY = Math.floor(rawY / BLOCK_SIZE) * BLOCK_SIZE;
-    isDragging = true;
-    selection = null;
-    selectionInfo.textContent = '';
-    selectionOverlay.style.display = 'none';
-    confirmBtn.disabled = true;
-  }, { passive: false });
-
   canvas.addEventListener('mousemove', (e) => {
     handleMove(e);
     handleHover(e);
   });
 
-  canvas.addEventListener('touchmove', (e) => {
-    handleMove(e);
-    handleHover(e);
-  }, { passive: false });
-
   canvas.addEventListener('mouseup', (e) => {
-    handleUp(e);
-  });
-
-  canvas.addEventListener('touchend', (e) => {
     handleUp(e);
   });
 
@@ -693,8 +631,6 @@
     const maxBlockY = maxY / BLOCK_SIZE;
     
     let soldInSelection = 0;
-    for (let by = minBlockX; by <= maxBlockY; by++) {} // no-op to avoid lint confusion
-
     for (let by = minBlockY; by <= maxBlockY; by++) {
       for (let bx = minBlockX; bx <= maxBlockX; bx++) {
         if (isBlockSold(bx, by)) soldInSelection++;
@@ -714,9 +650,7 @@
       selectionOverlay.style.boxShadow = '0 0 10px cyan';
     }
     
-    // Ajuste de overlay al tamaño real del canvas (responsivo)
-    const rect = canvas.getBoundingClientRect();
-    const scale = rect.width / CANVAS_SIZE;
+    const scale = canvas.getBoundingClientRect().width / CANVAS_SIZE;
     selectionOverlay.style.display = 'block';
     selectionOverlay.style.left = (minX * scale) + 'px';
     selectionOverlay.style.top = (minY * scale) + 'px';
@@ -790,7 +724,6 @@
     }
   }
 
-  // ====== Compra: abrir modal ======
   confirmBtn.addEventListener('click', () => {
     if (!selection) {
       alert('Selecciona un área primero');
@@ -819,7 +752,6 @@
     document.getElementById('paymentStatus').textContent = '';
   });
 
-  // ====== Upload logo ======
   async function uploadLogoToServer(file) {
     const fd = new FormData();
     fd.append('file', file);
@@ -840,9 +772,7 @@
     statusEl.className = type;
   }
 
-  // ====== Pago y verificación ======
   document.getElementById('payBtn').addEventListener('click', async () => {
-    if (signingInProgress) return;
     const name = document.getElementById('projectName').value.trim();
     const url = document.getElementById('projectURL').value.trim();
     const logoFile = document.getElementById('projectLogo').files[0];
@@ -860,16 +790,6 @@
       alert('Completa todos los campos');
       return;
     }
-    // Validaciones de logo
-    const maxMB = 5;
-    if (logoFile.size > maxMB * 1024 * 1024) {
-      alert(`El logo supera ${maxMB}MB`);
-      return;
-    }
-    if (!/^image\//.test(logoFile.type)) {
-      alert('El archivo debe ser una imagen (PNG/JPG/GIF)');
-      return;
-    }
     if (!window.solana) {
       alert('Phantom Wallet no detectado. Instálalo desde phantom.app');
       return;
@@ -880,7 +800,6 @@
     }
 
     try {
-      signingInProgress = true;
       payBtn.disabled = true;
       
       showStatus('📤 Subiendo logo...', 'warning');
@@ -910,7 +829,7 @@
       const toPubkey = new solanaWeb3.PublicKey(MERCHANT_WALLET);
       const lamports = Math.round(metadata.priceSOL * solanaWeb3.LAMPORTS_PER_SOL);
       
-      // TRANSACCIÓN: transferencia simple
+      // ✅ TRANSACCIÓN SIMPLE: Solo transferencia, SIN MEMO
       const transferIx = solanaWeb3.SystemProgram.transfer({
         fromPubkey,
         toPubkey,
@@ -923,9 +842,7 @@
       tx.recentBlockhash = blockhash;
 
       showStatus('✍️ Firma la transacción en Phantom...', 'warning');
-      // signAndSendTransaction suele devolver { signature: '...' } o solo la firma dependiendo de la versión
-      const signed = await window.solana.signAndSendTransaction(tx);
-      const signature = signed.signature || signed; // tolerate both shapes
+      const { signature } = await window.solana.signAndSendTransaction(tx);
       console.log('✅ Transacción enviada:', signature);
 
       showStatus('⏳ Confirmando transacción...', 'warning');
@@ -962,22 +879,19 @@
           selectionInfo.textContent = '';
           confirmBtn.disabled = true;
           payBtn.disabled = false;
-          signingInProgress = false;
-        }, 1200);
+        }, 2000);
       } else {
         throw new Error(verifyJson.error || 'Error en la verificación');
       }
 
     } catch (err) {
       console.error('❌ Error:', err);
-      showStatus('❌ Error: ' + (err.message || err), 'error');
-      alert('Error: ' + (err.message || err));
+      showStatus('❌ Error: ' + err.message, 'error');
+      alert('Error: ' + err.message);
       payBtn.disabled = false;
-      signingInProgress = false;
     }
   });
 
-  // ====== Finalizar localmente: pintar imagen y actualizar estado ======
   function finalizeOnChainPurchase(metadata) {
     const img = new Image();
     img.crossOrigin = 'anonymous';
@@ -1019,36 +933,28 @@
     img.src = metadata.logo;
   }
 
-  // ====== Dibujar overlays de bloques vendidos de manera eficiente ======
-  function syncOverlaySize() {
-    // Ajusta el tamaño CSS del canvas overlay para que coincida con el canvas principal (responsivo).
-    const rect = canvas.getBoundingClientRect();
-    overlayCanvas.style.width = rect.width + 'px';
-    overlayCanvas.style.height = rect.height + 'px';
-    overlayCanvas.style.left = '0px';
-    overlayCanvas.style.top = '0px';
-    // El canvas interno tiene resolución CANVAS_SIZE x CANVAS_SIZE (atributos) por lo que dibujamos en esas coordenadas.
-  }
-
   function drawSoldOverlays() {
-    syncOverlaySize();
-    // Limpiar en coordenadas internas
-    octx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-
-    // Dibuja un rect semitransparente para cada bloque vendido
-    octx.fillStyle = 'rgba(0,0,0,0.45)';
-    octx.strokeStyle = 'rgba(255,215,0,0.12)';
+    const prev = gridContainer.querySelectorAll('.sold-overlay');
+    prev.forEach(p => p.remove());
+    
+    const rect = canvas.getBoundingClientRect();
+    const scale = rect.width / CANVAS_SIZE;
+    
     for (let by = 0; by < BLOCKS_PER_SIDE; by++) {
       for (let bx = 0; bx < BLOCKS_PER_SIDE; bx++) {
         if (isBlockSold(bx, by)) {
-          octx.fillRect(bx * BLOCK_SIZE, by * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
-          octx.strokeRect(bx * BLOCK_SIZE + 0.5, by * BLOCK_SIZE + 0.5, BLOCK_SIZE - 1, BLOCK_SIZE - 1);
+          const div = document.createElement('div');
+          div.className = 'sold-overlay';
+          div.style.left = (bx * BLOCK_SIZE * scale) + 'px';
+          div.style.top = (by * BLOCK_SIZE * scale) + 'px';
+          div.style.width = (BLOCK_SIZE * scale) + 'px';
+          div.style.height = (BLOCK_SIZE * scale) + 'px';
+          gridContainer.appendChild(div);
         }
       }
     }
   }
 
-  // ====== Click para abrir proyecto ======
   canvas.addEventListener('click', (e) => {
     if (isDragging) return;
     
@@ -1062,27 +968,8 @@
     }
   });
 
-  window.addEventListener('resize', () => {
-    // redibujar overlays cuando cambia tamaño
-    drawSoldOverlays();
-    const rect = canvas.getBoundingClientRect();
-    // ajustar selección overlay si está visible
-    if (selectionOverlay.style.display === 'block' && (startX !== undefined && endX !== undefined)) {
-      const minX = Math.min(startX, endX);
-      const maxX = Math.max(startX, endX);
-      const minY = Math.min(startY, endY);
-      const maxY = Math.max(startY, endY);
-      const width = maxX - minX + BLOCK_SIZE;
-      const height = maxY - minY + BLOCK_SIZE;
-      const scale = rect.width / CANVAS_SIZE;
-      selectionOverlay.style.left = (minX * scale) + 'px';
-      selectionOverlay.style.top = (minY * scale) + 'px';
-      selectionOverlay.style.width = (width * scale) + 'px';
-      selectionOverlay.style.height = (height * scale) + 'px';
-    }
-  });
+  window.addEventListener('resize', drawSoldOverlays);
 
-  // ====== Inicio ======
   drawGrid();
   loadGridFromServer();
   </script>
