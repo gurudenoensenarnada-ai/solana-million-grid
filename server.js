@@ -13,7 +13,7 @@
 require('dotenv').config();
 
 // APP_CONFIG: parsear una sola env var JSON cuando el host solo permite UNA variable.
-// Ejemplo APP_CONFIG: {"RPC_URL":"https://...","SAVE_IMAGES_IN_JSON":true}
+// Ejemplo APP_CONFIG: {"RPC_URL":"https://...","SAVE_IMAGES_IN_JSON":true,"CLOUDINARY_CLOUD_NAME":"drubzopvu","CLOUDINARY_UPLOAD_PRESET":"solana_unsigned"}
 if (process.env.APP_CONFIG) {
   try {
     const cfg = JSON.parse(process.env.APP_CONFIG);
@@ -21,6 +21,11 @@ if (process.env.APP_CONFIG) {
     if (cfg.SAVE_IMAGES_IN_JSON !== undefined) process.env.SAVE_IMAGES_IN_JSON = String(cfg.SAVE_IMAGES_IN_JSON);
     if (cfg.PERSISTENT_UPLOADS_DIR) process.env.PERSISTENT_UPLOADS_DIR = cfg.PERSISTENT_UPLOADS_DIR;
     if (cfg.REMOVE_LOCAL_AFTER_UPLOAD !== undefined) process.env.REMOVE_LOCAL_AFTER_UPLOAD = String(cfg.REMOVE_LOCAL_AFTER_UPLOAD);
+    // Mapear Cloudinary también desde APP_CONFIG
+    if (cfg.CLOUDINARY_CLOUD_NAME) process.env.CLOUDINARY_CLOUD_NAME = cfg.CLOUDINARY_CLOUD_NAME;
+    if (cfg.CLOUDINARY_UPLOAD_PRESET) process.env.CLOUDINARY_UPLOAD_PRESET = cfg.CLOUDINARY_UPLOAD_PRESET;
+    // Opcional: RESTORE secret para proteger restore endpoint
+    if (cfg.RESTORE_SECRET !== undefined) process.env.RESTORE_SECRET = String(cfg.RESTORE_SECRET);
   } catch (e) {
     console.warn('APP_CONFIG no es JSON válido:', e.message || e);
   }
@@ -112,6 +117,8 @@ console.log(`   Storage: ${UPLOADS_DIR} ${process.env.PERSISTENT_UPLOADS_DIR ? '
 console.log(`   IMAGES_FILE: ${IMAGES_FILE}`);
 console.log(`   Cloudinary configured: ${CLOUDINARY_CLOUD_NAME ? 'yes' : 'no'}`);
 console.log(`   Entorno: ${NODE_ENV}`);
+
+const RESTORE_SECRET = process.env.RESTORE_SECRET || '';
 
 // ============================================
 // SEGURIDAD: RATE LIMITING
@@ -208,14 +215,26 @@ function backupSales() {
     fs.copyFileSync(SALES_FILE, backupPath);
     console.log(`📦 Backup creado: sales_${timestamp}.json`);
 
-    // Limpiar backups antiguos (mantener solo los últimos 10)
+    // Copiar también images.json si existe (respaldo de dataURLs)
+    if (fs.existsSync(IMAGES_FILE)) {
+      const imgBackupPath = path.join(BACKUPS_DIR, `images_${timestamp}.json`);
+      try {
+        fs.copyFileSync(IMAGES_FILE, imgBackupPath);
+        console.log(`📦 Backup creado: images_${timestamp}.json`);
+      } catch (e) {
+        console.warn('⚠️ No se pudo crear backup de images.json:', e.message || e);
+      }
+    }
+
+    // Limpiar backups antiguos (mantener solo los últimos 10 pares)
     const backups = fs.readdirSync(BACKUPS_DIR)
-      .filter(f => f.startsWith('sales_'))
+      .filter(f => f.startsWith('sales_') || f.startsWith('images_'))
       .sort()
       .reverse();
 
-    if (backups.length > 10) {
-      backups.slice(10).forEach(file => {
+    // Mantener solo los últimos 20 (10 sales + 10 images) por simplicidad
+    if (backups.length > 20) {
+      backups.slice(20).forEach(file => {
         fs.unlinkSync(path.join(BACKUPS_DIR, file));
       });
     }
@@ -295,8 +314,9 @@ app.post('/api/upload-logo', diskUpload.single('file'), async (req, res) => {
     }
 
     // Si Cloudinary no está configurado, devolver la URL local y dataUrl (si existe)
-    const cloudConfigured = Boolean(CLOUDINARY_CLOUD_NAME && CLOUDINARY_UPLOAD_PRESET);
+    const cloudConfigured = Boolean(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_UPLOAD_PRESET);
     if (!cloudConfigured) {
+      console.log('   Cloudinary no configurado, devolviendo URL local.');
       const localUrl = BASE_URL
         ? `${BASE_URL}/uploads/${encodeURIComponent(finalName)}`
         : `${req.protocol}://${req.get('host')}/uploads/${encodeURIComponent(finalName)}`;
@@ -308,22 +328,23 @@ app.post('/api/upload-logo', diskUpload.single('file'), async (req, res) => {
       });
     }
 
-    // Si Cloudinary está configurado: subir
+    // Si Cloudinary está configurado: subir (puede aceptar dataURL o stream)
+    // Preferimos subir como stream desde el archivo local para mayor fiabilidad
     const fileStream = fs.createReadStream(targetPath);
     const form = new FormData();
     form.append('file', fileStream);
-    form.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+    form.append('upload_preset', process.env.CLOUDINARY_UPLOAD_PRESET);
     // opcional: form.append('folder', 'solana-million-grid');
 
     const headers = form.getHeaders();
 
     console.log(`📤 Subiendo ${finalName} a Cloudinary...`);
     try {
-      const resp = await axios.post(CLOUDINARY_API_URL, form, {
+      const resp = await axios.post(process.env.CLOUDINARY_API_URL || CLOUDINARY_API_URL, form, {
         headers,
         maxContentLength: Infinity,
         maxBodyLength: Infinity,
-        timeout: 30000
+        timeout: 300000
       });
       const cloudResp = resp.data;
       console.log('   ✅ Subida a Cloudinary OK:', cloudResp.secure_url);
@@ -407,6 +428,45 @@ app.get('/api/images-list', (req, res) => {
     return res.json({ ok: true, count: list.length, images: list });
   } catch (err) {
     console.error('❌ Error en /api/images-list:', err);
+    return res.status(500).json({ ok: false, error: 'Error interno' });
+  }
+});
+
+// Endpoints para backups: listar y restaurar images.json desde backups
+app.get('/api/backups-list', (req, res) => {
+  try {
+    const files = fs.readdirSync(BACKUPS_DIR)
+      .filter(f => f.startsWith('sales_') || f.startsWith('images_'))
+      .sort()
+      .reverse();
+    return res.json({ ok: true, files });
+  } catch (err) {
+    console.error('❌ Error listando backups:', err);
+    return res.status(500).json({ ok: false, error: 'Error interno' });
+  }
+});
+
+// Restaurar images.json desde backups (protegido si RESTORE_SECRET está definido)
+app.post('/api/restore-images', express.json(), (req, res) => {
+  try {
+    const backup = req.body?.backup;
+    if (!backup) return res.status(400).json({ ok: false, error: 'Falta parámetro backup' });
+
+    if (RESTORE_SECRET) {
+      const secret = req.headers['x-restore-secret'] || req.body?.secret;
+      if (!secret || secret !== RESTORE_SECRET) {
+        return res.status(403).json({ ok: false, error: 'Forbidden' });
+      }
+    }
+
+    const src = path.join(BACKUPS_DIR, backup);
+    if (!fs.existsSync(src)) return res.status(404).json({ ok: false, error: 'Backup no encontrado' });
+
+    fs.copyFileSync(src, IMAGES_FILE);
+    console.log(`✅ images.json restaurado desde ${backup}`);
+    return res.json({ ok: true, message: 'images.json restaurado', backup });
+  } catch (err) {
+    console.error('❌ Error restaurando images.json:', err);
     return res.status(500).json({ ok: false, error: 'Error interno' });
   }
 });
