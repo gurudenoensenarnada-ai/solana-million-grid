@@ -27,7 +27,7 @@ app.use(cors());
 // ============================================
 const DEFAULT_MERCHANT = process.env.MERCHANT_WALLET || '3d7w4r4irLaKVYd4dLjpoiehJVawbbXWFWb1bCk9nGCo';
 const CLUSTER = process.env.CLUSTER || 'mainnet-beta';
-const RPC_URL = process.env.RPC_URL || solanaWeb3.clusterApiUrl(CLUSTER);
+const RPC_URL = process.env.RPC_URL || 'https://mainnet.helius-rpc.com/?api-key=cfadb209-0424-4c46-86cf-aa6f3f0c8d01';
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'production';
 const BASE_URL = process.env.BASE_URL || ''; // Para URLs completas
@@ -171,7 +171,7 @@ const diskUpload = multer({
 });
 
 // ============================================
-// API: SUBIR LOGO (🔧 FIXED: URLs completas)
+// API: SUBIR LOGO
 // ============================================
 app.post('/api/upload-logo', diskUpload.single('file'), (req, res) => {
   try {
@@ -191,15 +191,13 @@ app.post('/api/upload-logo', diskUpload.single('file'), (req, res) => {
     
     fs.renameSync(tmpPath, targetPath);
     
-    // 🔧 FIX: Generar URL completa (con protocolo y dominio)
+    // Generar URL completa
     let fullUrl;
     if (BASE_URL) {
-      // Si hay BASE_URL en .env, usarla
       fullUrl = `${BASE_URL}/uploads/${encodeURIComponent(finalName)}`;
     } else {
-      // Construir desde la request
-      const protocol = req.protocol; // http o https
-      const host = req.get('host'); // dominio:puerto
+      const protocol = req.protocol;
+      const host = req.get('host');
       fullUrl = `${protocol}://${host}/uploads/${encodeURIComponent(finalName)}`;
     }
     
@@ -208,7 +206,7 @@ app.post('/api/upload-logo', diskUpload.single('file'), (req, res) => {
     
     return res.json({ 
       ok: true, 
-      url: fullUrl, // URL completa en producción
+      url: fullUrl,
       name: finalName
     });
     
@@ -222,39 +220,27 @@ app.post('/api/upload-logo', diskUpload.single('file'), (req, res) => {
 });
 
 // ============================================
-// PARSEAR MEMO (CORREGIDO)
+// PARSEAR MEMO
 // ============================================
-function parseMemoFromTx(tx) {
+function parseMemoFromParsedTx(tx) {
   try {
-    const message = tx.transaction.message;
-    const accountKeys = message.accountKeys.map(k => k.toString());
-    const instructions = message.instructions || [];
+    const instructions = tx.transaction.message.instructions;
     
-    for (const instr of instructions) {
-      const programId = accountKeys[instr.programIdIndex];
-      if (programId === MEMO_PROGRAM_ID.toString()) {
+    for (const ix of instructions) {
+      if (ix.programId.toString() === MEMO_PROGRAM_ID.toString()) {
         try {
-          // Intentar decodificar desde base64 primero
-          const buffer = Buffer.from(instr.data, 'base64');
-          const txt = buffer.toString('utf8');
-          try {
-            return { raw: txt, json: JSON.parse(txt) };
-          } catch {
-            return { raw: txt, json: null };
-          }
-        } catch {
-          // Fallback a base58 si falla base64
-          try {
-            const buffer = bs58.decode(instr.data);
+          // Intentar desde ix.data (base64)
+          if (ix.data) {
+            const buffer = Buffer.from(ix.data, 'base64');
             const txt = buffer.toString('utf8');
             try {
               return { raw: txt, json: JSON.parse(txt) };
             } catch {
               return { raw: txt, json: null };
             }
-          } catch {
-            console.warn('⚠️ No se pudo decodificar el memo');
           }
+        } catch (err) {
+          console.warn('⚠️ No se pudo decodificar el memo:', err.message);
         }
       }
     }
@@ -291,7 +277,7 @@ function areBlocksAvailable(selection) {
 }
 
 // ============================================
-// API: VERIFICAR COMPRA (🔧 FIXED: Mejor logging)
+// API: VERIFICAR COMPRA (🔧 FIXED)
 // ============================================
 app.post('/api/verify-purchase', async (req, res) => {
   const { signature, expectedAmountSOL, metadata } = req.body || {};
@@ -318,13 +304,15 @@ app.post('/api/verify-purchase', async (req, res) => {
   }
   
   try {
-    // Obtener transacción
-    const tx = await connection.getTransaction(signature, { 
+    // 🔧 FIX: Usar getParsedTransaction en lugar de getTransaction
+    console.log('   ⏳ Obteniendo transacción parseada...');
+    
+    const tx = await connection.getParsedTransaction(signature, { 
       commitment: 'confirmed',
       maxSupportedTransactionVersion: 0
     });
     
-    if (!tx) {
+    if (!tx || !tx.meta) {
       console.log(`❌ Transacción no encontrada`);
       return res.status(404).json({ 
         ok: false, 
@@ -335,47 +323,78 @@ app.post('/api/verify-purchase', async (req, res) => {
     console.log(`   ✅ Transacción encontrada`);
     console.log(`   🔗 Explorer: https://solscan.io/tx/${signature}?cluster=${CLUSTER}`);
     
-    // Verificar que el merchant esté en la transacción
-    const accountKeys = tx.transaction.message.accountKeys.map(k => k.toString());
-    const merchantIndex = accountKeys.findIndex(k => 
-      k === (new solanaWeb3.PublicKey(DEFAULT_MERCHANT)).toString()
-    );
-    
-    if (merchantIndex < 0) {
-      console.log(`❌ Merchant no encontrado en la transacción`);
+    // 🔧 FIX: Verificar que no haya error en la transacción
+    if (tx.meta.err) {
+      console.log(`❌ Transacción falló en la blockchain`);
       return res.status(400).json({ 
         ok: false, 
-        error: 'La transacción no incluye la wallet del merchant' 
+        error: 'La transacción falló en la blockchain' 
       });
     }
     
-    // Verificar balances
-    if (!tx.meta || !tx.meta.preBalances || !tx.meta.postBalances) {
-      console.log(`❌ No hay información de balances`);
+    // 🔧 FIX: Buscar la instrucción de transferencia parseada
+    const instructions = tx.transaction.message.instructions;
+    let transferFound = false;
+    let amountReceived = 0;
+    
+    console.log(`   🔍 Analizando ${instructions.length} instrucciones...`);
+    
+    for (const ix of instructions) {
+      // Verificar si es una transferencia del System Program
+      if (ix.programId.toString() === '11111111111111111111111111111111') {
+        console.log('      ✓ Instrucción del System Program encontrada');
+        
+        if (ix.parsed && ix.parsed.type === 'transfer') {
+          const info = ix.parsed.info;
+          console.log(`      📤 De: ${info.source}`);
+          console.log(`      📥 A: ${info.destination}`);
+          console.log(`      💵 Monto: ${info.lamports} lamports`);
+          
+          // Verificar que el destinatario es nuestro merchant wallet
+          if (info.destination === DEFAULT_MERCHANT) {
+            transferFound = true;
+            amountReceived = info.lamports / LAMPORTS_PER_SOL;
+            console.log(`      ✅ Transferencia al merchant confirmada: ${amountReceived} SOL`);
+            break;
+          } else {
+            console.log(`      ⚠️ Destino no coincide.`);
+            console.log(`         Esperado: ${DEFAULT_MERCHANT}`);
+            console.log(`         Recibido: ${info.destination}`);
+          }
+        }
+      }
+    }
+    
+    if (!transferFound) {
+      console.log(`❌ No se encontró transferencia válida al merchant`);
       return res.status(400).json({ 
         ok: false, 
-        error: 'No se pudo verificar el monto de la transacción' 
+        error: 'No se encontró transferencia válida al merchant wallet' 
       });
     }
     
-    const pre = tx.meta.preBalances[merchantIndex];
-    const post = tx.meta.postBalances[merchantIndex];
-    const lamportsReceived = post - pre;
-    const expectedLamports = Math.round(expectedAmountSOL * LAMPORTS_PER_SOL);
+    // 🔧 FIX: Verificar el monto con tolerancia mínima
+    const tolerance = 0.00001; // Tolerancia de 0.00001 SOL
+    const difference = Math.abs(amountReceived - expectedAmountSOL);
     
-    console.log(`   💰 Lamports recibidos: ${lamportsReceived}`);
-    console.log(`   💰 Lamports esperados: ${expectedLamports}`);
+    console.log(`   💰 Verificando monto:`);
+    console.log(`      Esperado: ${expectedAmountSOL} SOL`);
+    console.log(`      Recibido: ${amountReceived} SOL`);
+    console.log(`      Diferencia: ${difference} SOL`);
+    console.log(`      Tolerancia: ${tolerance} SOL`);
     
-    if (lamportsReceived < expectedLamports) {
+    if (difference > tolerance) {
       console.log(`❌ Monto insuficiente`);
       return res.status(400).json({ 
         ok: false, 
-        error: `Monto insuficiente: se recibieron ${(lamportsReceived / LAMPORTS_PER_SOL).toFixed(4)} SOL, se esperaban ${expectedAmountSOL} SOL` 
+        error: `Monto insuficiente: se recibieron ${amountReceived.toFixed(4)} SOL, se esperaban ${expectedAmountSOL} SOL` 
       });
     }
     
+    console.log(`   ✅ Verificación de monto exitosa`);
+    
     // Parsear memo
-    const memo = parseMemoFromTx(tx);
+    const memo = parseMemoFromParsedTx(tx);
     let memoMatches = false;
     
     if (memo && memo.json && metadata.selection) {
@@ -387,20 +406,26 @@ app.post('/api/verify-purchase', async (req, res) => {
         selMemo.blocksX === selReq.blocksX &&
         selMemo.blocksY === selReq.blocksY
       );
-      console.log(`   📝 Memo parseado: ${memoMatches ? '✅' : '⚠️ no coincide'}`);
+      console.log(`   📝 Memo parseado: ${memoMatches ? '✅ coincide' : '⚠️ no coincide'}`);
     }
+    
+    // Obtener el buyer (primera cuenta de la transacción)
+    const buyer = tx.transaction.message.accountKeys[0].pubkey 
+      ? tx.transaction.message.accountKeys[0].pubkey.toString() 
+      : tx.transaction.message.accountKeys[0].toString();
     
     // Guardar venta
     const sale = {
       signature,
-      amountSOL: expectedAmountSOL,
-      lamportsReceived,
+      buyer,
+      amountSOL: amountReceived,
       merchant: DEFAULT_MERCHANT,
       metadata,
       memo: memo ? memo.raw : null,
       memoParsed: memo ? memo.json : null,
       memoMatches,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      blockTime: tx.blockTime
     };
     
     appendSale(sale);
@@ -416,7 +441,6 @@ app.post('/api/verify-purchase', async (req, res) => {
     });
     
   } catch (err) {
-    // 🔧 FIXED: Mejor logging de errores
     console.error('❌ Error verificando transacción:', err);
     console.error('Error completo:', {
       message: err.message,
