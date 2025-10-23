@@ -365,7 +365,7 @@
   const CANVAS_SIZE = 1000;
   const BLOCK_SIZE = 10;
   const BLOCKS_PER_SIDE = CANVAS_SIZE / BLOCK_SIZE;
-  const PRICE_PER_BLOCK = 0.0001; // ⬅️ CAMBIADO DE 0.1 A 0.0001 PARA PRUEBAS
+  const PRICE_PER_BLOCK = 0.0001;
   const MERCHANT_WALLET = '3d7w4r4irLaKVYd4dLjpoiehJVawbbXWFWb1bCk9nGCo';
   const API_BASE = window.location.origin;
   const CLUSTER = 'mainnet-beta';
@@ -829,22 +829,14 @@
       const toPubkey = new solanaWeb3.PublicKey(MERCHANT_WALLET);
       const lamports = Math.round(metadata.priceSOL * solanaWeb3.LAMPORTS_PER_SOL);
       
+      // ✅ TRANSACCIÓN SIMPLE: Solo transferencia, SIN MEMO
       const transferIx = solanaWeb3.SystemProgram.transfer({
         fromPubkey,
         toPubkey,
         lamports
       });
-      
-      const MEMO_PROGRAM_ID = new solanaWeb3.PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
-      const encoder = new TextEncoder();
-      const memoData = encoder.encode(JSON.stringify(metadata));
-      const memoIx = new solanaWeb3.TransactionInstruction({
-        keys: [],
-        programId: MEMO_PROGRAM_ID,
-        data: memoData
-      });
 
-      const tx = new solanaWeb3.Transaction().add(transferIx, memoIx);
+      const tx = new solanaWeb3.Transaction().add(transferIx);
       tx.feePayer = fromPubkey;
       const { blockhash } = await connection.getLatestBlockhash('finalized');
       tx.recentBlockhash = blockhash;
