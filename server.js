@@ -21,6 +21,9 @@ if (process.env.APP_CONFIG) {
     // Mapear Cloudinary también desde APP_CONFIG
     if (cfg.CLOUDINARY_CLOUD_NAME) process.env.CLOUDINARY_CLOUD_NAME = cfg.CLOUDINARY_CLOUD_NAME;
     if (cfg.CLOUDINARY_UPLOAD_PRESET) process.env.CLOUDINARY_UPLOAD_PRESET = cfg.CLOUDINARY_UPLOAD_PRESET;
+    // Añadir API key/secret desde APP_CONFIG (si vienen incluidos)
+    if (cfg.CLOUDINARY_API_KEY) process.env.CLOUDINARY_API_KEY = String(cfg.CLOUDINARY_API_KEY);
+    if (cfg.CLOUDINARY_API_SECRET) process.env.CLOUDINARY_API_SECRET = String(cfg.CLOUDINARY_API_SECRET);
     // Opcional: RESTORE secret para proteger restore endpoint
     if (cfg.RESTORE_SECRET !== undefined) process.env.RESTORE_SECRET = String(cfg.RESTORE_SECRET);
     if (cfg.REMOVE_LOCAL_AFTER_UPLOAD !== undefined) process.env.REMOVE_LOCAL_AFTER_UPLOAD = String(cfg.REMOVE_LOCAL_AFTER_UPLOAD);
@@ -599,6 +602,44 @@ app.post('/api/restore-sales', express.json(), (req, res) => {
   } catch (err) {
     console.error('❌ Error restaurando sales.json:', err);
     return res.status(500).json({ ok: false, error: 'Error interno' });
+  }
+});
+
+// ============================================
+// NUEVO ENDPOINT: Forzar restauración desde Cloudinary (protegido por RESTORE_SECRET si se configura)
+// ============================================
+app.post('/api/restore-from-cloudinary', express.json(), async (req, res) => {
+  try {
+    const RESTORE_SECRET = process.env.RESTORE_SECRET || '';
+    if (RESTORE_SECRET) {
+      const secret = req.headers['x-restore-secret'] || req.body?.secret;
+      if (!secret || secret !== RESTORE_SECRET) {
+        return res.status(403).json({ ok: false, error: 'Forbidden' });
+      }
+    }
+
+    if (!CLOUDINARY_CLOUD_NAME) {
+      return res.status(400).json({ ok: false, error: 'CLOUDINARY_CLOUD_NAME no configurado' });
+    }
+
+    const cloudName = CLOUDINARY_CLOUD_NAME;
+    const apiKey = CLOUDINARY_API_KEY;
+    const apiSecret = CLOUDINARY_API_SECRET;
+
+    // Restaurar sales.json e images.json
+    const salesRes = await restoreImagesFromCloudinary('solana_sales_backup', SALES_FILE, cloudName, apiKey, apiSecret);
+    const imagesRes = await restoreImagesFromCloudinary('solana_images_backup', IMAGES_FILE, cloudName, apiKey, apiSecret);
+
+    const result = { sales: salesRes, images: imagesRes };
+    // si ambos fallan devolvemos 500 para que quede claro el fallo
+    if (!salesRes.ok && !imagesRes.ok) {
+      return res.status(500).json({ ok: false, result });
+    }
+
+    return res.json({ ok: true, result });
+  } catch (err) {
+    console.error('❌ Error en /api/restore-from-cloudinary:', err);
+    return res.status(500).json({ ok: false, error: err.message || 'Error interno' });
   }
 });
 
