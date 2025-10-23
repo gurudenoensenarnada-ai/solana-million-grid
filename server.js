@@ -38,6 +38,9 @@ const cors = require('cors');
 const axios = require('axios');
 const FormData = require('form-data');
 
+// nuevo helper para restauración más robusta desde Cloudinary (Admin API fallback)
+const { restoreImagesFromCloudinary } = require('./cloudinary-helpers');
+
 const app = express();
 app.use(express.json({ limit: '4mb' }));
 app.use(cors());
@@ -55,6 +58,9 @@ const BASE_URL = process.env.BASE_URL || ''; // Para URLs completas
 // Cloudinary unsigned config (defaults to your values)
 const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || '';
 const CLOUDINARY_UPLOAD_PRESET = process.env.CLOUDINARY_UPLOAD_PRESET || '';
+// API key/secret (para Admin API fallback)
+const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY || '';
+const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET || '';
 // API endpoints for raw uploads
 const CLOUDINARY_RAW_API_URL = CLOUDINARY_CLOUD_NAME ? `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/raw/upload` : null;
 const CLOUDINARY_RAW_DELIVER_BASE = CLOUDINARY_CLOUD_NAME ? `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/raw/upload` : null;
@@ -96,6 +102,7 @@ console.log('   MEMO_PROGRAM_ID used value:', MEMO_PROGRAM_ID_STR);
 
 // ============================================
 // UTIL: Cloudinary upload/download para backups (resource_type=raw)
+// (se mantiene la función pública de descarga como fallback local)
 // ============================================
 
 async function uploadFileToCloudinary(filePath, publicId) {
@@ -166,9 +173,23 @@ async function ensureJsonFiles() {
 
     if (needSales && CLOUDINARY_CLOUD_NAME) {
       console.log('   Intentando restaurar sales.json desde Cloudinary...');
-      const ok = await downloadFileFromCloudinary('solana_sales_backup', SALES_FILE);
-      if (!ok) {
-        // crear por defecto si no se pudo restaurar
+      // usar helper que intenta URL pública y luego Admin API si tienes API_KEY/SECRET
+      try {
+        const resSales = await restoreImagesFromCloudinary(
+          'solana_sales_backup',
+          SALES_FILE,
+          CLOUDINARY_CLOUD_NAME,
+          CLOUDINARY_API_KEY,
+          CLOUDINARY_API_SECRET
+        );
+        if (resSales.ok) {
+          console.log(`   ✅ sales.json restaurado desde: ${resSales.url}`);
+        } else {
+          console.warn('   ⚠️ No se pudo restaurar sales.json desde Cloudinary:', resSales.error);
+          fs.writeFileSync(SALES_FILE, JSON.stringify({ sales: [] }, null, 2));
+        }
+      } catch (err) {
+        console.warn('   ⚠️ Error intentando restaurar sales.json (helper):', err?.message || err);
         fs.writeFileSync(SALES_FILE, JSON.stringify({ sales: [] }, null, 2));
       }
     } else if (!fs.existsSync(SALES_FILE)) {
@@ -184,8 +205,22 @@ async function ensureJsonFiles() {
 
     if (needImages && CLOUDINARY_CLOUD_NAME) {
       console.log('   Intentando restaurar images.json desde Cloudinary...');
-      const ok2 = await downloadFileFromCloudinary('solana_images_backup', IMAGES_FILE);
-      if (!ok2) {
+      try {
+        const resImages = await restoreImagesFromCloudinary(
+          'solana_images_backup',
+          IMAGES_FILE,
+          CLOUDINARY_CLOUD_NAME,
+          CLOUDINARY_API_KEY,
+          CLOUDINARY_API_SECRET
+        );
+        if (resImages.ok) {
+          console.log(`   ✅ images.json restaurado desde: ${resImages.url}`);
+        } else {
+          console.warn('   ⚠️ No se pudo restaurar images.json desde Cloudinary:', resImages.error);
+          fs.writeFileSync(IMAGES_FILE, JSON.stringify({ images: {} }, null, 2));
+        }
+      } catch (err) {
+        console.warn('   ⚠️ Error intentando restaurar images.json (helper):', err?.message || err);
         fs.writeFileSync(IMAGES_FILE, JSON.stringify({ images: {} }, null, 2));
       }
     } else if (!fs.existsSync(IMAGES_FILE)) {
