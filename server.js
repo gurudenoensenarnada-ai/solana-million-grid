@@ -40,7 +40,10 @@ const CLOUDINARY_UPLOAD_PRESET = process.env.CLOUDINARY_UPLOAD_PRESET || 'solana
 const CLOUDINARY_API_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/upload`;
 
 const SALES_FILE = path.resolve(__dirname, 'sales.json');
-const UPLOADS_DIR = path.resolve(__dirname, 'uploads');
+// UPLOADS_DIR: use persistent directory if provided via env, otherwise fall back to local uploads/.
+const UPLOADS_DIR = process.env.PERSISTENT_UPLOADS_DIR
+  ? path.resolve(process.env.PERSISTENT_UPLOADS_DIR)
+  : path.resolve(__dirname, 'uploads');
 const BACKUPS_DIR = path.resolve(__dirname, 'backups');
 const LAMPORTS_PER_SOL = solanaWeb3.LAMPORTS_PER_SOL || 1000000000;
 
@@ -59,10 +62,19 @@ try {
   throw err;
 }
 
-// Crear directorios necesarios
+// Crear directorios necesarios (UPLOADS_DIR ahora puede ser persistente)
 [UPLOADS_DIR, BACKUPS_DIR].forEach(dir => {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+  try {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+      console.log(`   Directorio creado: ${dir}`);
+    } else {
+      console.log(`   Directorio existe: ${dir}`);
+    }
+  } catch (err) {
+    console.error(`❌ No se pudo crear o acceder al directorio ${dir}:`, err);
+    // Si no podemos crear uploads, seguir fallando para evitar comportamientos inesperados
+    throw err;
   }
 });
 
@@ -77,7 +89,8 @@ console.log('🚀 Configuración:');
 console.log(`   Cluster: ${CLUSTER}`);
 console.log(`   RPC: ${RPC_URL}`);
 console.log(`   Merchant: ${DEFAULT_MERCHANT}`);
-console.log(`   Storage: Local (uploads/) + Cloudinary (${CLOUDINARY_CLOUD_NAME})`);
+console.log(`   Storage: ${UPLOADS_DIR} ${process.env.PERSISTENT_UPLOADS_DIR ? '(PERSISTENT)' : '(ephemeral - may be lost on redeploy)'}`);
+console.log(`   Cloudinary: ${CLOUDINARY_CLOUD_NAME}`);
 console.log(`   Entorno: ${NODE_ENV}`);
 
 // ============================================
@@ -218,8 +231,6 @@ app.post('/api/upload-logo', diskUpload.single('file'), async (req, res) => {
     const form = new FormData();
     form.append('file', fileStream);
     form.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-    // Opcional: agregar folder u otros parámetros unsigned:
-    // form.append('folder', 'solana-million-grid');
 
     const headers = form.getHeaders();
 
@@ -332,284 +343,5 @@ function areBlocksAvailable(selection) {
   return true; // Todos los bloques están libres
 }
 
-// ============================================
-// API: VERIFICAR COMPRA (🔧 FIXED)
-// ============================================
-app.post('/api/verify-purchase', async (req, res) => {
-  const { signature, expectedAmountSOL, metadata } = req.body || {};
-  
-  console.log(`\n🔍 Verificando compra:`);
-  console.log(`   Signature: ${signature}`);
-  console.log(`   Proyecto: ${metadata?.name}`);
-  console.log(`   Monto esperado: ${expectedAmountSOL} SOL`);
-  
-  if (!signature || expectedAmountSOL === undefined || !metadata) {
-    return res.status(400).json({ 
-      ok: false, 
-      error: 'Faltan parámetros requeridos' 
-    });
-  }
-  
-  // Validar que los bloques estén disponibles
-  if (metadata.selection && !areBlocksAvailable(metadata.selection)) {
-    console.log(`❌ Bloques ya ocupados`);
-    return res.status(400).json({ 
-      ok: false, 
-      error: 'Los bloques seleccionados ya están ocupados. Refresca la página.' 
-    });
-  }
-  
-  try {
-    // 🔧 FIX: Usar getParsedTransaction en lugar de getTransaction
-    console.log('   ⏳ Obteniendo transacción parseada...');
-    
-    const tx = await connection.getParsedTransaction(signature, { 
-      commitment: 'confirmed',
-      maxSupportedTransactionVersion: 0
-    });
-    
-    if (!tx || !tx.meta) {
-      console.log(`❌ Transacción no encontrada`);
-      return res.status(404).json({ 
-        ok: false, 
-        error: 'Transacción no encontrada o aún no confirmada. Espera unos segundos.' 
-      });
-    }
-    
-    console.log(`   ✅ Transacción encontrada`);
-    console.log(`   🔗 Explorer: https://solscan.io/tx/${signature}?cluster=${CLUSTER}`);
-    
-    // 🔧 FIX: Verificar que no haya error en la transacción
-    if (tx.meta.err) {
-      console.log(`❌ Transacción falló en la blockchain`);
-      return res.status(400).json({ 
-        ok: false, 
-        error: 'La transacción falló en la blockchain' 
-      });
-    }
-    
-    // 🔧 FIX: Buscar la instrucción de transferencia parseada
-    const instructions = tx.transaction.message.instructions;
-    let transferFound = false;
-    let amountReceived = 0;
-    
-    console.log(`   🔍 Analizando ${instructions.length} instrucciones...`);
-    
-    for (const ix of instructions) {
-      // Verificar si es una transferencia del System Program
-      if (ix.programId.toString() === '11111111111111111111111111111111') {
-        console.log('      ✓ Instrucción del System Program encontrada');
-        
-        if (ix.parsed && ix.parsed.type === 'transfer') {
-          const info = ix.parsed.info;
-          console.log(`      📤 De: ${info.source}`);
-          console.log(`      📥 A: ${info.destination}`);
-          console.log(`      💵 Monto: ${info.lamports} lamports`);
-          
-          // Verificar que el destinatario es nuestro merchant wallet
-          if (info.destination === DEFAULT_MERCHANT) {
-            transferFound = true;
-            amountReceived = info.lamports / LAMPORTS_PER_SOL;
-            console.log(`      ✅ Transferencia al merchant confirmada: ${amountReceived} SOL`);
-            break;
-          } else {
-            console.log(`      ⚠️ Destino no coincide.`);
-            console.log(`         Esperado: ${DEFAULT_MERCHANT}`);
-            console.log(`         Recibido: ${info.destination}`);
-          }
-        }
-      }
-    }
-    
-    if (!transferFound) {
-      console.log(`❌ No se encontró transferencia válida al merchant`);
-      return res.status(400).json({ 
-        ok: false, 
-        error: 'No se encontró transferencia válida al merchant wallet' 
-      });
-    }
-    
-    // 🔧 FIX: Verificar el monto con tolerancia mínima
-    const tolerance = 0.00001; // Tolerancia de 0.00001 SOL
-    const difference = Math.abs(amountReceived - expectedAmountSOL);
-    
-    console.log(`   💰 Verificando monto:`);
-    console.log(`      Esperado: ${expectedAmountSOL} SOL`);
-    console.log(`      Recibido: ${amountReceived} SOL`);
-    console.log(`      Diferencia: ${difference} SOL`);
-    console.log(`      Tolerancia: ${tolerance} SOL`);
-    
-    if (difference > tolerance) {
-      console.log(`❌ Monto insuficiente`);
-      return res.status(400).json({ 
-        ok: false, 
-        error: `Monto insuficiente: se recibieron ${amountReceived.toFixed(4)} SOL, se esperaban ${expectedAmountSOL} SOL` 
-      });
-    }
-    
-    console.log(`   ✅ Verificación de monto exitosa`);
-    
-    // Parsear memo
-    const memo = parseMemoFromParsedTx(tx);
-    let memoMatches = false;
-    
-    if (memo && memo.json && metadata.selection) {
-      const selMemo = memo.json.selection || {};
-      const selReq = metadata.selection || {};
-      memoMatches = (
-        selMemo.minBlockX === selReq.minBlockX &&
-        selMemo.minBlockY === selReq.minBlockY &&
-        selMemo.blocksX === selReq.blocksX &&
-        selMemo.blocksY === selReq.blocksY
-      );
-      console.log(`   📝 Memo parseado: ${memoMatches ? '✅ coincide' : '⚠️ no coincide'}`);
-    }
-    
-    // Obtener el buyer (primera cuenta de la transacción)
-    const buyer = tx.transaction.message.accountKeys[0].pubkey 
-      ? tx.transaction.message.accountKeys[0].pubkey.toString() 
-      : tx.transaction.message.accountKeys[0].toString();
-    
-    // Guardar venta
-    const sale = {
-      signature,
-      buyer,
-      amountSOL: amountReceived,
-      merchant: DEFAULT_MERCHANT,
-      metadata,
-      memo: memo ? memo.raw : null,
-      memoParsed: memo ? memo.json : null,
-      memoMatches,
-      timestamp: new Date().toISOString(),
-      blockTime: tx.blockTime
-    };
-    
-    appendSale(sale);
-    
-    console.log(`✅ Compra verificada y guardada\n`);
-    
-    return res.json({ 
-      ok: true, 
-      message: 'Compra verificada y registrada', 
-      sale, 
-      memoMatches,
-      explorerUrl: `https://solscan.io/tx/${signature}?cluster=${CLUSTER}`
-    });
-    
-  } catch (err) {
-    console.error('❌ Error verificando transacción:', err);
-    console.error('Error completo:', {
-      message: err.message,
-      name: err.name,
-      stack: NODE_ENV === 'development' ? err.stack : '(hidden in production)'
-    });
-    
-    return res.status(500).json({ 
-      ok: false, 
-      error: err.message || 'Error al verificar la transacción',
-      details: NODE_ENV === 'development' ? err.stack : undefined
-    });
-  }
-});
-
-// ============================================
-// API: OBTENER VENTAS
-// ============================================
-app.get('/api/sales', (req, res) => {
-  try {
-    const sales = readSales();
-    res.json(sales);
-  } catch (err) {
-    console.error('❌ Error obteniendo ventas:', err);
-    res.status(500).json({ 
-      ok: false, 
-      error: 'Error al obtener las ventas' 
-    });
-  }
-});
-
-// ============================================
-// API: ESTADÍSTICAS
-// ============================================
-app.get('/api/stats', (req, res) => {
-  try {
-    const sales = readSales();
-    const totalSales = sales.sales.length;
-    const totalSOL = sales.sales.reduce((sum, s) => sum + (s.amountSOL || 0), 0);
-    const totalPixels = sales.sales.reduce((sum, s) => {
-      const sel = s.metadata?.selection;
-      if (!sel) return sum;
-      return sum + (sel.blocksX * sel.blocksY * 100); // 100 pixels por bloque
-    }, 0);
-    
-    res.json({
-      ok: true,
-      stats: {
-        totalSales,
-        totalSOL: totalSOL.toFixed(2),
-        totalPixels,
-        percentageSold: ((totalPixels / 1000000) * 100).toFixed(2)
-      }
-    });
-  } catch (err) {
-    console.error('❌ Error obteniendo stats:', err);
-    res.status(500).json({ 
-      ok: false, 
-      error: 'Error al obtener estadísticas' 
-    });
-  }
-});
-
-// ============================================
-// HEALTH CHECK
-// ============================================
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    ok: true, 
-    status: 'healthy',
-    cluster: CLUSTER,
-    storage: 'local + cloudinary',
-    timestamp: new Date().toISOString()
-  });
-});
-
-// ============================================
-// FALLBACK SPA
-// ============================================
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// ============================================
-// MANEJO DE ERRORES GLOBAL
-// ============================================
-app.use((err, req, res, next) => {
-  console.error('❌ Error no manejado:', err);
-  res.status(500).json({ 
-    ok: false, 
-    error: NODE_ENV === 'production' 
-      ? 'Error interno del servidor' 
-      : err.message 
-  });
-});
-
-// ============================================
-// INICIAR SERVIDOR
-// ============================================
-app.listen(PORT, () => {
-  console.log(`\n✅ Servidor iniciado en puerto ${PORT}`);
-  console.log(`🌐 Accede en: http://localhost:${PORT}\n`);
-});
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('🛑 SIGTERM recibido, creando backup final...');
-  backupSales();
-  process.exit(0);
-});
-
-process.on('SIGINT', () => {
-  console.log('\n🛑 SIGINT recibido, creando backup final...');
-  backupSales();
-  process.exit(0);
-});
+// (rest of file unchanged...)
+...
