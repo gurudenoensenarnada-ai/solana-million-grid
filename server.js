@@ -1,8 +1,8 @@
 /**
- * server.js - PRODUCTION VERSION (Local Storage Only)
+ * server.js - PRODUCTION VERSION (Local Storage Only) + Cloudinary unsigned uploads
  * 
  * Express server para Solana Million Grid
- * - Subida de logos LOCAL (sin IPFS)
+ * - Subida de logos LOCAL (sin IPFS) y COPIA en Cloudinary (unsigned preset)
  * - Verificación de transacciones on-chain
  * - Rate limiting y seguridad
  * - Backups automáticos
@@ -17,6 +17,8 @@ const multer = require('multer');
 const solanaWeb3 = require('@solana/web3.js');
 const bs58 = require('bs58');
 const cors = require('cors');
+const axios = require('axios');
+const FormData = require('form-data');
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
@@ -32,11 +34,16 @@ const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'production';
 const BASE_URL = process.env.BASE_URL || ''; // Para URLs completas
 
+// Cloudinary unsigned config (defaults to your values)
+const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || 'drubzopvu';
+const CLOUDINARY_UPLOAD_PRESET = process.env.CLOUDINARY_UPLOAD_PRESET || 'solana_unsigned';
+const CLOUDINARY_API_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/upload`;
+
 const SALES_FILE = path.resolve(__dirname, 'sales.json');
 const UPLOADS_DIR = path.resolve(__dirname, 'uploads');
 const BACKUPS_DIR = path.resolve(__dirname, 'backups');
 const LAMPORTS_PER_SOL = solanaWeb3.LAMPORTS_PER_SOL || 1000000000;
-const MEMO_PROGRAM_ID = new solanaWeb3.PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
+const MEMO_PROGRAM_ID = new solanaWeb3.PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLmfcHr');
 
 // Crear directorios necesarios
 [UPLOADS_DIR, BACKUPS_DIR].forEach(dir => {
@@ -56,7 +63,7 @@ console.log('🚀 Configuración:');
 console.log(`   Cluster: ${CLUSTER}`);
 console.log(`   RPC: ${RPC_URL}`);
 console.log(`   Merchant: ${DEFAULT_MERCHANT}`);
-console.log(`   Storage: Local (uploads/)`);
+console.log(`   Storage: Local (uploads/) + Cloudinary (${CLOUDINARY_CLOUD_NAME})`);
 console.log(`   Entorno: ${NODE_ENV}`);
 
 // ============================================
@@ -171,9 +178,9 @@ const diskUpload = multer({
 });
 
 // ============================================
-// API: SUBIR LOGO
+// API: SUBIR LOGO -> ahora guarda en Cloudinary (unsigned)
 // ============================================
-app.post('/api/upload-logo', diskUpload.single('file'), (req, res) => {
+app.post('/api/upload-logo', diskUpload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ ok: false, error: 'No se recibió ningún archivo' });
@@ -182,32 +189,67 @@ app.post('/api/upload-logo', diskUpload.single('file'), (req, res) => {
     const originalName = req.file.originalname;
     const tmpPath = req.file.path;
     
-    // Generar nombre único
+    // Generar nombre único (local)
     const timestamp = Date.now();
     const ext = path.extname(originalName);
     const safeName = originalName.replace(/[^a-zA-Z0-9.-]/g, '_');
     const finalName = `${timestamp}_${safeName}`;
     const targetPath = path.join(UPLOADS_DIR, finalName);
-    
+
+    // Renombrar el archivo en local (mantener copia local como backup)
     fs.renameSync(tmpPath, targetPath);
-    
-    // Generar URL completa
-    let fullUrl;
-    if (BASE_URL) {
-      fullUrl = `${BASE_URL}/uploads/${encodeURIComponent(finalName)}`;
-    } else {
-      const protocol = req.protocol;
-      const host = req.get('host');
-      fullUrl = `${protocol}://${host}/uploads/${encodeURIComponent(finalName)}`;
+
+    // Subir a Cloudinary (unsigned) usando multipart/form-data
+    const fileStream = fs.createReadStream(targetPath);
+    const form = new FormData();
+    form.append('file', fileStream);
+    form.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+    // Opcional: agregar folder u otros parámetros unsigned:
+    // form.append('folder', 'solana-million-grid');
+
+    const headers = form.getHeaders();
+
+    console.log(`📤 Subiendo ${finalName} a Cloudinary ${CLOUDINARY_CLOUD_NAME} con preset ${CLOUDINARY_UPLOAD_PRESET}...`);
+    let cloudResp;
+    try {
+      const resp = await axios.post(CLOUDINARY_API_URL, form, {
+        headers,
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
+        timeout: 30000
+      });
+      cloudResp = resp.data;
+      console.log('   ✅ Subida a Cloudinary OK:', cloudResp.secure_url);
+    } catch (err) {
+      // En caso de error en la subida a Cloudinary, lo loggeamos y devolvemos fallback a la URL local
+      console.error('❌ Error subiendo a Cloudinary:', err.message || err.toString());
+      // No eliminamos la copia local; devolvemos la URL local para compatibilidad
+      let fullUrl;
+      if (BASE_URL) {
+        fullUrl = `${BASE_URL}/uploads/${encodeURIComponent(finalName)}`;
+      } else {
+        const protocol = req.protocol;
+        const host = req.get('host');
+        fullUrl = `${protocol}://${host}/uploads/${encodeURIComponent(finalName)}`;
+      }
+
+      return res.status(502).json({
+        ok: false,
+        error: 'La subida a Cloudinary falló. Archivo guardado en local como respaldo.',
+        localUrl: fullUrl,
+        details: err.message
+      });
     }
-    
-    console.log(`📤 Logo guardado: ${finalName}`);
-    console.log(`🔗 URL completa: ${fullUrl}`);
-    
-    return res.json({ 
-      ok: true, 
-      url: fullUrl,
-      name: finalName
+
+    // Si la subida a Cloudinary fue exitosa, devolver la URL pública y metadatos.
+    return res.json({
+      ok: true,
+      url: cloudResp.secure_url,
+      public_id: cloudResp.public_id,
+      version: cloudResp.version,
+      name: finalName,
+      // Mantener también la URL local en caso de que quieras conservarla
+      local: BASE_URL ? `${BASE_URL}/uploads/${encodeURIComponent(finalName)}` : undefined
     });
     
   } catch (err) {
@@ -512,7 +554,7 @@ app.get('/api/health', (req, res) => {
     ok: true, 
     status: 'healthy',
     cluster: CLUSTER,
-    storage: 'local',
+    storage: 'local + cloudinary',
     timestamp: new Date().toISOString()
   });
 });
