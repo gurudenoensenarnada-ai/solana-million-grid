@@ -30,6 +30,7 @@ const CLUSTER = process.env.CLUSTER || 'mainnet-beta';
 const RPC_URL = process.env.RPC_URL || solanaWeb3.clusterApiUrl(CLUSTER);
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'production';
+const BASE_URL = process.env.BASE_URL || ''; // Para URLs completas
 
 const SALES_FILE = path.resolve(__dirname, 'sales.json');
 const UPLOADS_DIR = path.resolve(__dirname, 'uploads');
@@ -170,7 +171,7 @@ const diskUpload = multer({
 });
 
 // ============================================
-// API: SUBIR LOGO (Solo Local)
+// API: SUBIR LOGO (🔧 FIXED: URLs completas)
 // ============================================
 app.post('/api/upload-logo', diskUpload.single('file'), (req, res) => {
   try {
@@ -190,12 +191,24 @@ app.post('/api/upload-logo', diskUpload.single('file'), (req, res) => {
     
     fs.renameSync(tmpPath, targetPath);
     
-    const url = `/uploads/${encodeURIComponent(finalName)}`;
+    // 🔧 FIX: Generar URL completa (con protocolo y dominio)
+    let fullUrl;
+    if (BASE_URL) {
+      // Si hay BASE_URL en .env, usarla
+      fullUrl = `${BASE_URL}/uploads/${encodeURIComponent(finalName)}`;
+    } else {
+      // Construir desde la request
+      const protocol = req.protocol; // http o https
+      const host = req.get('host'); // dominio:puerto
+      fullUrl = `${protocol}://${host}/uploads/${encodeURIComponent(finalName)}`;
+    }
+    
     console.log(`📤 Logo guardado: ${finalName}`);
+    console.log(`🔗 URL completa: ${fullUrl}`);
     
     return res.json({ 
       ok: true, 
-      url, 
+      url: fullUrl, // URL completa en producción
       name: finalName
     });
     
@@ -278,7 +291,7 @@ function areBlocksAvailable(selection) {
 }
 
 // ============================================
-// API: VERIFICAR COMPRA
+// API: VERIFICAR COMPRA (🔧 FIXED: Mejor logging)
 // ============================================
 app.post('/api/verify-purchase', async (req, res) => {
   const { signature, expectedAmountSOL, metadata } = req.body || {};
@@ -403,10 +416,18 @@ app.post('/api/verify-purchase', async (req, res) => {
     });
     
   } catch (err) {
+    // 🔧 FIXED: Mejor logging de errores
     console.error('❌ Error verificando transacción:', err);
+    console.error('Error completo:', {
+      message: err.message,
+      name: err.name,
+      stack: NODE_ENV === 'development' ? err.stack : '(hidden in production)'
+    });
+    
     return res.status(500).json({ 
       ok: false, 
-      error: err.message || 'Error al verificar la transacción' 
+      error: err.message || 'Error al verificar la transacción',
+      details: NODE_ENV === 'development' ? err.stack : undefined
     });
   }
 });
