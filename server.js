@@ -1,8 +1,9 @@
 /**
- * server.js - PRODUCTION VERSION (Local Storage Only) + Cloudinary unsigned uploads
+ * server.js - PRODUCTION VERSION (Local Storage Only) + optional Cloudinary + images.json dataURL backup
  *
  * Express server para Solana Million Grid
- * - Subida de logos LOCAL (sin IPFS) y COPIA en Cloudinary (unsigned preset)
+ * - Subida de logos LOCAL (sin IPFS) y COPIA opcional en Cloudinary (unsigned preset)
+ * - Opcional: guardar imagen en images.json como dataURL (SAVE_IMAGES_IN_JSON=true)
  * - Verificación de transacciones on-chain
  * - Rate limiting y seguridad
  * - Backups automáticos
@@ -15,13 +16,12 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const solanaWeb3 = require('@solana/web3.js');
-const bs58 = require('bs58');
 const cors = require('cors');
 const axios = require('axios');
 const FormData = require('form-data');
 
 const app = express();
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '4mb' }));
 app.use(cors());
 
 // ============================================
@@ -35,11 +35,12 @@ const NODE_ENV = process.env.NODE_ENV || 'production';
 const BASE_URL = process.env.BASE_URL || ''; // Para URLs completas
 
 // Cloudinary unsigned config (defaults to your values)
-const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || 'drubzopvu';
-const CLOUDINARY_UPLOAD_PRESET = process.env.CLOUDINARY_UPLOAD_PRESET || 'solana_unsigned';
-const CLOUDINARY_API_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/upload`;
+const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || '';
+const CLOUDINARY_UPLOAD_PRESET = process.env.CLOUDINARY_UPLOAD_PRESET || '';
+const CLOUDINARY_API_URL = CLOUDINARY_CLOUD_NAME ? `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/upload` : null;
 
 const SALES_FILE = path.resolve(__dirname, 'sales.json');
+const IMAGES_FILE = path.resolve(__dirname, 'images.json');
 // UPLOADS_DIR: use persistent directory if provided via env, otherwise fall back to local uploads/.
 const UPLOADS_DIR = process.env.PERSISTENT_UPLOADS_DIR
   ? path.resolve(process.env.PERSISTENT_UPLOADS_DIR)
@@ -47,7 +48,7 @@ const UPLOADS_DIR = process.env.PERSISTENT_UPLOADS_DIR
 const BACKUPS_DIR = path.resolve(__dirname, 'backups');
 const LAMPORTS_PER_SOL = solanaWeb3.LAMPORTS_PER_SOL || 1000000000;
 
-// MEMO_PROGRAM: usar string en lugar de instanciar PublicKey para evitar errores de inicialización en algunos entornos
+// MEMO_PROGRAM: usar string para evitar instanciar PublicKey en startup
 const DEFAULT_MEMO_PROGRAM = 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLmfcHr';
 const MEMO_PROGRAM_ID_STR = (process.env.MEMO_PROGRAM_ID || DEFAULT_MEMO_PROGRAM).toString().trim();
 console.log('   MEMO_PROGRAM_ID raw value:', process.env.MEMO_PROGRAM_ID);
@@ -64,14 +65,16 @@ console.log('   MEMO_PROGRAM_ID used value:', MEMO_PROGRAM_ID_STR);
     }
   } catch (err) {
     console.error(`❌ No se pudo crear o acceder al directorio ${dir}:`, err);
-    // Si no podemos crear uploads, seguir fallando para evitar comportamientos inesperados
     throw err;
   }
 });
 
-// Crear sales.json si no existe
+// Crear sales.json e images.json si no existen
 if (!fs.existsSync(SALES_FILE)) {
   fs.writeFileSync(SALES_FILE, JSON.stringify({ sales: [] }, null, 2));
+}
+if (!fs.existsSync(IMAGES_FILE)) {
+  fs.writeFileSync(IMAGES_FILE, JSON.stringify({ images: {} }, null, 2));
 }
 
 const connection = new solanaWeb3.Connection(RPC_URL, 'confirmed');
@@ -81,7 +84,7 @@ console.log(`   Cluster: ${CLUSTER}`);
 console.log(`   RPC: ${RPC_URL}`);
 console.log(`   Merchant: ${DEFAULT_MERCHANT}`);
 console.log(`   Storage: ${UPLOADS_DIR} ${process.env.PERSISTENT_UPLOADS_DIR ? '(PERSISTENT)' : '(ephemeral - may be lost on redeploy)'}`);
-console.log(`   Cloudinary: ${CLOUDINARY_CLOUD_NAME}`);
+console.log(`   Cloudinary configured: ${CLOUDINARY_CLOUD_NAME ? 'yes' : 'no'}`);
 console.log(`   Entorno: ${NODE_ENV}`);
 
 // ============================================
@@ -146,6 +149,29 @@ function appendSale(sale) {
   }
 }
 
+// images.json helpers
+function readImages() {
+  try {
+    const data = fs.readFileSync(IMAGES_FILE, 'utf8');
+    return JSON.parse(data);
+  } catch (err) {
+    console.error('❌ Error leyendo images.json:', err);
+    return { images: {} };
+  }
+}
+
+function writeImages(imgs) {
+  try {
+    fs.writeFileSync(IMAGES_FILE, JSON.stringify(imgs, null, 2));
+  } catch (err) {
+    console.error('❌ Error guardando images.json:', err);
+    throw err;
+  }
+}
+
+// Control por env var: si === 'true' guardamos la imagen en images.json como dataURL
+const SAVE_IMAGES_IN_JSON = process.env.SAVE_IMAGES_IN_JSON === 'true';
+
 // ============================================
 // BACKUP AUTOMÁTICO
 // ============================================
@@ -196,7 +222,7 @@ const diskUpload = multer({
 });
 
 // ============================================
-// API: SUBIR LOGO -> ahora guarda en Cloudinary (unsigned)
+// API: SUBIR LOGO -> guarda copia local, opcional dataURL en images.json, opcional upload a Cloudinary
 // ============================================
 app.post('/api/upload-logo', diskUpload.single('file'), async (req, res) => {
   try {
@@ -209,7 +235,6 @@ app.post('/api/upload-logo', diskUpload.single('file'), async (req, res) => {
 
     // Generar nombre único (local)
     const timestamp = Date.now();
-    const ext = path.extname(originalName);
     const safeName = originalName.replace(/[^a-zA-Z0-9.-]/g, '_');
     const finalName = `${timestamp}_${safeName}`;
     const targetPath = path.join(UPLOADS_DIR, finalName);
@@ -217,18 +242,56 @@ app.post('/api/upload-logo', diskUpload.single('file'), async (req, res) => {
     // Renombrar el archivo en local (mantener copia local como backup)
     fs.renameSync(tmpPath, targetPath);
 
-    // Subir a Cloudinary (unsigned) usando multipart/form-data
+    // Crear data URL (base64) para guardarlo en JSON si se desea
+    let dataUrl = null;
+    try {
+      const buffer = fs.readFileSync(targetPath);
+      dataUrl = `data:${req.file.mimetype};base64,${buffer.toString('base64')}`;
+    } catch (err) {
+      console.warn('⚠️ No se pudo crear dataURL de la imagen:', err.message || err);
+    }
+
+    // Guardar en images.json si está habilitado
+    if (SAVE_IMAGES_IN_JSON && dataUrl) {
+      try {
+        const imgs = readImages();
+        imgs.images[finalName] = {
+          dataUrl,
+          mimetype: req.file.mimetype,
+          size: req.file.size,
+          uploadedAt: new Date().toISOString()
+        };
+        writeImages(imgs);
+        console.log(`   ✅ Imagen guardada en images.json: ${finalName}`);
+      } catch (err) {
+        console.warn('   ⚠️ Error guardando imagen en images.json:', err.message || err);
+      }
+    }
+
+    // Si Cloudinary no está configurado, devolver la URL local y dataUrl (si existe)
+    const cloudConfigured = Boolean(CLOUDINARY_CLOUD_NAME && CLOUDINARY_UPLOAD_PRESET);
+    if (!cloudConfigured) {
+      const localUrl = BASE_URL
+        ? `${BASE_URL}/uploads/${encodeURIComponent(finalName)}`
+        : `${req.protocol}://${req.get('host')}/uploads/${encodeURIComponent(finalName)}`;
+      return res.json({
+        ok: true,
+        url: localUrl,
+        name: finalName,
+        dataUrl // puede ser null si falla la conversión
+      });
+    }
+
+    // Si Cloudinary está configurado: subir
     const fileStream = fs.createReadStream(targetPath);
     const form = new FormData();
     form.append('file', fileStream);
     form.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-    // Opcional: agregar folder u otros parámetros unsigned:
-    // form.append('folder', 'solana-million-grid');
+    // opcional: form.append('folder', 'solana-million-grid');
 
     const headers = form.getHeaders();
 
-    console.log(`📤 Subiendo ${finalName} a Cloudinary ${CLOUDINARY_CLOUD_NAME} con preset ${CLOUDINARY_UPLOAD_PRESET}...`);
-    let cloudResp;
+    console.log(`📤 Subiendo ${finalName} a Cloudinary...`);
     try {
       const resp = await axios.post(CLOUDINARY_API_URL, form, {
         headers,
@@ -236,11 +299,10 @@ app.post('/api/upload-logo', diskUpload.single('file'), async (req, res) => {
         maxBodyLength: Infinity,
         timeout: 30000
       });
-      cloudResp = resp.data;
+      const cloudResp = resp.data;
       console.log('   ✅ Subida a Cloudinary OK:', cloudResp.secure_url);
 
-      // Si quieres eliminar la copia local para que no haya dependencia del filesystem efímero,
-      // pon la variable de entorno REMOVE_LOCAL_AFTER_UPLOAD = "true" en Render.
+      // Opción para eliminar copia local tras upload
       if (process.env.REMOVE_LOCAL_AFTER_UPLOAD === 'true') {
         try {
           fs.unlinkSync(targetPath);
@@ -249,37 +311,31 @@ app.post('/api/upload-logo', diskUpload.single('file'), async (req, res) => {
           console.warn('   ⚠️ No se pudo eliminar copia local:', unlinkErr.message || unlinkErr);
         }
       }
+
+      return res.json({
+        ok: true,
+        url: cloudResp.secure_url,
+        public_id: cloudResp.public_id,
+        version: cloudResp.version,
+        name: finalName,
+        dataUrl // útil para uso inmediato en cliente si quieres mostrar la imagen sin depender del hosting
+      });
     } catch (err) {
-      // En caso de error en la subida a Cloudinary, lo loggeamos y devolvemos fallback a la URL local
       console.error('❌ Error subiendo a Cloudinary:', err.message || err.toString());
-      // No eliminamos la copia local; devolvemos la URL local para compatibilidad
-      let fullUrl;
-      if (BASE_URL) {
-        fullUrl = `${BASE_URL}/uploads/${encodeURIComponent(finalName)}`;
-      } else {
-        const protocol = req.protocol;
-        const host = req.get('host');
-        fullUrl = `${protocol}://${host}/uploads/${encodeURIComponent(finalName)}`;
-      }
+
+      // Fallback: devolver URL local + dataUrl
+      const localUrl = BASE_URL
+        ? `${BASE_URL}/uploads/${encodeURIComponent(finalName)}`
+        : `${req.protocol}://${req.get('host')}/uploads/${encodeURIComponent(finalName)}`;
 
       return res.status(502).json({
         ok: false,
         error: 'La subida a Cloudinary falló. Archivo guardado en local como respaldo.',
-        localUrl: fullUrl,
+        localUrl,
+        dataUrl,
         details: err.message
       });
     }
-
-    // Si la subida a Cloudinary fue exitosa, devolver la URL pública y metadatos.
-    return res.json({
-      ok: true,
-      url: cloudResp.secure_url,
-      public_id: cloudResp.public_id,
-      version: cloudResp.version,
-      name: finalName,
-      // Mantener también la URL local en caso de que quieras conservarla
-      local: BASE_URL ? `${BASE_URL}/uploads/${encodeURIComponent(finalName)}` : undefined
-    });
 
   } catch (err) {
     console.error('❌ Error guardando archivo:', err);
@@ -290,15 +346,36 @@ app.post('/api/upload-logo', diskUpload.single('file'), async (req, res) => {
   }
 });
 
+// Endpoint para obtener dataURL o servir archivo local
+app.get('/api/image/:name', (req, res) => {
+  try {
+    const name = req.params.name;
+    const imgs = readImages();
+    const entry = imgs.images && imgs.images[name];
+    if (entry && entry.dataUrl) {
+      return res.json({ ok: true, name, dataUrl: entry.dataUrl, mimetype: entry.mimetype, size: entry.size });
+    }
+
+    const localPath = path.join(UPLOADS_DIR, name);
+    if (fs.existsSync(localPath)) {
+      return res.sendFile(localPath);
+    }
+
+    return res.status(404).json({ ok: false, error: 'Imagen no encontrada' });
+  } catch (err) {
+    console.error('❌ Error en /api/image/:', err);
+    return res.status(500).json({ ok: false, error: 'Error interno' });
+  }
+});
+
 // ============================================
-// PARSEAR MEMO
+// PARSEAR MEMO (usa string MEMO_PROGRAM_ID_STR)
 // ============================================
 function parseMemoFromParsedTx(tx) {
   try {
     const instructions = tx.transaction.message.instructions;
 
     for (const ix of instructions) {
-      // Comparar con string del MEMO program id para evitar instanciar PublicKey
       if (ix.programId && ix.programId.toString() === MEMO_PROGRAM_ID_STR) {
         try {
           // Intentar desde ix.data (base64)
@@ -349,7 +426,7 @@ function areBlocksAvailable(selection) {
 }
 
 // ============================================
-// API: VERIFICAR COMPRA (🔧 FIXED)
+// API: VERIFICAR COMPRA
 // ============================================
 app.post('/api/verify-purchase', async (req, res) => {
   const { signature, expectedAmountSOL, metadata } = req.body || {};
@@ -376,7 +453,6 @@ app.post('/api/verify-purchase', async (req, res) => {
   }
 
   try {
-    // 🔧 FIX: Usar getParsedTransaction en lugar de getTransaction
     console.log('   ⏳ Obteniendo transacción parseada...');
 
     const tx = await connection.getParsedTransaction(signature, {
@@ -395,7 +471,6 @@ app.post('/api/verify-purchase', async (req, res) => {
     console.log(`   ✅ Transacción encontrada`);
     console.log(`   🔗 Explorer: https://solscan.io/tx/${signature}?cluster=${CLUSTER}`);
 
-    // 🔧 FIX: Verificar que no haya error en la transacción
     if (tx.meta.err) {
       console.log(`❌ Transacción falló en la blockchain`);
       return res.status(400).json({
@@ -404,7 +479,6 @@ app.post('/api/verify-purchase', async (req, res) => {
       });
     }
 
-    // 🔧 FIX: Buscar la instrucción de transferencia parseada
     const instructions = tx.transaction.message.instructions;
     let transferFound = false;
     let amountReceived = 0;
@@ -412,7 +486,6 @@ app.post('/api/verify-purchase', async (req, res) => {
     console.log(`   🔍 Analizando ${instructions.length} instrucciones...`);
 
     for (const ix of instructions) {
-      // Verificar si es una transferencia del System Program
       if (ix.programId && ix.programId.toString() === '11111111111111111111111111111111') {
         console.log('      ✓ Instrucción del System Program encontrada');
 
@@ -422,7 +495,6 @@ app.post('/api/verify-purchase', async (req, res) => {
           console.log(`      📥 A: ${info.destination}`);
           console.log(`      💵 Monto: ${info.lamports} lamports`);
 
-          // Verificar que el destinatario es nuestro merchant wallet
           if (info.destination === DEFAULT_MERCHANT) {
             transferFound = true;
             amountReceived = info.lamports / LAMPORTS_PER_SOL;
@@ -445,8 +517,7 @@ app.post('/api/verify-purchase', async (req, res) => {
       });
     }
 
-    // 🔧 FIX: Verificar el monto con tolerancia mínima
-    const tolerance = 0.00001; // Tolerancia de 0.00001 SOL
+    const tolerance = 0.00001;
     const difference = Math.abs(amountReceived - expectedAmountSOL);
 
     console.log(`   💰 Verificando monto:`);
@@ -465,7 +536,6 @@ app.post('/api/verify-purchase', async (req, res) => {
 
     console.log(`   ✅ Verificación de monto exitosa`);
 
-    // Parsear memo
     const memo = parseMemoFromParsedTx(tx);
     let memoMatches = false;
 
@@ -481,12 +551,10 @@ app.post('/api/verify-purchase', async (req, res) => {
       console.log(`   📝 Memo parseado: ${memoMatches ? '✅ coincide' : '⚠️ no coincide'}`);
     }
 
-    // Obtener el buyer (primera cuenta de la transacción)
     const buyer = tx.transaction.message.accountKeys[0].pubkey
       ? tx.transaction.message.accountKeys[0].pubkey.toString()
       : tx.transaction.message.accountKeys[0].toString();
 
-    // Guardar venta
     const sale = {
       signature,
       buyer,
