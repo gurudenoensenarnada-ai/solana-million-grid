@@ -11,6 +11,21 @@
  */
 
 require('dotenv').config();
+
+// APP_CONFIG: parsear una sola env var JSON cuando el host solo permite UNA variable.
+// Ejemplo APP_CONFIG: {"RPC_URL":"https://...","SAVE_IMAGES_IN_JSON":true}
+if (process.env.APP_CONFIG) {
+  try {
+    const cfg = JSON.parse(process.env.APP_CONFIG);
+    if (cfg.RPC_URL) process.env.RPC_URL = cfg.RPC_URL;
+    if (cfg.SAVE_IMAGES_IN_JSON !== undefined) process.env.SAVE_IMAGES_IN_JSON = String(cfg.SAVE_IMAGES_IN_JSON);
+    if (cfg.PERSISTENT_UPLOADS_DIR) process.env.PERSISTENT_UPLOADS_DIR = cfg.PERSISTENT_UPLOADS_DIR;
+    if (cfg.REMOVE_LOCAL_AFTER_UPLOAD !== undefined) process.env.REMOVE_LOCAL_AFTER_UPLOAD = String(cfg.REMOVE_LOCAL_AFTER_UPLOAD);
+  } catch (e) {
+    console.warn('APP_CONFIG no es JSON válido:', e.message || e);
+  }
+}
+
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
