@@ -40,11 +40,16 @@ const CLOUDINARY_UPLOAD_PRESET = process.env.CLOUDINARY_UPLOAD_PRESET || '';
 const CLOUDINARY_API_URL = CLOUDINARY_CLOUD_NAME ? `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/upload` : null;
 
 const SALES_FILE = path.resolve(__dirname, 'sales.json');
-const IMAGES_FILE = path.resolve(__dirname, 'images.json');
+// IMAGES_FILE ahora usa PERSISTENT_UPLOADS_DIR si está configurado (evita pérdida de images.json en redeploy)
+const IMAGES_FILE = process.env.PERSISTENT_UPLOADS_DIR
+  ? path.resolve(process.env.PERSISTENT_UPLOADS_DIR, 'images.json')
+  : path.resolve(__dirname, 'images.json');
+
 // UPLOADS_DIR: use persistent directory if provided via env, otherwise fall back to local uploads/.
 const UPLOADS_DIR = process.env.PERSISTENT_UPLOADS_DIR
   ? path.resolve(process.env.PERSISTENT_UPLOADS_DIR)
   : path.resolve(__dirname, 'uploads');
+
 const BACKUPS_DIR = path.resolve(__dirname, 'backups');
 const LAMPORTS_PER_SOL = solanaWeb3.LAMPORTS_PER_SOL || 1000000000;
 
@@ -74,6 +79,11 @@ if (!fs.existsSync(SALES_FILE)) {
   fs.writeFileSync(SALES_FILE, JSON.stringify({ sales: [] }, null, 2));
 }
 if (!fs.existsSync(IMAGES_FILE)) {
+  // Si IMAGES_FILE está en un directorio persistente que no existe, crearlo antes de escribir
+  try {
+    const dir = path.dirname(IMAGES_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  } catch (e) { /* ignore */ }
   fs.writeFileSync(IMAGES_FILE, JSON.stringify({ images: {} }, null, 2));
 }
 
@@ -84,6 +94,7 @@ console.log(`   Cluster: ${CLUSTER}`);
 console.log(`   RPC: ${RPC_URL}`);
 console.log(`   Merchant: ${DEFAULT_MERCHANT}`);
 console.log(`   Storage: ${UPLOADS_DIR} ${process.env.PERSISTENT_UPLOADS_DIR ? '(PERSISTENT)' : '(ephemeral - may be lost on redeploy)'}`);
+console.log(`   IMAGES_FILE: ${IMAGES_FILE}`);
 console.log(`   Cloudinary configured: ${CLOUDINARY_CLOUD_NAME ? 'yes' : 'no'}`);
 console.log(`   Entorno: ${NODE_ENV}`);
 
@@ -364,6 +375,23 @@ app.get('/api/image/:name', (req, res) => {
     return res.status(404).json({ ok: false, error: 'Imagen no encontrada' });
   } catch (err) {
     console.error('❌ Error en /api/image/:', err);
+    return res.status(500).json({ ok: false, error: 'Error interno' });
+  }
+});
+
+// Nuevo endpoint: listar images.json (solo metadata) para debugging
+app.get('/api/images-list', (req, res) => {
+  try {
+    const imgs = readImages();
+    const list = Object.entries(imgs.images || {}).map(([name, meta]) => ({
+      name,
+      mimetype: meta.mimetype,
+      size: meta.size,
+      uploadedAt: meta.uploadedAt
+    }));
+    return res.json({ ok: true, count: list.length, images: list });
+  } catch (err) {
+    console.error('❌ Error en /api/images-list:', err);
     return res.status(500).json({ ok: false, error: 'Error interno' });
   }
 });
