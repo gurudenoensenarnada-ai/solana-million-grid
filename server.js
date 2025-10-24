@@ -139,7 +139,92 @@ async function uploadFileToCloudinary(filePath, publicId) {
     return null;
   }
 }
+// --- AUTO BACKUP: subir backups a Cloudinary cada vez que se añade una venta ----
+// Debounce + lock para evitar subidas simultáneas y demasiadas peticiones cuando llegan varias ventas seguidas.
 
+let isUploadingBackups = false;
+let pendingBackupTimeout = null;
+const BACKUP_UPLOAD_DEBOUNCE_MS = 2000; // agrupar cambios en ventana de 2s
+
+async function performBackupUpload() {
+  if (!CLOUDINARY_RAW_API_URL || !CLOUDINARY_UPLOAD_PRESET) {
+    console.log('   Cloudinary no configurado para backup upload.');
+    return;
+  }
+
+  if (isUploadingBackups) {
+    console.log('   Upload de backup ya en curso, saltando.');
+    return;
+  }
+  isUploadingBackups = true;
+
+  try {
+    // Crear backups con timestamp
+    const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
+    const salesBackupPath = path.join(BACKUPS_DIR, `sales_${timestamp}.json`);
+    fs.copyFileSync(SALES_FILE, salesBackupPath);
+
+    let salesResp = null;
+    try {
+      // Subir sales backup con public_id fijo
+      salesResp = await uploadFileToCloudinary(salesBackupPath, 'solana_sales_backup');
+    } catch (e) {
+      console.warn('   ⚠️ Error subiendo sales backup (async):', e.message || e);
+    }
+
+    let imagesResp = null;
+    if (fs.existsSync(IMAGES_FILE)) {
+      const imagesBackupPath = path.join(BACKUPS_DIR, `images_${timestamp}.json`);
+      try {
+        fs.copyFileSync(IMAGES_FILE, imagesBackupPath);
+        imagesResp = await uploadFileToCloudinary(imagesBackupPath, 'solana_images_backup');
+      } catch (e) {
+        console.warn('   ⚠️ Error subiendo images backup (async):', e.message || e);
+      }
+    } else {
+      console.log('   No existe images.json, no se sube images backup.');
+    }
+
+    console.log('   Resultado upload backups:', {
+      sales: salesResp ? 'uploaded' : 'not_uploaded',
+      images: imagesResp ? 'uploaded' : 'not_uploaded'
+    });
+  } catch (err) {
+    console.warn('   ⚠️ Error creando/subiendo backups:', err.message || err);
+  } finally {
+    isUploadingBackups = false;
+  }
+}
+
+function scheduleBackupUpload() {
+  // debounce: reprogramar si viene otra venta en la ventana
+  if (pendingBackupTimeout) clearTimeout(pendingBackupTimeout);
+  pendingBackupTimeout = setTimeout(() => {
+    pendingBackupTimeout = null;
+    performBackupUpload().catch(e => console.warn('   ⚠️ performBackupUpload fallo:', e));
+  }, BACKUP_UPLOAD_DEBOUNCE_MS);
+}
+
+// Modificar appendSale para disparar scheduleBackupUpload() tras guardar la venta
+function appendSale(sale) {
+  try {
+    const db = readSales();
+    db.sales.push(sale);
+    fs.writeFileSync(SALES_FILE, JSON.stringify(db, null, 2));
+    console.log(`✅ Venta guardada: ${sale.metadata?.name || '(sin nombre)'}`);
+
+    // Programar subida de backup (no bloqueante)
+    try {
+      scheduleBackupUpload();
+    } catch (e) {
+      console.warn('⚠️ No se pudo programar upload de backup:', e.message || e);
+    }
+
+  } catch (err) {
+    console.error('❌ Error guardando venta:', err);
+    throw err;
+  }
+}
 async function downloadFileFromCloudinary(publicId, destPath) {
   if (!CLOUDINARY_RAW_DELIVER_BASE) {
     console.log('   Cloudinary no configurado para descarga.');
@@ -263,18 +348,6 @@ function readSales() {
   }
 }
 
-function appendSale(sale) {
-  try {
-    const db = readSales();
-    db.sales.push(sale);
-    fs.writeFileSync(SALES_FILE, JSON.stringify(db, null, 2));
-    console.log(`✅ Venta guardada: ${sale.metadata?.name || '(sin nombre)'}`);
-  } catch (err) {
-    console.error('❌ Error guardando venta:', err);
-    throw err;
-  }
-}
-
 // images.json helpers
 function readImages() {
   try {
@@ -303,13 +376,39 @@ const SAVE_IMAGES_IN_JSON = process.env.SAVE_IMAGES_IN_JSON === 'true';
 // ============================================
 function backupSales() {
   try {
+    // Leer sales.json y comprobar si hay ventas
+    let salesDb = { sales: [] };
+    try {
+      salesDb = readSales();
+    } catch (e) {
+      console.warn('   ⚠️ No se pudo leer sales.json al crear backup:', e.message || e);
+    }
+
+    const hasSales = Array.isArray(salesDb.sales) && salesDb.sales.length > 0;
+
+    // Comprobar si existe images.json y si contiene imágenes
+    let hasImages = false;
+    try {
+      if (fs.existsSync(IMAGES_FILE)) {
+        const imgs = readImages();
+        hasImages = imgs && imgs.images && Object.keys(imgs.images).length > 0;
+      }
+    } catch (e) {
+      console.warn('   ⚠️ No se pudo leer images.json al crear backup:', e.message || e);
+    }
+
+    if (!hasSales && !hasImages) {
+      console.log('   ⚠️ No hay ventas ni imágenes. Se omite la creación/subida del backup en este momento.');
+      return;
+    }
+
     const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
     const backupPath = path.join(BACKUPS_DIR, `sales_${timestamp}.json`);
     fs.copyFileSync(SALES_FILE, backupPath);
     console.log(`📦 Backup creado: sales_${timestamp}.json`);
 
     // Copiar también images.json si existe (respaldo de dataURLs)
-    if (fs.existsSync(IMAGES_FILE)) {
+    if (fs.existsSync(IMAGES_FILE) && hasImages) {
       const imgBackupPath = path.join(BACKUPS_DIR, `images_${timestamp}.json`);
       try {
         fs.copyFileSync(IMAGES_FILE, imgBackupPath);
@@ -354,10 +453,12 @@ function backupSales() {
   }
 }
 
-// Backup cada hora
+// Backup cada hora (no ejecutado inmediatamente en startup para evitar backups vacíos)
 setInterval(backupSales, 60 * 60 * 1000);
-// Backup inicial al iniciar
-backupSales();
+// Nota: no llamamos a backupSales() en el arranque para evitar subir backups vacíos durante deploy.
+// Los backups se crearán cuando:
+//  - se guarde una venta (appendSale -> scheduleBackupUpload -> performBackupUpload)
+//  - o periódicamente si ya existen ventas/imágenes (backupSales se ejecutará cuando el intervalo lo dispare)
 
 // ============================================
 // MULTER PARA SUBIDA DE ARCHIVOS
@@ -752,9 +853,9 @@ app.post('/api/verify-purchase', async (req, res) => {
     if (tx.meta.err) {
       console.log(`❌ Transacción falló en la blockchain`);
       return res.status(400).json({
-        ok: false,
-        error: 'La transacción falló en la blockchain'
-      });
+      ok: false,
+      error: 'La transacción falló en la blockchain'
+    });
     }
 
     const instructions = tx.transaction.message.instructions;
