@@ -139,6 +139,45 @@ async function uploadFileToCloudinary(filePath, publicId) {
     return null;
   }
 }
+
+// === ADD: helper para subir dataURLs a Cloudinary ===
+async function uploadDataUrlToCloudinary(dataUrl, publicName) {
+  if (!CLOUDINARY_CLOUD_NAME || (!CLOUDINARY_UPLOAD_PRESET && !(CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET))) {
+    console.log('   Cloudinary no configurado para uploadDataUrlToCloudinary.');
+    return null;
+  }
+  const m = String(dataUrl || '').match(/^data:(.+);base64,(.+)$/);
+  if (!m) {
+    console.warn('   uploadDataUrlToCloudinary: dataUrl inválida');
+    return null;
+  }
+  const contentType = m[1];
+  const b64 = m[2];
+  const buffer = Buffer.from(b64, 'base64');
+
+  try {
+    const form = new FormData();
+    // FormData acepta Buffer con nombre y contentType
+    form.append('file', buffer, { filename: publicName, contentType });
+    if (CLOUDINARY_UPLOAD_PRESET) form.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+    // endpoint imagen (image/upload)
+    const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
+
+    const resp = await axios.post(url, form, {
+      headers: form.getHeaders(),
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
+      timeout: 120000
+    });
+
+    console.log(`   ✅ Imagen (dataUrl) subida a Cloudinary: ${resp.data.secure_url}`);
+    return resp.data;
+  } catch (err) {
+    console.warn('   ⚠️ Error subiendo dataUrl a Cloudinary:', err.message || err.toString());
+    return null;
+  }
+}
+
 // --- AUTO BACKUP: subir backups a Cloudinary cada vez que se añade una venta ----
 // Debounce + lock para evitar subidas simultáneas y demasiadas peticiones cuando llegan varias ventas seguidas.
 
@@ -225,6 +264,7 @@ function appendSale(sale) {
     throw err;
   }
 }
+
 async function downloadFileFromCloudinary(publicId, destPath) {
   if (!CLOUDINARY_RAW_DELIVER_BASE) {
     console.log('   Cloudinary no configurado para descarga.');
@@ -525,8 +565,18 @@ app.post('/api/upload-logo', diskUpload.single('file'), async (req, res) => {
       }
     }
 
-    // Si Cloudinary no está configurado, devolver la URL local y dataUrl (si existe)
-    const cloudConfigured = Boolean(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_UPLOAD_PRESET);
+    // DEBUG: mostrar si cloud vars están presentes (temporal)
+    console.log('   DEBUG ENV CLOUDINARY_CLOUD_NAME:', process.env.CLOUDINARY_CLOUD_NAME ? '[SET]' : '[MISSING]');
+    console.log('   DEBUG ENV CLOUDINARY_UPLOAD_PRESET:', process.env.CLOUDINARY_UPLOAD_PRESET ? '[SET]' : '[MISSING]');
+    console.log('   DEBUG ENV CLOUDINARY_API_KEY:', process.env.CLOUDINARY_API_KEY ? '[SET]' : '[MISSING]');
+    console.log('   DEBUG ENV CLOUDINARY_API_SECRET:', process.env.CLOUDINARY_API_SECRET ? '[SET]' : '[MISSING]');
+
+    // Si hay preset + cloud name OR tienes API keys, consideramos Cloudinary "configurado"
+    const cloudConfigured = Boolean(
+      (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_UPLOAD_PRESET) ||
+      (process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET)
+    );
+
     if (!cloudConfigured) {
       console.log('   Cloudinary no configurado, devolviendo URL local.');
       const localUrl = BASE_URL
@@ -540,18 +590,19 @@ app.post('/api/upload-logo', diskUpload.single('file'), async (req, res) => {
       });
     }
 
-    // Si Cloudinary está configurado: subir (como stream)
+    // Si Cloudinary está configurado: subir (como stream) -- preferimos upload via image/upload
     const fileStream = fs.createReadStream(targetPath);
     const form = new FormData();
     form.append('file', fileStream);
-    form.append('upload_preset', process.env.CLOUDINARY_UPLOAD_PRESET);
-    // opcional: form.append('folder', 'solana-million-grid');
+    // preferimos usar el preset si está disponible
+    if (process.env.CLOUDINARY_UPLOAD_PRESET) form.append('upload_preset', process.env.CLOUDINARY_UPLOAD_PRESET);
 
+    const uploadUrl = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
     const headers = form.getHeaders();
 
     console.log(`📤 Subiendo ${finalName} a Cloudinary...`);
     try {
-      const resp = await axios.post(process.env.CLOUDINARY_API_URL || CLOUDINARY_RAW_API_URL.replace('/raw/', '/image/'), form, {
+      const resp = await axios.post(uploadUrl, form, {
         headers,
         maxContentLength: Infinity,
         maxBodyLength: Infinity,
@@ -570,6 +621,29 @@ app.post('/api/upload-logo', diskUpload.single('file'), async (req, res) => {
         }
       }
 
+      // Si guardamos en images.json con dataUrl, intentamos además subir la dataUrl y reemplazarla por secure_url
+      if (SAVE_IMAGES_IN_JSON && dataUrl) {
+        try {
+          const uploadResult = await uploadDataUrlToCloudinary(dataUrl, finalName);
+          if (uploadResult && uploadResult.secure_url) {
+            try {
+              const imgs = readImages();
+              if (imgs.images && imgs.images[finalName]) {
+                // Guardar reference cloudUrl y eliminar dataUrl para aligerar JSON
+                imgs.images[finalName].cloudUrl = uploadResult.secure_url;
+                delete imgs.images[finalName].dataUrl;
+                writeImages(imgs);
+                console.log(`   ✅ images.json actualizado con cloudUrl para ${finalName}`);
+              }
+            } catch (e) {
+              console.warn('   ⚠️ No se pudo actualizar images.json con cloudUrl:', e.message || e);
+            }
+          }
+        } catch (e) {
+          console.warn('   ⚠️ Falló uploadDataUrlToCloudinary:', e.message || e);
+        }
+      }
+
       return res.json({
         ok: true,
         url: cloudResp.secure_url,
@@ -581,7 +655,43 @@ app.post('/api/upload-logo', diskUpload.single('file'), async (req, res) => {
     } catch (err) {
       console.error('❌ Error subiendo a Cloudinary:', err.message || err.toString());
 
-      // Fallback: devolver URL local + dataUrl
+      // Fallback: intentar subir la dataUrl directamente (por si la subida por stream falló)
+      if (dataUrl) {
+        try {
+          const uploadResult = await uploadDataUrlToCloudinary(dataUrl, finalName);
+          if (uploadResult && uploadResult.secure_url) {
+            // si tuvo éxito, borrar copia local si corresponde
+            if (process.env.REMOVE_LOCAL_AFTER_UPLOAD === 'true') {
+              try { fs.unlinkSync(targetPath); } catch(e) { /* ignore */ }
+            }
+            // actualizar images.json con cloudUrl si procede
+            if (SAVE_IMAGES_IN_JSON && uploadResult.secure_url) {
+              try {
+                const imgs = readImages();
+                if (imgs.images && imgs.images[finalName]) {
+                  imgs.images[finalName].cloudUrl = uploadResult.secure_url;
+                  delete imgs.images[finalName].dataUrl;
+                  writeImages(imgs);
+                  console.log(`   ✅ images.json actualizado con cloudUrl (fallback) para ${finalName}`);
+                }
+              } catch (e) {
+                console.warn('   ⚠️ No se pudo actualizar images.json con cloudUrl (fallback):', e.message || e);
+              }
+            }
+            return res.json({
+              ok: true,
+              url: uploadResult.secure_url,
+              public_id: uploadResult.public_id,
+              version: uploadResult.version,
+              name: finalName
+            });
+          }
+        } catch (e) {
+          console.warn('   ⚠️ Fallback uploadDataUrl también falló:', e.message || e);
+        }
+      }
+
+      // Fallback final: devolver URL local + dataUrl
       const localUrl = BASE_URL
         ? `${BASE_URL}/uploads/${encodeURIComponent(finalName)}`
         : `${req.protocol}://${req.get('host')}/uploads/${encodeURIComponent(finalName)}`;
@@ -613,6 +723,9 @@ app.get('/api/image/:name', (req, res) => {
     if (entry && entry.dataUrl) {
       return res.json({ ok: true, name, dataUrl: entry.dataUrl, mimetype: entry.mimetype, size: entry.size });
     }
+    if (entry && entry.cloudUrl) {
+      return res.json({ ok: true, name, url: entry.cloudUrl, mimetype: entry.mimetype, size: entry.size });
+    }
 
     const localPath = path.join(UPLOADS_DIR, name);
     if (fs.existsSync(localPath)) {
@@ -634,7 +747,8 @@ app.get('/api/images-list', (req, res) => {
       name,
       mimetype: meta.mimetype,
       size: meta.size,
-      uploadedAt: meta.uploadedAt
+      uploadedAt: meta.uploadedAt,
+      cloudUrl: meta.cloudUrl ? meta.cloudUrl : undefined
     }));
     return res.json({ ok: true, count: list.length, images: list });
   } catch (err) {
@@ -853,9 +967,9 @@ app.post('/api/verify-purchase', async (req, res) => {
     if (tx.meta.err) {
       console.log(`❌ Transacción falló en la blockchain`);
       return res.status(400).json({
-      ok: false,
-      error: 'La transacción falló en la blockchain'
-    });
+        ok: false,
+        error: 'La transacción falló en la blockchain'
+      });
     }
 
     const instructions = tx.transaction.message.instructions;
