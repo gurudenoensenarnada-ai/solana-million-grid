@@ -1,109 +1,109 @@
-// cloudinary-helpers.js
-// Helpers para RESTORE de backups RAW en Cloudinary usando axios + Cloudinary Admin API.
-// Uso: require y llamar a restoreImagesFromCloudinary(prefix, destPath, cloudName, apiKey, apiSecret)
-
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
-const { pipeline } = require('stream');
-const { promisify } = require('util');
-const streamPipeline = promisify(pipeline);
+const cloudinary = require('cloudinary').v2;
 
-async function tryDownloadToPath(url, destPath, timeout = 120000) {
+if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+  console.warn('Aviso: variables CLOUDINARY_CLOUD_NAME/CLOUDINARY_API_KEY/CLOUDINARY_API_SECRET no definidas.');
+}
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+// public id por defecto para el sales.json principal y para backups
+const SALES_PUBLIC_ID = process.env.SALES_PUBLIC_ID || 'sales';
+const SALES_BACKUP_PUBLIC_ID = process.env.SALES_BACKUP_PUBLIC_ID || 'solana_sales_backup';
+
+/**
+ * Subir un objeto JS como sales.json (resource_type raw)
+ */
+async function uploadSalesJSONObject(obj, publicId = SALES_PUBLIC_ID) {
+  const tmpDir = process.env.TMP_DIR || '/tmp';
+  const tmpPath = path.join(tmpDir, `${publicId}.json`);
+  await fs.promises.mkdir(path.dirname(tmpPath), { recursive: true });
+  await fs.promises.writeFile(tmpPath, JSON.stringify(obj, null, 2), 'utf8');
+
+  const res = await cloudinary.uploader.upload(tmpPath, {
+    resource_type: 'raw',
+    public_id: publicId,
+    overwrite: true,
+  });
+
+  try { await fs.promises.unlink(tmpPath); } catch (e) { /* noop */ }
+  return res;
+}
+
+/**
+ * Descargar y parsear JSON publicado en Cloudinary (resource_type raw)
+ * Devuelve null si no existe.
+ */
+async function downloadSalesJSONObject(publicId = SALES_PUBLIC_ID) {
   try {
-    const res = await axios.get(url, { responseType: 'stream', timeout });
-    // Ensure directory exists
-    await fs.promises.mkdir(path.dirname(destPath), { recursive: true });
-    await streamPipeline(res.data, fs.createWriteStream(destPath));
-    return { ok: true };
+    const info = await cloudinary.api.resource(publicId, { resource_type: 'raw' });
+    const url = info.secure_url || info.url;
+    const r = await axios.get(url, { responseType: 'json', timeout: 10000 });
+    return r.data;
   } catch (err) {
-    // return status if available
-    return { ok: false, error: err.message, status: err.response && err.response.status };
+    // Cloudinary admin API devuelve errores con http_code 404 cuando no existe
+    if (err && err.http_code === 404) return null;
+    // axios error al pedir la URL: intentar parsear cuerpo si existe
+    if (err && err.response && typeof err.response.data === 'string') {
+      try { return JSON.parse(err.response.data); } catch (e) { /* fallthrough */ }
+    }
+    throw err;
   }
 }
 
 /**
- * Consulta la Cloudinary Admin API para listar resources/raw con un prefijo.
- * Devuelve la URL (secure_url o url) del recurso más reciente encontrado, o null.
+ * Subir archivo local al Cloudinary como raw. publicId fijo para restauración.
  */
-async function findLatestRawUrl(cloudName, apiKey, apiSecret, prefix) {
-  if (!cloudName || !apiKey || !apiSecret) {
-    throw new Error('Faltan credenciales Cloudinary (CLOUD_NAME, API_KEY, API_SECRET)');
+async function uploadFileToCloudinary(localPath, publicId) {
+  if (!fs.existsSync(localPath)) {
+    return { ok: false, error: 'file_not_found', localPath };
   }
-
-  const apiUrl = `https://api.cloudinary.com/v1_1/${encodeURIComponent(cloudName)}/resources/raw`;
-  // Consultar por prefijo, traer hasta 50 resultados (ajusta si necesitas más)
-  const params = {
-    prefix: prefix || '',
-    max_results: 50,
-    direction: 'desc'
-  };
-
   try {
-    const resp = await axios.get(apiUrl, {
-      params,
-      auth: {
-        username: apiKey,
-        password: apiSecret
-      },
-      timeout: 15000
+    const res = await cloudinary.uploader.upload(localPath, {
+      resource_type: 'raw',
+      public_id: publicId,
+      overwrite: true,
     });
-
-    const resources = (resp.data && resp.data.resources) || [];
-    if (!resources.length) return null;
-
-    // Ordenar por created_at (desc) por si acaso
-    resources.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    const chosen = resources[0];
-    // secure_url está disponible en Admin API response
-    return chosen.secure_url || chosen.url || null;
+    return { ok: true, res };
   } catch (err) {
-    // no usar throw para no romper el flujo, devolver null
-    return null;
+    return { ok: false, error: err.message || err };
   }
 }
 
 /**
- * Restore flow:
- * 1) Intenta descargar la URL directa: https://res.cloudinary.com/{cloudName}/raw/upload/{prefix}
- * 2) Si falla, consulta la Admin API para buscar el último raw con el prefijo y descargar su secure_url
- *
- * Devuelve objeto: { ok: boolean, url?: string, error?: string }
+ * Descargar archivo raw desde Cloudinary a una ruta local (stream).
+ * publicId: id en Cloudinary (raw). destPath: ruta local donde escribir.
  */
-async function restoreImagesFromCloudinary(prefix, destPath, cloudName, apiKey, apiSecret) {
-  if (!prefix) {
-    return { ok: false, error: 'No se proporcionó prefijo/public_id para buscar en Cloudinary' };
-  }
-  if (!cloudName) {
-    return { ok: false, error: 'No CLOUDINARY_CLOUD_NAME' };
-  }
-
-  // 1) Intento directo (podría fallar si falta versión u otra parte del path)
-  const directUrl = `https://res.cloudinary.com/${cloudName}/raw/upload/${prefix}`;
-  let res = await tryDownloadToPath(directUrl, destPath);
-  if (res.ok) {
-    return { ok: true, url: directUrl };
-  }
-
-  // 2) Intentar buscar el último recurso con el prefijo via Admin API
+async function downloadFileFromCloudinary(publicId, destPath) {
   try {
-    const latestUrl = await findLatestRawUrl(cloudName, apiKey, apiSecret, prefix);
-    if (!latestUrl) {
-      return { ok: false, error: `No se encontró ningún recurso RAW con prefijo '${prefix}' en Cloudinary` };
-    }
-    const res2 = await tryDownloadToPath(latestUrl, destPath);
-    if (res2.ok) {
-      return { ok: true, url: latestUrl };
-    } else {
-      return { ok: false, error: `Error descargando desde ${latestUrl}: ${res2.error}` };
-    }
+    const info = await cloudinary.api.resource(publicId, { resource_type: 'raw' });
+    const url = info.secure_url || info.url;
+    const writer = fs.createWriteStream(destPath);
+    const response = await axios.get(url, { responseType: 'stream', timeout: 10000 });
+    await new Promise((resolve, reject) => {
+      response.data.pipe(writer);
+      let errored = false;
+      writer.on('error', err => { errored = true; reject(err); });
+      writer.on('close', () => { if (!errored) resolve(); });
+    });
+    return { ok: true, url };
   } catch (err) {
-    return { ok: false, error: err.message || String(err) };
+    if (err && err.http_code === 404) return { ok: false, error: 'not_found' };
+    return { ok: false, error: err.message || err };
   }
 }
 
 module.exports = {
-  tryDownloadToPath,
-  findLatestRawUrl,
-  restoreImagesFromCloudinary
+  uploadSalesJSONObject,
+  downloadSalesJSONObject,
+  uploadFileToCloudinary,
+  downloadFileFromCloudinary,
+  SALES_PUBLIC_ID,
+  SALES_BACKUP_PUBLIC_ID
 };
