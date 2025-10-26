@@ -6,972 +6,209 @@
   <meta name="description" content="Million Grid en Solana - Compra píxeles y muestra tu proyecto">
   <title>Solana Million Grid</title>
   <style>
-    * { box-sizing: border-box; }
-    body { 
-      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%); 
-      color: #fff; 
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-      margin: 0;
-      min-height: 100vh;
-    }
-    header { 
-      background: rgba(34, 34, 34, 0.95); 
-      padding: 15px 20px; 
-      color: gold; 
-      display: flex; 
-      justify-content: space-between; 
-      align-items: center;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.5);
-      backdrop-filter: blur(10px);
-    }
-    .logo { font-size: 24px; font-weight: bold; }
-    .connectBtn { 
-      padding: 10px 20px; 
-      background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-      border: none; 
-      border-radius: 8px; 
-      color: #fff; 
-      cursor: pointer;
-      font-weight: bold;
-      transition: transform 0.2s;
-    }
-    .connectBtn:hover { transform: scale(1.05); }
-    .connectBtn:disabled { 
-      background: #666; 
-      cursor: not-allowed;
-      transform: none;
-    }
-    
-    #info { 
-      padding: 15px; 
-      background: rgba(51, 51, 51, 0.8); 
-      text-align: center;
-      backdrop-filter: blur(10px);
-    }
-    
-    #stats {
-      display: flex;
-      justify-content: center;
-      gap: 30px;
-      padding: 10px;
-      flex-wrap: wrap;
-    }
-    .stat-item {
-      text-align: center;
-    }
-    .stat-value {
-      font-size: 24px;
-      font-weight: bold;
-      color: gold;
-    }
-    .stat-label {
-      font-size: 12px;
-      color: #aaa;
-      text-transform: uppercase;
-    }
-    
-    #gridWrapper { 
-      display: flex; 
-      justify-content: center; 
-      padding: 20px;
-    }
-    #gridContainer { 
-      position: relative; 
-      display: inline-block; 
-      border: 3px solid #444;
-      border-radius: 8px;
-      overflow: hidden;
-      box-shadow: 0 0 30px rgba(255, 215, 0, 0.3);
-    }
-    #canvas { 
-      display: block; 
-      cursor: pointer;
-      image-rendering: pixelated; 
-      background: #555;
-    }
-    #selectionOverlay { 
-      position: absolute; 
-      pointer-events: none; 
-      display: none; 
-      z-index: 20; 
-      background: rgba(0, 255, 255, 0.1);
-      border: 2px solid cyan;
-      box-shadow: 0 0 10px cyan;
-    }
-    #tooltip { 
-      position: absolute; 
-      display: none; 
-      pointer-events: none; 
-      background: rgba(0, 0, 0, 0.95); 
-      color: #fff; 
-      padding: 8px 12px; 
-      border-radius: 6px; 
-      border: 1px solid gold; 
-      z-index: 60; 
-      font-size: 14px; 
-      white-space: nowrap;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.8);
-    }
-    
-    #selectionInfo { 
-      text-align: center; 
-      padding: 10px; 
-      color: gold; 
-      font-weight: bold;
-      min-height: 30px;
-    }
-    
-    #buttons { 
-      text-align: center; 
-      margin: 15px;
-      display: flex;
-      gap: 10px;
-      justify-content: center;
-    }
-    button { 
-      padding: 12px 24px; 
-      border-radius: 8px; 
-      border: none; 
-      cursor: pointer; 
-      font-weight: bold;
-      font-size: 14px;
-      transition: all 0.3s;
-    }
-    button:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-    button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-    
-    .price-display { 
-      color: gold; 
-      text-align: center; 
-      padding: 12px; 
-      margin-bottom: 10px; 
-      background: rgba(17, 17, 17, 0.8); 
-      border-radius: 8px;
-      font-size: 18px;
-      font-weight: bold;
-    }
-    
-    .sold-overlay { 
-      position: absolute; 
-      pointer-events: none; 
-      background: rgba(0, 0, 0, 0.3); 
-      border: 1px dashed rgba(255, 215, 0, 0.2); 
-      z-index: 30; 
-      box-sizing: border-box;
-    }
-    
-    #paymentStatus { 
-      text-align: center; 
-      padding: 10px; 
-      margin-top: 10px; 
-      color: #fff;
-      min-height: 24px;
-      font-weight: bold;
-    }
-    
-    .form-group {
-      margin-bottom: 15px;
-    }
-    .form-group label {
-      display: block;
-      margin-bottom: 5px;
-      color: #aaa;
-      font-size: 13px;
-    }
-    input[type="text"], input[type="url"], input[type="file"] { 
-      width: 100%; 
-      padding: 10px; 
-      background: #333; 
-      border: 1px solid #555; 
-      color: #fff; 
-      border-radius: 6px; 
-      box-sizing: border-box;
-      font-size: 14px;
-    }
-    input:focus {
-      outline: none;
-      border-color: gold;
-    }
-    
-    #modalInner { 
-      background: rgba(34, 34, 34, 0.98); 
-      padding: 25px; 
-      border-radius: 12px; 
-      border: 2px solid gold; 
-      width: 400px; 
-      max-width: 90%; 
-      margin: auto;
-      box-shadow: 0 10px 50px rgba(0,0,0,0.8);
-    }
-    
-    #loading { 
-      position: fixed; 
-      inset: 0; 
-      background: rgba(0, 0, 0, 0.95); 
-      display: flex; 
-      align-items: center; 
-      justify-content: center; 
-      z-index: 300;
-      backdrop-filter: blur(5px);
-    }
-    .spinner { 
-      border: 4px solid #333; 
-      border-top: 4px solid gold; 
-      border-radius: 50%; 
-      width: 50px; 
-      height: 50px; 
-      animation: spin 1s linear infinite;
-    }
-    @keyframes spin { 
-      0% { transform: rotate(0deg); } 
-      100% { transform: rotate(360deg); } 
-    }
-    
-    #modal {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.9);
-      z-index: 200;
-      overflow-y: auto;
-    }
-    
-    .modal-content {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      padding: 20px;
-    }
-    
-    .success { color: #28a745; }
-    .error { color: #dc3545; }
-    .warning { color: #ffc107; }
-    
-    .btn-primary {
-      background: linear-gradient(135deg, gold 0%, #ffd700 100%);
-      color: #000;
-    }
-    .btn-secondary {
-      background: #666;
-      color: #fff;
-    }
-    
-    @media (max-width: 768px) {
-      #gridContainer {
-        max-width: 100%;
-      }
-      #canvas {
-        max-width: 100%;
-        height: auto;
-      }
-      #modalInner {
-        width: 95%;
-        padding: 20px;
-      }
-      .logo {
-        font-size: 18px;
-      }
-    }
+    body { font-family: Arial, sans-serif; background:#0f1115; color:#fff; margin:0; padding:0; }
+    header { padding:12px 16px; background: #0b1020; display:flex; justify-content:space-between; align-items:center; }
+    #canvas { background:#111; display:block; margin:12px auto; border:1px solid #333; }
+    #controls { max-width:1000px; margin: 10px auto; display:flex; gap:8px; justify-content:center; }
+    button { padding:10px 12px; border-radius:6px; border:none; cursor:pointer; background:#2b6cb0; color:#fff; }
+    #status { text-align:center; margin:8px; color:#ffda79; }
   </style>
 </head>
 <body>
-  <div id="loading">
-    <div style="text-align:center;">
-      <div class="spinner"></div>
-      <p style="color:gold;margin-top:15px;font-size:18px;">Cargando grid...</p>
-    </div>
-  </div>
-
   <header>
-    <div class="logo">🎨 Solana Million Grid</div>
+    <div>Solana Million Grid</div>
     <div>
-      <button id="connectWallet" class="connectBtn">Conectar Wallet</button>
-      <span id="walletAddr" style="margin-left:10px;color:#ddd;font-size:13px"></span>
+      <button id="connectBtn">Conectar wallet</button>
     </div>
   </header>
 
-  <div id="info">
-    <div id="stats">
-      <div class="stat-item">
-        <div class="stat-value" id="soldPixels">0</div>
-        <div class="stat-label">Píxeles Vendidos</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-value">0.0001 SOL</div>
-        <div class="stat-label">Por Bloque 10x10</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-value" id="totalSales">0</div>
-        <div class="stat-label">Ventas Totales</div>
-      </div>
-    </div>
+  <div id="controls">
+    <button id="selectBtn">Seleccionar bloques</button>
+    <button id="buyBtn" disabled>💳 Pagar y registrar</button>
+    <div id="price" style="align-self:center;color:#ffd700">Precio: <span id="totalPrice">0.00</span> SOL</div>
   </div>
 
-  <div id="selectionInfo"></div>
-
-  <div id="buttons">
-    <button id="confirmBtn" class="btn-primary" disabled>✓ Comprar Selección</button>
-    <button id="cancelBtn" class="btn-secondary">✗ Cancelar</button>
-  </div>
-
-  <div id="gridWrapper">
-    <div id="gridContainer">
-      <canvas id="canvas" width="1000" height="1000"></canvas>
-      <div id="selectionOverlay"></div>
-      <div id="tooltip"></div>
-    </div>
-  </div>
-
-  <div id="modal">
-    <div class="modal-content">
-      <div id="modalInner">
-        <h3 style="color:gold;margin:0 0 15px 0;text-align:center">🎨 Comprar Píxeles</h3>
-        
-        <div class="price-display">
-          Precio total: <span id="totalPrice">0.00</span> SOL
-        </div>
-        
-        <div id="projectForm">
-          <div class="form-group">
-            <label>Nombre del Proyecto *</label>
-            <input type="text" id="projectName" placeholder="Mi Proyecto Increíble" maxlength="50">
-          </div>
-          
-          <div class="form-group">
-            <label>URL del Proyecto *</label>
-            <input type="url" id="projectURL" placeholder="https://miproyecto.com">
-          </div>
-          
-          <div class="form-group">
-            <label>Logo del Proyecto * (PNG, JPG, GIF - máx 5MB)</label>
-            <input type="file" id="projectLogo" accept="image/*">
-          </div>
-        </div>
-        
-        <div id="paymentStatus"></div>
-        
-        <div style="display:flex; gap:10px; margin-top:15px;">
-          <button id="payBtn" class="btn-primary" style="flex:1">💰 Pagar y Registrar</button>
-          <button id="closeModal" class="btn-secondary" style="flex:1">Cancelar</button>
-        </div>
-      </div>
-    </div>
+  <div style="max-width:1000px;margin:0 auto">
+    <canvas id="canvas" width="1000" height="1000"></canvas>
+    <div id="status"></div>
   </div>
 
   <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
-  
   <script>
-  const CANVAS_SIZE = 1000;
-  const BLOCK_SIZE = 10;
-  const BLOCKS_PER_SIDE = CANVAS_SIZE / BLOCK_SIZE;
-  const PRICE_PER_BLOCK = 0.0001;
-  const MERCHANT_WALLET = '3d7w4r4irLaKVYd4dLjpoiehJVawbbXWFWb1bCk9nGCo';
-  const API_BASE = window.location.origin;
-  const CLUSTER = 'mainnet-beta';
+    const CANVAS_SIZE = 1000;
+    const BLOCK_SIZE = 10;
+    const BLOCKS_PER_SIDE = CANVAS_SIZE / BLOCK_SIZE;
+    const PRICE_PER_BLOCK_SOL = 0.001; // ejemplo: ajustar en servidor/cliente según sea necesario
 
-  const canvas = document.getElementById('canvas');
-  const ctx = canvas.getContext('2d');
-  const gridContainer = document.getElementById('gridContainer');
-  const soldPixelsSpan = document.getElementById('soldPixels');
-  const totalSalesSpan = document.getElementById('totalSales');
-  const selectionOverlay = document.getElementById('selectionOverlay');
-  const selectionInfo = document.getElementById('selectionInfo');
-  const tooltip = document.getElementById('tooltip');
-  const connectBtn = document.getElementById('connectWallet');
-  const walletAddrSpan = document.getElementById('walletAddr');
-  const loadingEl = document.getElementById('loading');
-  const confirmBtn = document.getElementById('confirmBtn');
-  const cancelBtn = document.getElementById('cancelBtn');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const statusEl = document.getElementById('status');
+    const connectBtn = document.getElementById('connectBtn');
+    const buyBtn = document.getElementById('buyBtn');
+    const totalPriceEl = document.getElementById('totalPrice');
 
-  let blockData = new Array(BLOCKS_PER_SIDE * BLOCKS_PER_SIDE).fill(null);
-  let soldPixels = 0;
-  let totalSales = 0;
-  let isDragging = false;
-  let startX, startY, endX, endY;
-  let selection = null;
-  let connection = new solanaWeb3.Connection('https://mainnet.helius-rpc.com/?api-key=cfadb209-0424-4c46-86cf-aa6f3f0c8d01');
-  let userPublicKey = null;
+    let walletConnected = false;
+    let userPublicKey = null;
 
-  function drawGrid() {
-    ctx.fillStyle = '#555';
-    ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-    ctx.strokeStyle = '#333';
-    ctx.lineWidth = 1;
-    
-    for (let x = 0; x <= CANVAS_SIZE; x += BLOCK_SIZE) {
-      ctx.beginPath();
-      ctx.moveTo(x + 0.5, 0);
-      ctx.lineTo(x + 0.5, CANVAS_SIZE);
-      ctx.stroke();
-    }
-    
-    for (let y = 0; y <= CANVAS_SIZE; y += BLOCK_SIZE) {
-      ctx.beginPath();
-      ctx.moveTo(0, y + 0.5);
-      ctx.lineTo(CANVAS_SIZE, y + 0.5);
-      ctx.stroke();
-    }
-  }
-
-  function blockIndex(bx, by) {
-    return by * BLOCKS_PER_SIDE + bx;
-  }
-
-  function isBlockSold(bx, by) {
-    if (bx < 0 || by < 0 || bx >= BLOCKS_PER_SIDE || by >= BLOCKS_PER_SIDE) return false;
-    return blockData[blockIndex(bx, by)] !== null;
-  }
-
-  function getMousePosInCanvas(e) {
-    const rect = canvas.getBoundingClientRect();
-    const rawX = Math.floor((e.clientX - rect.left) * (CANVAS_SIZE / rect.width));
-    const rawY = Math.floor((e.clientY - rect.top) * (CANVAS_SIZE / rect.height));
-    return { rawX, rawY, rect };
-  }
-
-  async function loadGridFromServer() {
-    try {
-      const res = await fetch(`${API_BASE}/api/sales`);
-      const json = await res.json();
-      
-      if (!json || !json.sales) throw new Error('Error cargando ventas');
-      
-      const { sales } = json;
-      totalSales = sales.length;
-      totalSalesSpan.textContent = totalSales;
-      
-      blockData = new Array(BLOCKS_PER_SIDE * BLOCKS_PER_SIDE).fill(null);
-      soldPixels = 0;
-      
-      const projects = {};
-      sales.forEach(sale => {
-        const meta = sale.metadata;
-        if (!meta || !meta.selection) return;
-        
-        const key = `${meta.name}_${meta.logo}`;
-        if (!projects[key]) {
-          projects[key] = {
-            name: meta.name,
-            url: meta.url,
-            logo: meta.logo,
-            blocks: []
-          };
-        }
-        
-        const sel = meta.selection;
-        for (let by = sel.minBlockY; by < sel.minBlockY + sel.blocksY; by++) {
-          for (let bx = sel.minBlockX; bx < sel.minBlockX + sel.blocksX; bx++) {
-            projects[key].blocks.push({ x: bx, y: by });
-          }
-        }
-      });
-      
-      const projectList = Object.values(projects);
-      for (const project of projectList) {
-        await loadProjectOnGrid(project);
+    // Simple grid draw
+    function drawGrid() {
+      ctx.fillStyle = '#111';
+      ctx.fillRect(0,0,CANVAS_SIZE,CANVAS_SIZE);
+      ctx.strokeStyle = '#222';
+      for (let x=0;x<=CANVAS_SIZE;x+=BLOCK_SIZE) {
+        ctx.beginPath();
+        ctx.moveTo(x,0); ctx.lineTo(x,CANVAS_SIZE); ctx.stroke();
       }
-      
-      soldPixels = Object.values(blockData).filter(b => b !== null).length * BLOCK_SIZE * BLOCK_SIZE;
-      soldPixelsSpan.textContent = soldPixels.toLocaleString();
-      drawSoldOverlays();
-      
-      console.log(`✅ Cargadas ${sales.length} ventas, ${projectList.length} proyectos`);
-      
-    } catch (err) {
-      console.error('Error cargando grid:', err);
-      showStatus('Error cargando el grid. Recarga la página.', 'error');
-    } finally {
-      loadingEl.style.display = 'none';
+      for (let y=0;y<=CANVAS_SIZE;y+=BLOCK_SIZE) {
+        ctx.beginPath();
+        ctx.moveTo(0,y); ctx.lineTo(CANVAS_SIZE,y); ctx.stroke();
+      }
     }
-  }
+    drawGrid();
 
-  function loadProjectOnGrid(project) {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      
-      img.onload = function() {
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        project.blocks.forEach(b => {
-          if (b.x < minX) minX = b.x;
-          if (b.y < minY) minY = b.y;
-          if (b.x > maxX) maxX = b.x;
-          if (b.y > maxY) maxY = b.y;
-        });
-        
-        const drawX = minX * BLOCK_SIZE;
-        const drawY = minY * BLOCK_SIZE;
-        const drawWidth = (maxX - minX + 1) * BLOCK_SIZE;
-        const drawHeight = (maxY - minY + 1) * BLOCK_SIZE;
-        
-        ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
-        
-        project.blocks.forEach(b => {
-          const idx = blockIndex(b.x, b.y);
-          blockData[idx] = {
-            name: project.name,
-            url: project.url,
-            logo: project.logo
-          };
-        });
-        
-        resolve();
-      };
-      
-      img.onerror = function() {
-        console.warn('No se pudo cargar imagen:', project.logo);
-        project.blocks.forEach(b => {
-          const idx = blockIndex(b.x, b.y);
-          blockData[idx] = {
-            name: project.name,
-            url: project.url,
-            logo: project.logo
-          };
-        });
-        resolve();
-      };
-      
-      img.src = project.logo;
+    let selection = null;
+    canvas.addEventListener('mousedown', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.floor((e.clientX - rect.left) / BLOCK_SIZE);
+      const y = Math.floor((e.clientY - rect.top) / BLOCK_SIZE);
+      selection = { x, y, w: 1, h: 1 };
+      renderSelection();
+      updatePrice();
+      buyBtn.disabled = false;
     });
-  }
 
-  async function connectWallet() {
-    if (!window.solana) {
-      alert('Por favor instala Phantom Wallet: https://phantom.app');
-      return;
-    }
-    
-    try {
-      connectBtn.disabled = true;
-      connectBtn.textContent = 'Conectando...';
-      
-      const resp = await window.solana.connect({ 
-        onlyIfTrusted: false
-      });
-      
-      userPublicKey = resp.publicKey;
-      walletAddrSpan.textContent = userPublicKey.toString().slice(0, 4) + '...' + userPublicKey.toString().slice(-4);
-      connectBtn.textContent = 'Conectado ✓';
-      connectBtn.style.background = '#28a745';
-      
-      console.log('✅ Wallet conectada:', userPublicKey.toString());
-      
-    } catch (err) {
-      console.error('Error conectando:', err);
-      
-      if (err.code === 4001 || err.message?.includes('User rejected')) {
-        alert('❌ Conexión rechazada. Por favor aprueba la conexión en Phantom para continuar.');
-      } else if (err.code === -32603) {
-        alert('⚠️ Phantom bloqueó la conexión. Ve a Settings → Trusted Apps en Phantom y aprueba este sitio.');
-      } else {
-        alert('Error conectando wallet: ' + err.message);
-      }
-      
-      connectBtn.disabled = false;
-      connectBtn.textContent = 'Conectar Wallet';
-    }
-  }
-
-  function disconnectWallet() {
-    if (window.solana && window.solana.disconnect) window.solana.disconnect();
-    userPublicKey = null;
-    walletAddrSpan.textContent = '';
-    connectBtn.textContent = 'Conectar Wallet';
-    connectBtn.style.background = '';
-  }
-
-  connectBtn.onclick = connectWallet;
-
-  canvas.addEventListener('mousedown', (e) => {
-    const { rawX, rawY } = getMousePosInCanvas(e);
-    startX = Math.floor(rawX / BLOCK_SIZE) * BLOCK_SIZE;
-    startY = Math.floor(rawY / BLOCK_SIZE) * BLOCK_SIZE;
-    isDragging = true;
-    selection = null;
-    selectionInfo.textContent = '';
-    selectionOverlay.style.display = 'none';
-    confirmBtn.disabled = true;
-  });
-
-  canvas.addEventListener('mousemove', (e) => {
-    handleMove(e);
-    handleHover(e);
-  });
-
-  canvas.addEventListener('mouseup', (e) => {
-    handleUp(e);
-  });
-
-  canvas.addEventListener('mouseleave', () => {
-    isDragging = false;
-  });
-
-  function handleMove(e) {
-    if (!isDragging) return;
-    
-    const { rawX, rawY } = getMousePosInCanvas(e);
-    endX = Math.floor(rawX / BLOCK_SIZE) * BLOCK_SIZE;
-    endY = Math.floor(rawY / BLOCK_SIZE) * BLOCK_SIZE;
-    
-    const minX = Math.min(startX, endX);
-    const maxX = Math.max(startX, endX);
-    const minY = Math.min(startY, endY);
-    const maxY = Math.max(startY, endY);
-    
-    const width = maxX - minX + BLOCK_SIZE;
-    const height = maxY - minY + BLOCK_SIZE;
-    const blocksX = width / BLOCK_SIZE;
-    const blocksY = height / BLOCK_SIZE;
-    const blocksTotal = blocksX * blocksY;
-    
-    const minBlockX = minX / BLOCK_SIZE;
-    const minBlockY = minY / BLOCK_SIZE;
-    const maxBlockX = maxX / BLOCK_SIZE;
-    const maxBlockY = maxY / BLOCK_SIZE;
-    
-    let soldInSelection = 0;
-    for (let by = minBlockY; by <= maxBlockY; by++) {
-      for (let bx = minBlockX; bx <= maxBlockX; bx++) {
-        if (isBlockSold(bx, by)) soldInSelection++;
-      }
-    }
-    
-    const freeBlocks = blocksTotal - soldInSelection;
-    const totalPrice = (freeBlocks * PRICE_PER_BLOCK).toFixed(4);
-    
-    if (soldInSelection > 0) {
-      selectionInfo.innerHTML = `⚠️ Selección: ${blocksX}×${blocksY} bloques | <span class="error">Ocupados: ${soldInSelection}</span> | Disponibles: ${freeBlocks} | Precio: ${totalPrice} SOL`;
-      selectionOverlay.style.border = '3px solid #dc3545';
-      selectionOverlay.style.boxShadow = '0 0 10px #dc3545';
-    } else {
-      selectionInfo.innerHTML = `✓ Selección: ${blocksX}×${blocksY} bloques | Precio: ${(blocksTotal * PRICE_PER_BLOCK).toFixed(4)} SOL`;
-      selectionOverlay.style.border = '3px solid cyan';
-      selectionOverlay.style.boxShadow = '0 0 10px cyan';
-    }
-    
-    const scale = canvas.getBoundingClientRect().width / CANVAS_SIZE;
-    selectionOverlay.style.display = 'block';
-    selectionOverlay.style.left = (minX * scale) + 'px';
-    selectionOverlay.style.top = (minY * scale) + 'px';
-    selectionOverlay.style.width = (width * scale) + 'px';
-    selectionOverlay.style.height = (height * scale) + 'px';
-  }
-
-  function handleUp(e) {
-    if (!isDragging) return;
-    isDragging = false;
-    
-    if (endX === undefined || endY === undefined) {
-      selection = null;
-      return;
-    }
-    
-    const minX = Math.min(startX, endX);
-    const maxX = Math.max(startX, endX);
-    const minY = Math.min(startY, endY);
-    const maxY = Math.max(startY, endY);
-    
-    const minBlockX = minX / BLOCK_SIZE;
-    const minBlockY = minY / BLOCK_SIZE;
-    const maxBlockX = maxX / BLOCK_SIZE;
-    const maxBlockY = maxY / BLOCK_SIZE;
-    
-    let soldInSelection = 0;
-    for (let by = minBlockY; by <= maxBlockY; by++) {
-      for (let bx = minBlockX; bx <= maxBlockX; bx++) {
-        if (isBlockSold(bx, by)) soldInSelection++;
-      }
-    }
-    
-    selection = {
-      minBlockX,
-      minBlockY,
-      maxBlockX,
-      maxBlockY,
-      blocksX: maxBlockX - minBlockX + 1,
-      blocksY: maxBlockY - minBlockY + 1,
-      soldInSelection
-    };
-    
-    confirmBtn.disabled = soldInSelection > 0;
-  }
-
-  function handleHover(e) {
-    if (isDragging) {
-      tooltip.style.display = 'none';
-      return;
-    }
-    
-    const { rawX, rawY, rect } = getMousePosInCanvas(e);
-    const bx = Math.floor(rawX / BLOCK_SIZE);
-    const by = Math.floor(rawY / BLOCK_SIZE);
-    
-    if (bx < 0 || by < 0 || bx >= BLOCKS_PER_SIDE || by >= BLOCKS_PER_SIDE) {
-      tooltip.style.display = 'none';
-      return;
-    }
-    
-    const data = blockData[blockIndex(bx, by)];
-    if (data) {
-      tooltip.textContent = `🚀 ${data.name}`;
-      const scale = rect.width / CANVAS_SIZE;
-      tooltip.style.left = (bx * BLOCK_SIZE * scale + 10) + 'px';
-      tooltip.style.top = (by * BLOCK_SIZE * scale - 30) + 'px';
-      tooltip.style.display = 'block';
-    } else {
-      tooltip.style.display = 'none';
-    }
-  }
-
-  confirmBtn.addEventListener('click', () => {
-    if (!selection) {
-      alert('Selecciona un área primero');
-      return;
-    }
-    if (selection.soldInSelection > 0) {
-      alert(`${selection.soldInSelection} bloques ya están ocupados. Selecciona otra área.`);
-      return;
-    }
-    
-    const blocksTotal = selection.blocksX * selection.blocksY;
-    const totalPrice = (blocksTotal * PRICE_PER_BLOCK).toFixed(4);
-    document.getElementById('totalPrice').textContent = totalPrice;
-    document.getElementById('modal').style.display = 'block';
-  });
-
-  cancelBtn.addEventListener('click', () => {
-    selection = null;
-    selectionOverlay.style.display = 'none';
-    selectionInfo.textContent = '';
-    confirmBtn.disabled = true;
-  });
-
-  document.getElementById('closeModal').addEventListener('click', () => {
-    document.getElementById('modal').style.display = 'none';
-    document.getElementById('paymentStatus').textContent = '';
-  });
-
-  async function uploadLogoToServer(file) {
-    const fd = new FormData();
-    fd.append('file', file);
-    const res = await fetch(`${API_BASE}/api/upload-logo`, {
-      method: 'POST',
-      body: fd
+    canvas.addEventListener('mousemove', (e) => {
+      // (opcional) expandir selección con Shift + mousemove
     });
-    const data = await res.json();
-    if (!res.ok || !data.ok) {
-      throw new Error(data.error || 'Error subiendo logo');
-    }
-    return data;
-  }
 
-  function showStatus(message, type = 'info') {
-    const statusEl = document.getElementById('paymentStatus');
-    statusEl.textContent = message;
-    statusEl.className = type;
-  }
-
-  document.getElementById('payBtn').addEventListener('click', async () => {
-    const name = document.getElementById('projectName').value.trim();
-    const url = document.getElementById('projectURL').value.trim();
-    const logoFile = document.getElementById('projectLogo').files[0];
-    const payBtn = document.getElementById('payBtn');
-    
-    if (!selection) {
-      alert('No hay selección');
-      return;
-    }
-    if (selection.soldInSelection > 0) {
-      alert('Bloques ocupados');
-      return;
-    }
-    if (!name || !url || !logoFile) {
-      alert('Completa todos los campos');
-      return;
-    }
-    if (!window.solana) {
-      alert('Phantom Wallet no detectado. Instálalo desde phantom.app');
-      return;
-    }
-    if (!userPublicKey) {
-      alert('Conecta tu wallet primero');
-      return;
+    function renderSelection() {
+      drawGrid();
+      if (!selection) return;
+      ctx.fillStyle = 'rgba(255,215,0,0.6)';
+      ctx.fillRect(selection.x * BLOCK_SIZE, selection.y * BLOCK_SIZE, selection.w * BLOCK_SIZE, selection.h * BLOCK_SIZE);
     }
 
-    try {
-      payBtn.disabled = true;
-      
-      showStatus('📤 Subiendo logo...', 'warning');
-      const uploadRes = await uploadLogoToServer(logoFile);
-      const logoUrl = uploadRes.url.startsWith('http') 
-        ? uploadRes.url 
-        : `${API_BASE}${uploadRes.url}`;
-      
-      console.log('✅ Logo subido:', logoUrl);
+    function updatePrice() {
+      if (!selection) { totalPriceEl.textContent = '0.00'; return; }
+      const blocks = Math.max(1, selection.w * selection.h);
+      const price = (blocks * PRICE_PER_BLOCK_SOL).toFixed(4);
+      totalPriceEl.textContent = price;
+    }
 
-      const metadata = {
-        name,
-        url,
-        logo: logoUrl,
-        selection: {
-          minBlockX: selection.minBlockX,
-          minBlockY: selection.minBlockY,
-          blocksX: selection.blocksX,
-          blocksY: selection.blocksY
-        },
-        priceSOL: parseFloat((selection.blocksX * selection.blocksY * PRICE_PER_BLOCK).toFixed(9))
-      };
+    // Wallet connect
+    async function connectWallet() {
+      if (!window.solana || !window.solana.isPhantom) {
+        alert('Instala Phantom u otra wallet compatible con window.solana.');
+        return;
+      }
+      try {
+        const resp = await window.solana.connect();
+        userPublicKey = resp.publicKey;
+        walletConnected = true;
+        connectBtn.textContent = 'Conectado: ' + userPublicKey.toString().slice(0,6) + '...';
+        status('Wallet conectada');
+        buyBtn.disabled = false;
+      } catch (err) {
+        console.error('Wallet connect error', err);
+        status('Error conectando wallet');
+      }
+    }
 
-      showStatus('💳 Preparando transacción...', 'warning');
+    connectBtn.addEventListener('click', connectWallet);
 
-      const fromPubkey = userPublicKey;
-      const toPubkey = new solanaWeb3.PublicKey(MERCHANT_WALLET);
-      const lamports = Math.round(metadata.priceSOL * solanaWeb3.LAMPORTS_PER_SOL);
-      
-      // ✅ TRANSACCIÓN SIMPLE: Solo transferencia, SIN MEMO
-      const transferIx = solanaWeb3.SystemProgram.transfer({
-        fromPubkey,
-        toPubkey,
-        lamports
-      });
+    function status(msg, type='info') {
+      statusEl.textContent = msg || '';
+    }
 
-      const tx = new solanaWeb3.Transaction().add(transferIx);
-      tx.feePayer = fromPubkey;
-      const { blockhash } = await connection.getLatestBlockhash('finalized');
-      tx.recentBlockhash = blockhash;
+    // Construir y enviar transacción simple (transfer) con memo JSON
+    async function payAndRegister() {
+      if (!walletConnected || !userPublicKey) return alert('Conecta la wallet primero');
+      if (!selection) return alert('Selecciona bloques primero');
 
-      showStatus('✍️ Firma la transacción en Phantom...', 'warning');
-      const { signature } = await window.solana.signAndSendTransaction(tx);
-      console.log('✅ Transacción enviada:', signature);
+      const priceSOL = parseFloat(totalPriceEl.textContent);
+      if (!priceSOL || priceSOL <= 0) return alert('Precio inválido');
 
-      showStatus('⏳ Confirmando transacción...', 'warning');
-      await connection.confirmTransaction(signature, 'confirmed');
-      console.log('✅ Transacción confirmada');
+      try {
+        status('Preparando transacción...');
+        const fromPubkey = userPublicKey;
+        const merchant = window.MERCHANT_WALLET || ''; // opcional: inyectar desde server o config
+        if (!merchant) return alert('Merchant wallet no configurada en el cliente');
 
-      showStatus('🔍 Verificando en el servidor...', 'warning');
-      const verifyRes = await fetch(`${API_BASE}/api/verify-purchase`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        const toPubkey = new solanaWeb3.PublicKey(merchant);
+        const lamports = Math.round(priceSOL * solanaWeb3.LAMPORTS_PER_SOL);
+
+        const transferIx = solanaWeb3.SystemProgram.transfer({
+          fromPubkey,
+          toPubkey,
+          lamports
+        });
+
+        // Memo JSON con selection
+        const memoObj = {
+          type: 'million-grid-sale',
+          selection: {
+            minBlockX: selection.x,
+            minBlockY: selection.y,
+            blocksX: selection.w,
+            blocksY: selection.h
+          },
+          projectName: 'Mi Proyecto' // puedes recolectar este campo desde un formulario
+        };
+        const memoIx = new solanaWeb3.TransactionInstruction({
+          keys: [],
+          programId: new solanaWeb3.PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLmfcHr'),
+          data: Buffer.from(JSON.stringify(memoObj), 'utf8')
+        });
+
+        const tx = new solanaWeb3.Transaction().add(transferIx, memoIx);
+        tx.feePayer = fromPubkey;
+        const { blockhash } = await connection.getLatestBlockhash('finalized');
+        tx.recentBlockhash = blockhash;
+
+        status('Por favor firma y envía la transacción en la wallet...');
+        const signed = await window.solana.signAndSendTransaction(tx);
+        const signature = signed.signature || signed;
+        status('Transacción enviada: ' + signature);
+        // Esperar confirmación y llamar al backend para verificiar y registrar
+        status('Confirmando transacción y registrando venta...');
+
+        // Llamada backend
+        const payload = {
           signature,
-          expectedAmountSOL: metadata.priceSOL,
-          metadata
-        })
-      });
-      
-      const verifyJson = await verifyRes.json();
-      
-      if (verifyJson.ok) {
-        showStatus('✅ ¡Compra confirmada exitosamente!', 'success');
-        console.log('✅ Verificación exitosa:', verifyJson);
-        
-        finalizeOnChainPurchase(metadata);
-        
-        setTimeout(() => {
-          document.getElementById('modal').style.display = 'none';
-          document.getElementById('projectName').value = '';
-          document.getElementById('projectURL').value = '';
-          document.getElementById('projectLogo').value = '';
-          document.getElementById('paymentStatus').textContent = '';
-          selection = null;
-          selectionOverlay.style.display = 'none';
-          selectionInfo.textContent = '';
-          confirmBtn.disabled = true;
-          payBtn.disabled = false;
-        }, 2000);
-      } else {
-        throw new Error(verifyJson.error || 'Error en la verificación');
-      }
-
-    } catch (err) {
-      console.error('❌ Error:', err);
-      showStatus('❌ Error: ' + err.message, 'error');
-      alert('Error: ' + err.message);
-      payBtn.disabled = false;
-    }
-  });
-
-  function finalizeOnChainPurchase(metadata) {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    
-    img.onload = function() {
-      const drawX = selection.minBlockX * BLOCK_SIZE;
-      const drawY = selection.minBlockY * BLOCK_SIZE;
-      const drawWidth = selection.blocksX * BLOCK_SIZE;
-      const drawHeight = selection.blocksY * BLOCK_SIZE;
-      
-      ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
-
-      let newlySold = 0;
-      for (let by = selection.minBlockY; by <= selection.maxBlockY; by++) {
-        for (let bx = selection.minBlockX; bx <= selection.maxBlockX; bx++) {
-          const idx = blockIndex(bx, by);
-          if (blockData[idx] === null) {
-            blockData[idx] = {
-              name: metadata.name,
-              url: metadata.url,
-              logo: metadata.logo
-            };
-            newlySold++;
+          expectedAmountSOL: priceSOL,
+          metadata: {
+            name: memoObj.projectName,
+            selection: memoObj.selection
           }
+        };
+        const resp = await fetch('/api/verify-purchase', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const json = await resp.json();
+        if (json.ok) {
+          status('Compra verificada y registrada ✔️');
+          console.log('Venta registrada:', json.sale);
+        } else {
+          status('Error registrando compra: ' + (json.error || 'unknown'));
+          console.error('verify-purchase error', json);
         }
-      }
-      
-      soldPixels += newlySold * BLOCK_SIZE * BLOCK_SIZE;
-      soldPixelsSpan.textContent = soldPixels.toLocaleString();
-      totalSales++;
-      totalSalesSpan.textContent = totalSales;
-      drawSoldOverlays();
-    };
-    
-    img.onerror = function() {
-      console.warn('Error cargando imagen:', metadata.logo);
-    };
-    
-    img.src = metadata.logo;
-  }
 
-  function drawSoldOverlays() {
-    const prev = gridContainer.querySelectorAll('.sold-overlay');
-    prev.forEach(p => p.remove());
-    
-    const rect = canvas.getBoundingClientRect();
-    const scale = rect.width / CANVAS_SIZE;
-    
-    for (let by = 0; by < BLOCKS_PER_SIDE; by++) {
-      for (let bx = 0; bx < BLOCKS_PER_SIDE; bx++) {
-        if (isBlockSold(bx, by)) {
-          const div = document.createElement('div');
-          div.className = 'sold-overlay';
-          div.style.left = (bx * BLOCK_SIZE * scale) + 'px';
-          div.style.top = (by * BLOCK_SIZE * scale) + 'px';
-          div.style.width = (BLOCK_SIZE * scale) + 'px';
-          div.style.height = (BLOCK_SIZE * scale) + 'px';
-          gridContainer.appendChild(div);
-        }
+      } catch (err) {
+        console.error('Error en pago:', err);
+        status('Error en pago: ' + (err.message || err.toString()));
       }
     }
-  }
 
-  canvas.addEventListener('click', (e) => {
-    if (isDragging) return;
-    
-    const { rawX, rawY } = getMousePosInCanvas(e);
-    const bx = Math.floor(rawX / BLOCK_SIZE);
-    const by = Math.floor(rawY / BLOCK_SIZE);
-    const data = blockData[blockIndex(bx, by)];
-    
-    if (data && confirm(`🚀 ¿Visitar ${data.name}?`)) {
-      window.open(data.url, '_blank');
-    }
-  });
+    buyBtn.addEventListener('click', payAndRegister);
 
-  window.addEventListener('resize', drawSoldOverlays);
+    // Inicializar connection usada por ejemplo (usa devnet/mainnet según servidor)
+    const connection = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl('devnet'), { commitment: 'confirmed' });
 
-  drawGrid();
-  loadGridFromServer();
+    // (Opcional) Exponer merchant wallet si el servidor inyecta valor dinámicamente
+    window.MERCHANT_WALLET = '3d7w4r4irLaKVYd4dLjpoiehJVawbbXWFWb1bCk9nGCo'; // reemplazar en producción
+    status('Listo');
   </script>
 </body>
 </html>
