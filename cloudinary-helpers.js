@@ -1,171 +1,170 @@
+/**
+ * cloudinary-helpers.js
+ * Helper to restore/download backups from Cloudinary.
+ *
+ * export: restoreImagesFromCloudinary(publicId, destPath, cloudName, apiKey, apiSecret, opts)
+ *
+ * Mejoras añadidas:
+ * - Descarga atómica (tmp -> rename) para evitar archivos corruptos.
+ * - Reintentos con backoff en descargas y llamadas a Admin API.
+ * - Creación automática del directorio destino si no existe.
+ * - Mensajes de error más detallados para facilitar debugging.
+ * - Limpieza de archivos temporales en caso de fallo.
+ *
+ * Uso:
+ * const { restoreImagesFromCloudinary } = require('./cloudinary-helpers');
+ * const res = await restoreImagesFromCloudinary('solana_sales_backup', './sales.json', 'mi_cloud', apiKey, apiSecret);
+ */
+
+const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
-const axios = require('axios');
-const cloudinary = require('cloudinary').v2;
 
-// Note: CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET are read from env at runtime
-if (!process.env.CLOUDINARY_CLOUD_NAME) {
-  console.warn('cloudinary-helpers: CLOUDINARY_CLOUD_NAME not set');
+const DEFAULT_TIMEOUT_MS = 120000;
+const DEFAULT_DOWNLOAD_RETRIES = 3;
+const DEFAULT_ADMIN_RETRIES = 3;
+const BACKOFF_BASE_MS = 800; // multiplicador exponencial
+
+function ensureDirExists(filePath) {
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
 }
 
-// Configure cloudinary if API keys are present
-if (process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
-  cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET
+/**
+ * Descarga una URL a un archivo destino de forma atómica:
+ * - descarga a tmpPath (destPath + .tmp)
+ * - al finalizar, renombra tmpPath -> destPath
+ */
+async function downloadToFileAtomic(url, destPath, timeout = DEFAULT_TIMEOUT_MS) {
+  ensureDirExists(destPath);
+  const tmpPath = `${destPath}.tmp`;
+
+  // limpiar tmp si existe de previos intentos
+  try { if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch (e) { /* ignore */ }
+
+  const resp = await axios.get(url, { responseType: 'stream', timeout });
+  const writer = fs.createWriteStream(tmpPath);
+
+  return new Promise((resolve, reject) => {
+    let finished = false;
+    resp.data.pipe(writer);
+    writer.on('finish', () => {
+      finished = true;
+      try {
+        fs.renameSync(tmpPath, destPath);
+        resolve({ ok: true, url });
+      } catch (err) {
+        reject(new Error(`Error renombrando tmp a destino: ${err.message || err}`));
+      }
+    });
+    writer.on('error', (err) => {
+      // cleanup tmp on error
+      try { if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch (e) { /* ignore */ }
+      if (!finished) reject(err);
+    });
   });
 }
 
-const RAW_DELIVER_BASE = process.env.CLOUDINARY_CLOUD_NAME ? `https://res.cloudinary.com/${process.env.CLOUDINARY_CLOUD_NAME}/raw/upload` : null;
-
-const DEFAULT_SALES_PUBLIC_ID = process.env.SALES_PUBLIC_ID || 'sales';
-
-async function uploadFileToCloudinary(localPath, publicId) {
-  if (!fs.existsSync(localPath)) {
-    return { ok: false, error: 'file_not_found', localPath };
-  }
-  try {
-    const res = await cloudinary.uploader.upload(localPath, {
-      resource_type: 'raw',
-      public_id: publicId,
-      overwrite: true
-    });
-    return { ok: true, res };
-  } catch (err) {
-    return { ok: false, error: err.message || err };
-  }
-}
-
-async function downloadFileFromCloudinary(publicId, destPath) {
-  // Try public delivery URL first
-  if (RAW_DELIVER_BASE) {
-    const url = `${RAW_DELIVER_BASE}/${encodeURIComponent(publicId)}`;
+/**
+ * tryDownloadUrl con reintentos/backoff más robusto
+ */
+async function tryDownloadUrlWithRetries(url, destPath, retries = DEFAULT_DOWNLOAD_RETRIES, timeout = DEFAULT_TIMEOUT_MS) {
+  let lastErr = null;
+  for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      const resp = await axios.get(url, { responseType: 'stream', timeout: 120000 });
-      await fs.promises.mkdir(path.dirname(destPath), { recursive: true });
-      const writer = fs.createWriteStream(destPath);
-      resp.data.pipe(writer);
-      await new Promise((resolve, reject) => {
-        writer.on('finish', resolve);
-        writer.on('error', reject);
-      });
+      const res = await downloadToFileAtomic(url, destPath, timeout);
       return { ok: true, url };
     } catch (err) {
-      // continue to admin API fallback if possible
+      lastErr = err;
+      const waitMs = BACKOFF_BASE_MS * Math.pow(2, attempt - 1);
+      console.warn(`tryDownloadUrlWithRetries: intento ${attempt} fallo: ${err.message || err}. Reintentando en ${waitMs}ms`);
+      await new Promise(r => setTimeout(r, waitMs));
     }
   }
-
-  // If admin API credentials are available, try admin API to get resource URL
-  try {
-    const info = await cloudinary.api.resource(publicId, { resource_type: 'raw' });
-    const url = info.secure_url || info.url;
-    const resp = await axios.get(url, { responseType: 'stream', timeout: 120000 });
-    await fs.promises.mkdir(path.dirname(destPath), { recursive: true });
-    const writer = fs.createWriteStream(destPath);
-    resp.data.pipe(writer);
-    await new Promise((resolve, reject) => {
-      writer.on('finish', resolve);
-      writer.on('error', reject);
-    });
-    return { ok: true, url };
-  } catch (err) {
-    return { ok: false, error: err.message || err };
-  }
+  return { ok: false, error: lastErr ? (lastErr.message || String(lastErr)) : 'unknown' };
 }
 
 /**
- * restoreImagesFromCloudinary(publicId, destPath, cloudName, apiKey, apiSecret)
- * Attempts to fetch a raw resource from Cloudinary and save it to destPath.
- * Tries public delivery first, then Admin API if apiKey/apiSecret are provided.
+ * Llama a la Admin API de Cloudinary para obtener secure_url del recurso raw.
  */
-async function restoreImagesFromCloudinary(publicId, destPath, cloudName, apiKey, apiSecret) {
-  // If cloudName is provided but differs from env, we can still try public URL
-  const deliverBase = cloudName ? `https://res.cloudinary.com/${cloudName}/raw/upload` : RAW_DELIVER_BASE;
-  if (deliverBase) {
-    const url = `${deliverBase}/${encodeURIComponent(publicId)}`;
+async function getCloudinaryResourceSecureUrl(publicId, cloudName, apiKey, apiSecret, retries = DEFAULT_ADMIN_RETRIES) {
+  if (!apiKey || !apiSecret) {
+    throw new Error('No API credentials provided');
+  }
+  const adminUrl = `https://api.cloudinary.com/v1_1/${cloudName}/resources/raw/${encodeURIComponent(publicId)}`;
+
+  let lastErr = null;
+  for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      const resp = await axios.get(url, { responseType: 'stream', timeout: 120000 });
-      await fs.promises.mkdir(path.dirname(destPath), { recursive: true });
-      const writer = fs.createWriteStream(destPath);
-      resp.data.pipe(writer);
-      await new Promise((resolve, reject) => {
-        writer.on('finish', resolve);
-        writer.on('error', reject);
+      const resp = await axios.get(adminUrl, {
+        auth: {
+          username: apiKey,
+          password: apiSecret
+        },
+        timeout: DEFAULT_TIMEOUT_MS
       });
-      return { ok: true, url };
-    } catch (err) {
-      // continue to admin API fallback
-    }
-  }
-
-  // Admin API fallback: configure temporary cloudinary client if apiKey/apiSecret provided
-  if (apiKey && apiSecret && cloudName) {
-    try {
-      const temp = require('cloudinary').v2;
-      temp.config({ cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret });
-      const info = await temp.api.resource(publicId, { resource_type: 'raw' });
-      const url = info.secure_url || info.url;
-      const resp = await axios.get(url, { responseType: 'stream', timeout: 120000 });
-      await fs.promises.mkdir(path.dirname(destPath), { recursive: true });
-      const writer = fs.createWriteStream(destPath);
-      resp.data.pipe(writer);
-      await new Promise((resolve, reject) => {
-        writer.on('finish', resolve);
-        writer.on('error', reject);
-      });
-      return { ok: true, url };
-    } catch (err) {
-      return { ok: false, error: err.message || err };
-    }
-  }
-
-  return { ok: false, error: 'not_found_or_no_admin_credentials' };
-}
-
-/**
- * Upload a JS object as sales JSON to Cloudinary (raw)
- */
-async function uploadSalesJSONObject(obj, publicId = DEFAULT_SALES_PUBLIC_ID) {
-  const tmpDir = process.env.TMP_DIR || '/tmp';
-  const tmpPath = path.join(tmpDir, `${publicId}.json`);
-  await fs.promises.mkdir(path.dirname(tmpPath), { recursive: true });
-  await fs.promises.writeFile(tmpPath, JSON.stringify(obj, null, 2), 'utf8');
-  try {
-    const res = await cloudinary.uploader.upload(tmpPath, { resource_type: 'raw', public_id: publicId, overwrite: true });
-    try { await fs.promises.unlink(tmpPath); } catch(e){}
-    return { ok: true, res };
-  } catch (err) {
-    return { ok: false, error: err.message || err };
-  }
-}
-
-async function downloadSalesJSONObject(publicId = DEFAULT_SALES_PUBLIC_ID) {
-  // Try admin API first if configured
-  try {
-    const info = await cloudinary.api.resource(publicId, { resource_type: 'raw' });
-    const url = info.secure_url || info.url;
-    const r = await axios.get(url, { responseType: 'json', timeout: 10000 });
-    return { ok: true, data: r.data };
-  } catch (err) {
-    // try public delivery
-    if (RAW_DELIVER_BASE) {
-      const url = `${RAW_DELIVER_BASE}/${encodeURIComponent(publicId)}`;
-      try {
-        const r = await axios.get(url, { responseType: 'json', timeout: 10000 });
-        return { ok: true, data: r.data };
-      } catch (e) {
-        return { ok: false, error: e.message || e };
+      if (resp && resp.data && resp.data.secure_url) {
+        return resp.data.secure_url;
+      } else {
+        throw new Error('Admin API no devolvió secure_url');
       }
+    } catch (err) {
+      lastErr = err;
+      const waitMs = BACKOFF_BASE_MS * Math.pow(2, attempt - 1);
+      console.warn(`getCloudinaryResourceSecureUrl: intento ${attempt} fallo: ${err.message || err}. Reintentando en ${waitMs}ms`);
+      await new Promise(r => setTimeout(r, waitMs));
     }
-    return { ok: false, error: err.message || err };
   }
+  throw lastErr || new Error('Failed to fetch resource from Admin API');
 }
 
-module.exports = {
-  uploadFileToCloudinary,
-  downloadFileFromCloudinary,
-  restoreImagesFromCloudinary,
-  uploadSalesJSONObject,
-  downloadSalesJSONObject
-};
+/**
+ * restoreImagesFromCloudinary
+ * - publicId: public_id en Cloudinary (string)
+ * - destPath: ruta local donde guardar el archivo (string)
+ * - cloudName: nombre de cloudinary (string)
+ * - apiKey, apiSecret: opcionales, para usar Admin API si la descarga pública falla
+ * - opts: { downloadRetries, adminRetries, timeout }
+ *
+ * Devuelve { ok: true, url } o { ok: false, error }
+ */
+async function restoreImagesFromCloudinary(publicId, destPath, cloudName, apiKey, apiSecret, opts = {}) {
+  const downloadRetries = opts.downloadRetries || DEFAULT_DOWNLOAD_RETRIES;
+  const adminRetries = opts.adminRetries || DEFAULT_ADMIN_RETRIES;
+  const timeout = opts.timeout || DEFAULT_TIMEOUT_MS;
+
+  if (!publicId || !destPath || !cloudName) {
+    return { ok: false, error: 'Faltan parámetros (publicId, destPath, cloudName)' };
+  }
+
+  // 1) Intentar delivery público
+  const publicUrl = `https://res.cloudinary.com/${cloudName}/raw/upload/${encodeURIComponent(publicId)}`;
+  try {
+    const dres = await tryDownloadUrlWithRetries(publicUrl, destPath, downloadRetries, timeout);
+    if (dres.ok) return { ok: true, url: publicUrl };
+    console.warn(`restore: descarga pública falló: ${dres.error}`);
+  } catch (e) {
+    console.warn('restore: error en descarga pública:', e.message || e);
+  }
+
+  // 2) Si tenemos API keys, intentar Admin API para obtener secure_url y descargarla
+  if (apiKey && apiSecret) {
+    try {
+      const secureUrl = await getCloudinaryResourceSecureUrl(publicId, cloudName, apiKey, apiSecret, adminRetries);
+      if (secureUrl) {
+        const dres2 = await tryDownloadUrlWithRetries(secureUrl, destPath, downloadRetries, timeout);
+        if (dres2.ok) return { ok: true, url: secureUrl };
+        return { ok: false, error: `No se pudo descargar secure_url: ${dres2.error}` };
+      }
+      return { ok: false, error: 'Admin API no devolvió secure_url' };
+    } catch (err) {
+      return { ok: false, error: `Admin API error: ${err.message || err}` };
+    }
+  }
+
+  return { ok: false, error: 'No se pudo restaurar desde Cloudinary (ni pública ni Admin API disponible)' };
+}
+
+module.exports = { restoreImagesFromCloudinary, tryDownloadUrlWithRetries, getCloudinaryResourceSecureUrl };
