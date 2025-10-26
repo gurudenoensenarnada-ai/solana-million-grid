@@ -245,28 +245,12 @@ function scheduleBackupUpload() {
 }
 
 // Modificar appendSale para disparar scheduleBackupUpload() tras guardar la venta
-// Append sale (sin bloquear): mantiene escritura local, programa subida de backup y sincroniza a Cloudinary en background
 function appendSale(sale) {
   try {
     const db = readSales();
-    if (!db || !db.sales) db.sales = [];
     db.sales.push(sale);
     fs.writeFileSync(SALES_FILE, JSON.stringify(db, null, 2));
     console.log(`✅ Venta guardada: ${sale.metadata?.name || '(sin nombre)'}`);
-
-    // Sincronizar a Cloudinary en background (no bloqueante)
-    try {
-      const { saveSales } = require('./src/sales-init');
-      (async () => {
-        try {
-          await saveSales(db);
-        } catch (e) {
-          console.warn('⚠️ Error subiendo sales.json a Cloudinary tras appendSale:', e?.message || e);
-        }
-      })();
-    } catch (e) {
-      console.warn('⚠️ No se pudo iniciar subida a Cloudinary (saveSales):', e?.message || e);
-    }
 
     // Programar subida de backup (no bloqueante)
     try {
@@ -388,19 +372,7 @@ async function ensureJsonFiles() {
 
 // Antes de continuar, intentar restaurar si es necesario (sin bloquear demasiado)
 (async () => {
-  try {
-    await ensureJsonFiles();
-  } catch (e) {
-    console.warn('Error en ensureJsonFiles:', e?.message || e);
-  }
-
-  // Inicializar sales desde Cloudinary y cachearlo en memoria
-  try {
-    const { initSales } = require('./src/sales-init');
-    await initSales();
-  } catch (e) {
-    console.warn('Error inicializando sales en cache (initSales):', e?.message || e);
-  }
+  await ensureJsonFiles();
 })();
 
 // ============================================
