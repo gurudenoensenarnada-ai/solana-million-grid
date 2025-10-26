@@ -4,17 +4,23 @@
   "description": "Million Grid en Solana",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "lint": "eslint . --ext .js",
+    "test": "echo \"No tests yet\" && exit 0"
   },
   "engines": {
     "node": "18.x"
   },
   "dependencies": {
+    "@solana/web3.js": "^1.85.0",
     "axios": "^1.5.0",
     "cloudinary": "^1.32.0",
-    "form-data": "^4.0.0",
     "cors": "^2.8.5",
-    "multer": "^1.4.4",
-    "@solana/web3.js": "^1.85.0"
+    "dotenv": "^16.1.4",
+    "form-data": "^4.0.0",
+    "multer": "^1.4.4"
+  },
+  "devDependencies": {
+    "eslint": "^8.50.0"
   }
 }
