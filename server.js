@@ -5,6 +5,15 @@
  * - Guardado en images.json cuando SAVE_IMAGES_IN_JSON=true
  * - Backup de sales.json + images.json a backups/ y subida a Cloudinary (resource_type=raw)
  * - Al arrancar, si sales.json/images.json no existen o están vacíos, intenta restaurar desde Cloudinary
+ *
+ * Mejoras aplicadas:
+ * - No exponer keys hardcodeadas; RPC_URL se toma desde env y si no existe se usa clusterApiUrl(CLUSTER) como fallback (advertencia).
+ * - Validación de env vars en producción (MERCHANT_WALLET requerido).
+ * - Escritura atómica y serializada de sales.json (appendSaleAtomic) para evitar corrupciones por escrituras concurrentes.
+ * - Revalidación de disponibilidad de bloques justo antes de persistir la venta.
+ * - Tolerancia de pago configurable vía env PAYMENT_TOLERANCE_SOL.
+ * - Menos logs que podrían exponer secretos; mensajes indicativos en su lugar.
+ * - Retries leves al obtener transacción parseada para lidiar con latencia RPC.
  */
 
 require('dotenv').config();
@@ -35,6 +44,7 @@ if (process.env.APP_CONFIG) {
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const { promises: fsp } = require('fs');
 const multer = require('multer');
 const solanaWeb3 = require('@solana/web3.js');
 const cors = require('cors');
@@ -51,16 +61,34 @@ app.use(cors());
 // ============================================
 // CONFIGURACIÓN (usar .env en producción)
 // ============================================
-const DEFAULT_MERCHANT = process.env.MERCHANT_WALLET || '3d7w4r4irLaKVYd4dLjpoiehJVawbbXWFWb1bCk9nGCo';
-const CLUSTER = process.env.CLUSTER || 'mainnet-beta';
-// Antes: no hardcodear keys públicas en repo
-const RPC_URL = process.env.RPC_URL || '';
-if (!RPC_URL) {
-  console.warn('⚠️ RPC_URL no configurada — configura RPC_URL en .env. Usar un RPC público en producción no es recomendable.');
-}
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'production';
 const BASE_URL = process.env.BASE_URL || ''; // Para URLs completas
+
+const DEFAULT_MERCHANT = (process.env.MERCHANT_WALLET || '3d7w4r4irLaKVYd4dLjpoiehJVawbbXWFWb1bCk9nGCo').trim();
+const CLUSTER = process.env.CLUSTER || 'mainnet-beta';
+
+// Antes: no hardcodear keys públicas en repo
+const RPC_URL = (process.env.RPC_URL || '').trim();
+if (!RPC_URL) {
+  console.warn('⚠️ RPC_URL no configurada — usando clusterApiUrl(CLUSTER) como fallback para evitar fallo. Configura RPC_URL en .env para producción.');
+}
+const rpcToUse = RPC_URL || solanaWeb3.clusterApiUrl(CLUSTER);
+
+const PAYMENT_TOLERANCE_SOL = parseFloat(process.env.PAYMENT_TOLERANCE_SOL || '0.00001');
+
+// Validaciones mínimas al arranque
+if (NODE_ENV === 'production') {
+  const missing = [];
+  if (!process.env.MERCHANT_WALLET) missing.push('MERCHANT_WALLET');
+  if (!process.env.RPC_URL) missing.push('RPC_URL');
+  if (missing.length) {
+    console.error(`❌ Faltan variables de entorno en producción: ${missing.join(', ')}`);
+    // No hacemos process.exit automáticamente si quieres permitir deploys con variables ausentes;
+    // aquí preferimos forzar la salida para evitar operar con defaults inseguros.
+    process.exit(1);
+  }
+}
 
 // Cloudinary unsigned config (defaults to your values)
 const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || '';
@@ -89,11 +117,11 @@ const LAMPORTS_PER_SOL = solanaWeb3.LAMPORTS_PER_SOL || 1000000000;
 // MEMO_PROGRAM: usar string para evitar instanciar PublicKey en startup
 const DEFAULT_MEMO_PROGRAM = 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLmfcHr';
 const MEMO_PROGRAM_ID_STR = (process.env.MEMO_PROGRAM_ID || DEFAULT_MEMO_PROGRAM).toString().trim();
-console.log('   MEMO_PROGRAM_ID raw value:', process.env.MEMO_PROGRAM_ID);
 console.log('   MEMO_PROGRAM_ID used value:', MEMO_PROGRAM_ID_STR);
+
 // Inicializar conexión a RPC (usada por /api/verify-purchase)
-const connection = new solanaWeb3.Connection(RPC_URL, { commitment: 'confirmed' });
-console.log('   RPC_URL usada para connection:', RPC_URL);
+const connection = new solanaWeb3.Connection(rpcToUse, { commitment: 'confirmed' });
+console.log('   RPC configured:', RPC_URL ? '[CUSTOM RPC]' : `[${CLUSTER} clusterApiUrl]`);
 
 // Crear directorios necesarios (UPLOADS_DIR ahora puede ser persistente)
 [UPLOADS_DIR, BACKUPS_DIR].forEach(dir => {
@@ -112,7 +140,6 @@ console.log('   RPC_URL usada para connection:', RPC_URL);
 
 // ============================================
 // UTIL: Cloudinary upload/download para backups (resource_type=raw)
-// (se mantiene la función pública de descarga como fallback local)
 // ============================================
 
 async function uploadFileToCloudinary(filePath, publicId) {
@@ -124,9 +151,7 @@ async function uploadFileToCloudinary(filePath, publicId) {
     const form = new FormData();
     form.append('file', fs.createReadStream(filePath));
     form.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-    // resource_type raw para JSON/text
     form.append('resource_type', 'raw');
-    // intentamos mantener public_id fijo para poder sobrescribir/recuperar
     if (publicId) form.append('public_id', publicId);
 
     const resp = await axios.post(CLOUDINARY_RAW_API_URL, form, {
@@ -136,7 +161,7 @@ async function uploadFileToCloudinary(filePath, publicId) {
       timeout: 120000
     });
 
-    console.log(`   ✅ Backup subido a Cloudinary: ${resp.data.secure_url}`);
+    console.log(`   ✅ Backup subido a Cloudinary: ${resp.data?.secure_url ? '[secure_url]' : '[ok]'}`);
     return resp.data;
   } catch (err) {
     console.warn('   ⚠️ Error subiendo backup a Cloudinary:', err.message || err.toString());
@@ -144,7 +169,6 @@ async function uploadFileToCloudinary(filePath, publicId) {
   }
 }
 
-// === ADD: helper para subir dataURLs a Cloudinary ===
 async function uploadDataUrlToCloudinary(dataUrl, publicName) {
   if (!CLOUDINARY_CLOUD_NAME || (!CLOUDINARY_UPLOAD_PRESET && !(CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET))) {
     console.log('   Cloudinary no configurado para uploadDataUrlToCloudinary.');
@@ -161,10 +185,8 @@ async function uploadDataUrlToCloudinary(dataUrl, publicName) {
 
   try {
     const form = new FormData();
-    // FormData acepta Buffer con nombre y contentType
     form.append('file', buffer, { filename: publicName, contentType });
     if (CLOUDINARY_UPLOAD_PRESET) form.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-    // endpoint imagen (image/upload)
     const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
 
     const resp = await axios.post(url, form, {
@@ -174,7 +196,7 @@ async function uploadDataUrlToCloudinary(dataUrl, publicName) {
       timeout: 120000
     });
 
-    console.log(`   ✅ Imagen (dataUrl) subida a Cloudinary: ${resp.data.secure_url}`);
+    console.log(`   ✅ Imagen (dataUrl) subida a Cloudinary: [secure_url]`);
     return resp.data;
   } catch (err) {
     console.warn('   ⚠️ Error subiendo dataUrl a Cloudinary:', err.message || err.toString());
@@ -183,8 +205,6 @@ async function uploadDataUrlToCloudinary(dataUrl, publicName) {
 }
 
 // --- AUTO BACKUP: subir backups a Cloudinary cada vez que se añade una venta ----
-// Debounce + lock para evitar subidas simultáneas y demasiadas peticiones cuando llegan varias ventas seguidas.
-
 let isUploadingBackups = false;
 let pendingBackupTimeout = null;
 const BACKUP_UPLOAD_DEBOUNCE_MS = 2000; // agrupar cambios en ventana de 2s
@@ -202,14 +222,12 @@ async function performBackupUpload() {
   isUploadingBackups = true;
 
   try {
-    // Crear backups con timestamp
     const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
     const salesBackupPath = path.join(BACKUPS_DIR, `sales_${timestamp}.json`);
     fs.copyFileSync(SALES_FILE, salesBackupPath);
 
     let salesResp = null;
     try {
-      // Subir sales backup con public_id fijo
       salesResp = await uploadFileToCloudinary(salesBackupPath, 'solana_sales_backup');
     } catch (e) {
       console.warn('   ⚠️ Error subiendo sales backup (async):', e.message || e);
@@ -240,7 +258,6 @@ async function performBackupUpload() {
 }
 
 function scheduleBackupUpload() {
-  // debounce: reprogramar si viene otra venta en la ventana
   if (pendingBackupTimeout) clearTimeout(pendingBackupTimeout);
   pendingBackupTimeout = setTimeout(() => {
     pendingBackupTimeout = null;
@@ -248,67 +265,20 @@ function scheduleBackupUpload() {
   }, BACKUP_UPLOAD_DEBOUNCE_MS);
 }
 
-// Modificar appendSale para disparar scheduleBackupUpload() tras guardar la venta
-function appendSale(sale) {
-  try {
-    const db = readSales();
-    db.sales.push(sale);
-    fs.writeFileSync(SALES_FILE, JSON.stringify(db, null, 2));
-    console.log(`✅ Venta guardada: ${sale.metadata?.name || '(sin nombre)'}`);
-
-    // Programar subida de backup (no bloqueante)
-    try {
-      scheduleBackupUpload();
-    } catch (e) {
-      console.warn('⚠️ No se pudo programar upload de backup:', e.message || e);
-    }
-
-  } catch (err) {
-    console.error('❌ Error guardando venta:', err);
-    throw err;
-  }
-}
-
-async function downloadFileFromCloudinary(publicId, destPath) {
-  if (!CLOUDINARY_RAW_DELIVER_BASE) {
-    console.log('   Cloudinary no configurado para descarga.');
-    return false;
-  }
-  // Intentar URL pública: /raw/upload/<publicId> (Cloudinary sirve el archivo)
-  const url = `${CLOUDINARY_RAW_DELIVER_BASE}/${encodeURIComponent(publicId)}`;
-  try {
-    const resp = await axios.get(url, { responseType: 'stream', timeout: 120000 });
-    const writer = fs.createWriteStream(destPath);
-    resp.data.pipe(writer);
-    await new Promise((resolve, reject) => {
-      writer.on('finish', resolve);
-      writer.on('error', reject);
-    });
-    console.log(`   ✅ Backup descargado desde Cloudinary: ${url} -> ${destPath}`);
-    return true;
-  } catch (err) {
-    console.warn(`   ⚠️ No se pudo descargar ${url}:`, err.message || err.toString());
-    return false;
-  }
-}
-
 // ============================================
 // Crear sales.json e images.json si no existen (pero intentar restaurar desde Cloudinary primero)
 // ============================================
-
 async function ensureJsonFiles() {
-  // Si sales.json no existe o está vacío, intentar descargar desde Cloudinary public_id 'solana_sales_backup'
   try {
     let needSales = false;
     if (!fs.existsSync(SALES_FILE)) needSales = true;
     else {
       const stat = fs.statSync(SALES_FILE);
-      if (stat.size < 5) needSales = true; // considerar vacío
+      if (stat.size < 5) needSales = true;
     }
 
     if (needSales && CLOUDINARY_CLOUD_NAME) {
       console.log('   Intentando restaurar sales.json desde Cloudinary...');
-      // usar helper que intenta URL pública y luego Admin API si tienes API_KEY/SECRET
       try {
         const resSales = await restoreImagesFromCloudinary(
           'solana_sales_backup',
@@ -318,7 +288,7 @@ async function ensureJsonFiles() {
           CLOUDINARY_API_SECRET
         );
         if (resSales.ok) {
-          console.log(`   ✅ sales.json restaurado desde: ${resSales.url}`);
+          console.log(`   ✅ sales.json restaurado desde Cloudinary`);
         } else {
           console.warn('   ⚠️ No se pudo restaurar sales.json desde Cloudinary:', resSales.error);
           fs.writeFileSync(SALES_FILE, JSON.stringify({ sales: [] }, null, 2));
@@ -349,7 +319,7 @@ async function ensureJsonFiles() {
           CLOUDINARY_API_SECRET
         );
         if (resImages.ok) {
-          console.log(`   ✅ images.json restaurado desde: ${resImages.url}`);
+          console.log(`   ✅ images.json restaurado desde Cloudinary`);
         } else {
           console.warn('   ⚠️ No se pudo restaurar images.json desde Cloudinary:', resImages.error);
           fs.writeFileSync(IMAGES_FILE, JSON.stringify({ images: {} }, null, 2));
@@ -359,7 +329,6 @@ async function ensureJsonFiles() {
         fs.writeFileSync(IMAGES_FILE, JSON.stringify({ images: {} }, null, 2));
       }
     } else if (!fs.existsSync(IMAGES_FILE)) {
-      // crear images.json
       try {
         const dir = path.dirname(IMAGES_FILE);
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -368,26 +337,24 @@ async function ensureJsonFiles() {
     }
   } catch (e) {
     console.error('❌ Error en ensureJsonFiles:', e);
-    // fallback: crear por defecto
     if (!fs.existsSync(SALES_FILE)) fs.writeFileSync(SALES_FILE, JSON.stringify({ sales: [] }, null, 2));
     if (!fs.existsSync(IMAGES_FILE)) fs.writeFileSync(IMAGES_FILE, JSON.stringify({ images: {} }, null, 2));
   }
 }
 
-// Antes de continuar, intentar restaurar si es necesario (sin bloquear demasiado)
 (async () => {
   await ensureJsonFiles();
 })();
 
 // ============================================
-// FUNCIONES DE BASE DE DATOS
+// FUNCIONES DE BASE DE DATOS (lectura/escritura)
 // ============================================
 function readSales() {
   try {
     const data = fs.readFileSync(SALES_FILE, 'utf8');
     return JSON.parse(data);
   } catch (err) {
-    console.error('❌ Error leyendo sales.json:', err);
+    console.error('❌ Error leyendo sales.json:', err.message || err);
     return { sales: [] };
   }
 }
@@ -398,7 +365,7 @@ function readImages() {
     const data = fs.readFileSync(IMAGES_FILE, 'utf8');
     return JSON.parse(data);
   } catch (err) {
-    console.error('❌ Error leyendo images.json:', err);
+    console.error('❌ Error leyendo images.json:', err.message || err);
     return { images: {} };
   }
 }
@@ -407,20 +374,89 @@ function writeImages(imgs) {
   try {
     fs.writeFileSync(IMAGES_FILE, JSON.stringify(imgs, null, 2));
   } catch (err) {
-    console.error('❌ Error guardando images.json:', err);
+    console.error('❌ Error guardando images.json:', err.message || err);
     throw err;
   }
 }
 
-// Control por env var: si === 'true' guardamos la imagen en images.json como dataURL
 const SAVE_IMAGES_IN_JSON = process.env.SAVE_IMAGES_IN_JSON === 'true';
 
 // ============================================
-// BACKUP AUTOMÁTICO (ahora sube también a Cloudinary)
+// APPEND SALE ATÓMICO (serializado en este proceso)
+// ============================================
+let _appendLock = Promise.resolve();
+
+async function appendSaleAtomic(newSale) {
+  // Serialize append operations within this Node process to avoid interleaved writes.
+  _appendLock = _appendLock.then(async () => {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        let current = { sales: [] };
+        try {
+          const txt = await fsp.readFile(SALES_FILE, 'utf8');
+          current = JSON.parse(txt || '{"sales":[]}');
+        } catch (e) {
+          current = { sales: [] };
+        }
+
+        // Push new sale
+        current.sales.push(newSale);
+
+        // Atomic write: write tmp then rename
+        const tmpPath = SALES_FILE + '.tmp';
+        await fsp.writeFile(tmpPath, JSON.stringify(current, null, 2), 'utf8');
+        await fsp.rename(tmpPath, SALES_FILE);
+
+        // Programar upload de backup (no bloqueante)
+        try {
+          scheduleBackupUpload();
+        } catch (e) {
+          console.warn('⚠️ No se pudo programar upload de backup:', e.message || e);
+        }
+
+        console.log(`✅ Venta guardada (atomic): ${newSale.metadata?.name || '(sin nombre)'}`);
+        return;
+      } catch (err) {
+        console.warn('appendSaleAtomic: intento', attempt + 1, 'falló:', err.message || err);
+        await new Promise(r => setTimeout(r, 100 * (attempt + 1)));
+      }
+    }
+    throw new Error('No se pudo guardar la venta después de varios intentos');
+  });
+
+  return _appendLock;
+}
+
+// ============================================
+// Descargar archivo desde Cloudinary (fallback)
+// ============================================
+async function downloadFileFromCloudinary(publicId, destPath) {
+  if (!CLOUDINARY_RAW_DELIVER_BASE) {
+    console.log('   Cloudinary no configurado para descarga.');
+    return false;
+  }
+  const url = `${CLOUDINARY_RAW_DELIVER_BASE}/${encodeURIComponent(publicId)}`;
+  try {
+    const resp = await axios.get(url, { responseType: 'stream', timeout: 120000 });
+    const writer = fs.createWriteStream(destPath);
+    resp.data.pipe(writer);
+    await new Promise((resolve, reject) => {
+      writer.on('finish', resolve);
+      writer.on('error', reject);
+    });
+    console.log(`   ✅ Backup descargado desde Cloudinary: ${url} -> ${destPath}`);
+    return true;
+  } catch (err) {
+    console.warn(`   ⚠️ No se pudo descargar ${url}:`, err.message || err.toString());
+    return false;
+  }
+}
+
+// ============================================
+// BACKUP AUTOMÁTICO (se mantiene backupSales, schedule definido arriba)
 // ============================================
 function backupSales() {
   try {
-    // Leer sales.json y comprobar si hay ventas
     let salesDb = { sales: [] };
     try {
       salesDb = readSales();
@@ -430,7 +466,6 @@ function backupSales() {
 
     const hasSales = Array.isArray(salesDb.sales) && salesDb.sales.length > 0;
 
-    // Comprobar si existe images.json y si contiene imágenes
     let hasImages = false;
     try {
       if (fs.existsSync(IMAGES_FILE)) {
@@ -451,7 +486,6 @@ function backupSales() {
     fs.copyFileSync(SALES_FILE, backupPath);
     console.log(`📦 Backup creado: sales_${timestamp}.json`);
 
-    // Copiar también images.json si existe (respaldo de dataURLs)
     if (fs.existsSync(IMAGES_FILE) && hasImages) {
       const imgBackupPath = path.join(BACKUPS_DIR, `images_${timestamp}.json`);
       try {
@@ -462,26 +496,20 @@ function backupSales() {
       }
     }
 
-    // Limpiar backups antiguos (mantener solo los últimos N)
     const backups = fs.readdirSync(BACKUPS_DIR)
       .filter(f => f.startsWith('sales_') || f.startsWith('images_'))
       .sort()
       .reverse();
 
-    // Mantener solo los últimos 20 (ajustable)
     if (backups.length > 20) {
       backups.slice(20).forEach(file => {
         fs.unlinkSync(path.join(BACKUPS_DIR, file));
       });
     }
 
-    // Subir el backup recién creado a Cloudinary (si está configurado)
     (async () => {
       try {
-        // subir sales backup con public_id fijo para poder restaurar
         await uploadFileToCloudinary(backupPath, 'solana_sales_backup');
-
-        // subir images backup si existe
         const imgBackupName = fs.readdirSync(BACKUPS_DIR).find(f => f.startsWith(`images_${timestamp}`));
         if (imgBackupName) {
           const imgBackupFull = path.join(BACKUPS_DIR, imgBackupName);
@@ -493,16 +521,11 @@ function backupSales() {
     })();
 
   } catch (err) {
-    console.error('❌ Error creando backup:', err);
+    console.error('❌ Error creando backup:', err.message || err);
   }
 }
 
-// Backup cada hora (no ejecutado inmediatamente en startup para evitar backups vacíos)
 setInterval(backupSales, 60 * 60 * 1000);
-// Nota: no llamamos a backupSales() en el arranque para evitar subir backups vacíos durante deploy.
-// Los backups se crearán cuando:
-//  - se guarde una venta (appendSale -> scheduleBackupUpload -> performBackupUpload)
-//  - o periódicamente si ya existen ventas/imágenes (backupSales se ejecutará cuando el intervalo lo dispare)
 
 // ============================================
 // MULTER PARA SUBIDA DE ARCHIVOS
@@ -534,16 +557,13 @@ app.post('/api/upload-logo', diskUpload.single('file'), async (req, res) => {
     const originalName = req.file.originalname;
     const tmpPath = req.file.path;
 
-    // Generar nombre único (local)
     const timestamp = Date.now();
     const safeName = originalName.replace(/[^a-zA-Z0-9.-]/g, '_');
     const finalName = `${timestamp}_${safeName}`;
     const targetPath = path.join(UPLOADS_DIR, finalName);
 
-    // Renombrar el archivo en local (mantener copia local como backup)
     fs.renameSync(tmpPath, targetPath);
 
-    // Crear data URL (base64) para guardarlo en JSON si se desea
     let dataUrl = null;
     try {
       const buffer = fs.readFileSync(targetPath);
@@ -552,7 +572,6 @@ app.post('/api/upload-logo', diskUpload.single('file'), async (req, res) => {
       console.warn('⚠️ No se pudo crear dataURL de la imagen:', err.message || err);
     }
 
-    // Guardar en images.json si está habilitado
     if (SAVE_IMAGES_IN_JSON && dataUrl) {
       try {
         const imgs = readImages();
@@ -569,16 +588,10 @@ app.post('/api/upload-logo', diskUpload.single('file'), async (req, res) => {
       }
     }
 
-    // DEBUG: mostrar si cloud vars están presentes (temporal)
-    console.log('   DEBUG ENV CLOUDINARY_CLOUD_NAME:', process.env.CLOUDINARY_CLOUD_NAME ? '[SET]' : '[MISSING]');
-    console.log('   DEBUG ENV CLOUDINARY_UPLOAD_PRESET:', process.env.CLOUDINARY_UPLOAD_PRESET ? '[SET]' : '[MISSING]');
-    console.log('   DEBUG ENV CLOUDINARY_API_KEY:', process.env.CLOUDINARY_API_KEY ? '[SET]' : '[MISSING]');
-    console.log('   DEBUG ENV CLOUDINARY_API_SECRET:', process.env.CLOUDINARY_API_SECRET ? '[SET]' : '[MISSING]');
-
-    // Si hay preset + cloud name OR tienes API keys, consideramos Cloudinary "configurado"
+    // Indicar solamente si Cloudinary está configurado, sin loggear claves
     const cloudConfigured = Boolean(
-      (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_UPLOAD_PRESET) ||
-      (process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET)
+      (CLOUDINARY_CLOUD_NAME && CLOUDINARY_UPLOAD_PRESET) ||
+      (CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET)
     );
 
     if (!cloudConfigured) {
@@ -590,32 +603,28 @@ app.post('/api/upload-logo', diskUpload.single('file'), async (req, res) => {
         ok: true,
         url: localUrl,
         name: finalName,
-        dataUrl // puede ser null si falla la conversión
+        dataUrl
       });
     }
 
-    // Si Cloudinary está configurado: subir (como stream) -- preferimos upload via image/upload
     const fileStream = fs.createReadStream(targetPath);
     const form = new FormData();
     form.append('file', fileStream);
-    // preferimos usar el preset si está disponible
-    if (process.env.CLOUDINARY_UPLOAD_PRESET) form.append('upload_preset', process.env.CLOUDINARY_UPLOAD_PRESET);
+    if (CLOUDINARY_UPLOAD_PRESET) form.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
 
     const uploadUrl = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
-    const headers = form.getHeaders();
 
     console.log(`📤 Subiendo ${finalName} a Cloudinary...`);
     try {
       const resp = await axios.post(uploadUrl, form, {
-        headers,
+        headers: form.getHeaders(),
         maxContentLength: Infinity,
         maxBodyLength: Infinity,
         timeout: 300000
       });
       const cloudResp = resp.data;
-      console.log('   ✅ Subida a Cloudinary OK:', cloudResp.secure_url);
+      console.log('   ✅ Subida a Cloudinary OK');
 
-      // Opción para eliminar copia local tras upload
       if (process.env.REMOVE_LOCAL_AFTER_UPLOAD === 'true') {
         try {
           fs.unlinkSync(targetPath);
@@ -625,7 +634,6 @@ app.post('/api/upload-logo', diskUpload.single('file'), async (req, res) => {
         }
       }
 
-      // Si guardamos en images.json con dataUrl, intentamos además subir la dataUrl y reemplazarla por secure_url
       if (SAVE_IMAGES_IN_JSON && dataUrl) {
         try {
           const uploadResult = await uploadDataUrlToCloudinary(dataUrl, finalName);
@@ -633,7 +641,6 @@ app.post('/api/upload-logo', diskUpload.single('file'), async (req, res) => {
             try {
               const imgs = readImages();
               if (imgs.images && imgs.images[finalName]) {
-                // Guardar reference cloudUrl y eliminar dataUrl para aligerar JSON
                 imgs.images[finalName].cloudUrl = uploadResult.secure_url;
                 delete imgs.images[finalName].dataUrl;
                 writeImages(imgs);
@@ -654,21 +661,18 @@ app.post('/api/upload-logo', diskUpload.single('file'), async (req, res) => {
         public_id: cloudResp.public_id,
         version: cloudResp.version,
         name: finalName,
-        dataUrl // útil para uso inmediato en cliente si quieres mostrar la imagen sin depender del hosting
+        dataUrl
       });
     } catch (err) {
       console.error('❌ Error subiendo a Cloudinary:', err.message || err.toString());
 
-      // Fallback: intentar subir la dataUrl directamente (por si la subida por stream falló)
       if (dataUrl) {
         try {
           const uploadResult = await uploadDataUrlToCloudinary(dataUrl, finalName);
           if (uploadResult && uploadResult.secure_url) {
-            // si tuvo éxito, borrar copia local si corresponde
             if (process.env.REMOVE_LOCAL_AFTER_UPLOAD === 'true') {
               try { fs.unlinkSync(targetPath); } catch(e) { /* ignore */ }
             }
-            // actualizar images.json con cloudUrl si procede
             if (SAVE_IMAGES_IN_JSON && uploadResult.secure_url) {
               try {
                 const imgs = readImages();
@@ -695,7 +699,6 @@ app.post('/api/upload-logo', diskUpload.single('file'), async (req, res) => {
         }
       }
 
-      // Fallback final: devolver URL local + dataUrl
       const localUrl = BASE_URL
         ? `${BASE_URL}/uploads/${encodeURIComponent(finalName)}`
         : `${req.protocol}://${req.get('host')}/uploads/${encodeURIComponent(finalName)}`;
@@ -710,7 +713,7 @@ app.post('/api/upload-logo', diskUpload.single('file'), async (req, res) => {
     }
 
   } catch (err) {
-    console.error('❌ Error guardando archivo:', err);
+    console.error('❌ Error guardando archivo:', err.message || err);
     return res.status(500).json({
       ok: false,
       error: err.message || 'Error al subir el archivo'
@@ -738,7 +741,7 @@ app.get('/api/image/:name', (req, res) => {
 
     return res.status(404).json({ ok: false, error: 'Imagen no encontrada' });
   } catch (err) {
-    console.error('❌ Error en /api/image/:', err);
+    console.error('❌ Error en /api/image/:', err.message || err);
     return res.status(500).json({ ok: false, error: 'Error interno' });
   }
 });
@@ -756,7 +759,7 @@ app.get('/api/images-list', (req, res) => {
     }));
     return res.json({ ok: true, count: list.length, images: list });
   } catch (err) {
-    console.error('❌ Error en /api/images-list:', err);
+    console.error('❌ Error en /api/images-list:', err.message || err);
     return res.status(500).json({ ok: false, error: 'Error interno' });
   }
 });
@@ -770,7 +773,7 @@ app.get('/api/backups-list', (req, res) => {
       .reverse();
     return res.json({ ok: true, files });
   } catch (err) {
-    console.error('❌ Error listando backups:', err);
+    console.error('❌ Error listando backups:', err.message || err);
     return res.status(500).json({ ok: false, error: 'Error interno' });
   }
 });
@@ -796,7 +799,7 @@ app.post('/api/restore-images', express.json(), (req, res) => {
     console.log(`✅ images.json restaurado desde ${backup}`);
     return res.json({ ok: true, message: 'images.json restaurado', backup });
   } catch (err) {
-    console.error('❌ Error restaurando images.json:', err);
+    console.error('❌ Error restaurando images.json:', err.message || err);
     return res.status(500).json({ ok: false, error: 'Error interno' });
   }
 });
@@ -822,7 +825,7 @@ app.post('/api/restore-sales', express.json(), (req, res) => {
     console.log(`✅ sales.json restaurado desde ${backup}`);
     return res.json({ ok: true, message: 'sales.json restaurado', backup });
   } catch (err) {
-    console.error('❌ Error restaurando sales.json:', err);
+    console.error('❌ Error restaurando sales.json:', err.message || err);
     return res.status(500).json({ ok: false, error: 'Error interno' });
   }
 });
@@ -848,19 +851,17 @@ app.post('/api/restore-from-cloudinary', express.json(), async (req, res) => {
     const apiKey = CLOUDINARY_API_KEY;
     const apiSecret = CLOUDINARY_API_SECRET;
 
-    // Restaurar sales.json e images.json
     const salesRes = await restoreImagesFromCloudinary('solana_sales_backup', SALES_FILE, cloudName, apiKey, apiSecret);
     const imagesRes = await restoreImagesFromCloudinary('solana_images_backup', IMAGES_FILE, cloudName, apiKey, apiSecret);
 
     const result = { sales: salesRes, images: imagesRes };
-    // si ambos fallan devolvemos 500 para que quede claro el fallo
     if (!salesRes.ok && !imagesRes.ok) {
       return res.status(500).json({ ok: false, result });
     }
 
     return res.json({ ok: true, result });
   } catch (err) {
-    console.error('❌ Error en /api/restore-from-cloudinary:', err);
+    console.error('❌ Error en /api/restore-from-cloudinary:', err.message || err);
     return res.status(500).json({ ok: false, error: err.message || 'Error interno' });
   }
 });
@@ -875,7 +876,6 @@ function parseMemoFromParsedTx(tx) {
     for (const ix of instructions) {
       if (ix.programId && ix.programId.toString() === MEMO_PROGRAM_ID_STR) {
         try {
-          // Intentar desde ix.data (base64)
           if (ix.data) {
             const buffer = Buffer.from(ix.data, 'base64');
             const txt = buffer.toString('utf8');
@@ -891,7 +891,7 @@ function parseMemoFromParsedTx(tx) {
       }
     }
   } catch (err) {
-    console.error('❌ Error parseando memo:', err);
+    console.error('❌ Error parseando memo:', err.message || err);
   }
   return null;
 }
@@ -906,7 +906,6 @@ function areBlocksAvailable(selection) {
     const s = sale.metadata?.selection;
     if (!s) continue;
 
-    // Comprobar overlap/colisión
     const noOverlap = (
       selection.minBlockX + selection.blocksX <= s.minBlockX ||
       selection.minBlockX >= s.minBlockX + s.blocksX ||
@@ -915,11 +914,29 @@ function areBlocksAvailable(selection) {
     );
 
     if (!noOverlap) {
-      return false; // Hay overlap = bloques ocupados
+      return false;
     }
   }
 
-  return true; // Todos los bloques están libres
+  return true;
+}
+
+// Helper: retry getParsedTransaction a few veces (RPC puede tardar)
+async function getParsedTransactionWithRetry(signature, attempts = 3, delayMs = 1500) {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const tx = await connection.getParsedTransaction(signature, {
+        commitment: 'confirmed',
+        maxSupportedTransactionVersion: 0
+      });
+      if (tx) return tx;
+    } catch (err) {
+      // continue to retry
+      console.warn(`getParsedTransaction attempt ${i + 1} failed:`, err.message || err);
+    }
+    if (i < attempts - 1) await new Promise(r => setTimeout(r, delayMs));
+  }
+  return null;
 }
 
 // ============================================
@@ -929,7 +946,6 @@ app.post('/api/verify-purchase', async (req, res) => {
   const { signature, expectedAmountSOL, metadata } = req.body || {};
 
   console.log(`\n🔍 Verificando compra:`);
-  console.log(`   Signature: ${signature}`);
   console.log(`   Proyecto: ${metadata?.name}`);
   console.log(`   Monto esperado: ${expectedAmountSOL} SOL`);
 
@@ -940,9 +956,8 @@ app.post('/api/verify-purchase', async (req, res) => {
     });
   }
 
-  // Validar que los bloques estén disponibles
   if (metadata.selection && !areBlocksAvailable(metadata.selection)) {
-    console.log(`❌ Bloques ya ocupados`);
+    console.log(`❌ Bloques ya ocupados (pre-check)`);
     return res.status(400).json({
       ok: false,
       error: 'Los bloques seleccionados ya están ocupados. Refresca la página.'
@@ -950,12 +965,9 @@ app.post('/api/verify-purchase', async (req, res) => {
   }
 
   try {
-    console.log('   ⏳ Obteniendo transacción parseada...');
+    console.log('   ⏳ Obteniendo transacción parseada (con retries)...');
 
-    const tx = await connection.getParsedTransaction(signature, {
-      commitment: 'confirmed',
-      maxSupportedTransactionVersion: 0
-    });
+    const tx = await getParsedTransactionWithRetry(signature, 4, 2000);
 
     if (!tx || !tx.meta) {
       console.log(`❌ Transacción no encontrada`);
@@ -984,23 +996,15 @@ app.post('/api/verify-purchase', async (req, res) => {
 
     for (const ix of instructions) {
       if (ix.programId && ix.programId.toString() === '11111111111111111111111111111111') {
-        console.log('      ✓ Instrucción del System Program encontrada');
-
         if (ix.parsed && ix.parsed.type === 'transfer') {
           const info = ix.parsed.info;
-          console.log(`      📤 De: ${info.source}`);
-          console.log(`      📥 A: ${info.destination}`);
-          console.log(`      💵 Monto: ${info.lamports} lamports`);
-
           if (info.destination === DEFAULT_MERCHANT) {
             transferFound = true;
             amountReceived = info.lamports / LAMPORTS_PER_SOL;
             console.log(`      ✅ Transferencia al merchant confirmada: ${amountReceived} SOL`);
             break;
           } else {
-            console.log(`      ⚠️ Destino no coincide.`);
-            console.log(`         Esperado: ${DEFAULT_MERCHANT}`);
-            console.log(`         Recibido: ${info.destination}`);
+            console.log(`      ⚠️ Transfer destino no coincide con merchant`);
           }
         }
       }
@@ -1014,16 +1018,14 @@ app.post('/api/verify-purchase', async (req, res) => {
       });
     }
 
-    const tolerance = 0.00001;
     const difference = Math.abs(amountReceived - expectedAmountSOL);
 
-    console.log(`   💰 Verificando monto:`);
+    console.log(`   💰 Verificando monto (tolerance ${PAYMENT_TOLERANCE_SOL} SOL):`);
     console.log(`      Esperado: ${expectedAmountSOL} SOL`);
     console.log(`      Recibido: ${amountReceived} SOL`);
     console.log(`      Diferencia: ${difference} SOL`);
-    console.log(`      Tolerancia: ${tolerance} SOL`);
 
-    if (difference > tolerance) {
+    if (difference > PAYMENT_TOLERANCE_SOL) {
       console.log(`❌ Monto insuficiente`);
       return res.status(400).json({
         ok: false,
@@ -1048,9 +1050,8 @@ app.post('/api/verify-purchase', async (req, res) => {
       console.log(`   📝 Memo parseado: ${memoMatches ? '✅ coincide' : '⚠️ no coincide'}`);
     }
 
-    const buyer = tx.transaction.message.accountKeys[0].pubkey
-      ? tx.transaction.message.accountKeys[0].pubkey.toString()
-      : tx.transaction.message.accountKeys[0].toString();
+    const buyerKey = tx.transaction.message.accountKeys && tx.transaction.message.accountKeys[0];
+    const buyer = buyerKey && buyerKey.pubkey ? buyerKey.pubkey.toString() : String(buyerKey);
 
     const sale = {
       signature,
@@ -1065,7 +1066,17 @@ app.post('/api/verify-purchase', async (req, res) => {
       blockTime: tx.blockTime
     };
 
-    appendSale(sale);
+    // Revalidación final antes de persistir (evitar race)
+    if (metadata.selection && !areBlocksAvailable(metadata.selection)) {
+      console.log(`❌ Bloques ya ocupados (post-check)`);
+      return res.status(400).json({
+        ok: false,
+        error: 'Los bloques seleccionados ya fueron ocupados durante la verificación. Intenta de nuevo.'
+      });
+    }
+
+    // Guardar de forma atómica y serializada (esperar que termine)
+    await appendSaleAtomic(sale);
 
     console.log(`✅ Compra verificada y guardada\n`);
 
@@ -1078,7 +1089,7 @@ app.post('/api/verify-purchase', async (req, res) => {
     });
 
   } catch (err) {
-    console.error('❌ Error verificando transacción:', err);
+    console.error('❌ Error verificando transacción:', err.message || err);
     console.error('Error completo:', {
       message: err?.message,
       name: err?.name,
@@ -1101,7 +1112,7 @@ app.get('/api/sales', (req, res) => {
     const sales = readSales();
     res.json(sales);
   } catch (err) {
-    console.error('❌ Error obteniendo ventas:', err);
+    console.error('❌ Error obteniendo ventas:', err.message || err);
     res.status(500).json({
       ok: false,
       error: 'Error al obtener las ventas'
@@ -1133,7 +1144,7 @@ app.get('/api/stats', (req, res) => {
       }
     });
   } catch (err) {
-    console.error('❌ Error obteniendo stats:', err);
+    console.error('❌ Error obteniendo stats:', err.message || err);
     res.status(500).json({
       ok: false,
       error: 'Error al obtener estadísticas'
@@ -1165,7 +1176,7 @@ app.get('*', (req, res) => {
 // MANEJO DE ERRORES GLOBAL
 // ============================================
 app.use((err, req, res, next) => {
-  console.error('❌ Error no manejado:', err);
+  console.error('❌ Error no manejado:', err.message || err);
   res.status(500).json({
     ok: false,
     error: NODE_ENV === 'production'
@@ -1179,7 +1190,8 @@ app.use((err, req, res, next) => {
 // ============================================
 app.listen(PORT, () => {
   console.log(`\n✅ Servidor iniciado en puerto ${PORT}`);
-  console.log(`🌐 Accede en: http://localhost:${PORT}\n`);
+  if (BASE_URL) console.log(`🌐 Base URL: ${BASE_URL}`);
+  console.log(`🌐 Frontend: http://localhost:${PORT}\n`);
 });
 
 // Graceful shutdown
