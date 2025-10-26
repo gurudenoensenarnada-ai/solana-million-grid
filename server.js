@@ -53,7 +53,11 @@ app.use(cors());
 // ============================================
 const DEFAULT_MERCHANT = process.env.MERCHANT_WALLET || '3d7w4r4irLaKVYd4dLjpoiehJVawbbXWFWb1bCk9nGCo';
 const CLUSTER = process.env.CLUSTER || 'mainnet-beta';
-const RPC_URL = process.env.RPC_URL || 'https://mainnet.helius-rpc.com/?api-key=cfadb209-0424-4c46-86cf-aa6f3f0c8d01';
+// Antes: no hardcodear keys públicas en repo
+const RPC_URL = process.env.RPC_URL || '';
+if (!RPC_URL) {
+  console.warn('⚠️ RPC_URL no configurada — configura RPC_URL en .env. Usar un RPC público en producción no es recomendable.');
+}
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'production';
 const BASE_URL = process.env.BASE_URL || ''; // Para URLs completas
