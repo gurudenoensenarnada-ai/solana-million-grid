@@ -4,6 +4,22 @@
 
 require('dotenv').config();
 
+// Parsear APP_CONFIG si existe
+if (process.env.APP_CONFIG) {
+  try {
+    const config = JSON.parse(process.env.APP_CONFIG);
+    // Asignar cada propiedad como variable de entorno
+    Object.keys(config).forEach(key => {
+      if (!process.env[key]) {
+        process.env[key] = String(config[key]);
+      }
+    });
+    console.log('✅ APP_CONFIG parseado correctamente');
+  } catch (err) {
+    console.error('⚠️ Error parseando APP_CONFIG:', err.message);
+  }
+}
+
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
@@ -36,8 +52,12 @@ const CLUSTER = process.env.CLUSTER || 'mainnet-beta';
 const RPC_URL = process.env.RPC_URL || solanaWeb3.clusterApiUrl(CLUSTER);
 const MERCHANT_WALLET = process.env.MERCHANT_WALLET || '3d7w4r4irLaKVYd4dLjpoiehJVawbbXWFWb1bCk9nGCo';
 
-console.log('💾 Configuración de almacenamiento:');
-console.log(`   Persistent disk: ${USE_PERSISTENT ? '✅ Activo' : '❌ No disponible'}`);
+console.log('🚀 Configuración:');
+console.log(`   Cluster: ${CLUSTER}`);
+console.log(`   Merchant: ${MERCHANT_WALLET}`);
+console.log(`   Puerto: ${PORT}`);
+console.log('\n💾 Almacenamiento:');
+console.log(`   Persistent disk: ${USE_PERSISTENT ? '✅ Activo' : '⚠️ Local (se borra al redesplegar)'}`);
 console.log(`   Uploads: ${UPLOADS_DIR}`);
 console.log(`   Sales: ${SALES_FILE}`);
 
