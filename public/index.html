@@ -85,7 +85,7 @@
     }
     #canvas { 
       display: block; 
-      cursor: crosshair; 
+      cursor: pointer; 
       image-rendering: pixelated; 
       background: #555;
     }
@@ -368,7 +368,6 @@
   const PRICE_PER_BLOCK = 0.0001;
   const MERCHANT_WALLET = '3d7w4r4irLaKVYd4dLjpoiehJVawbbXWFWb1bCk9nGCo';
   const API_BASE = window.location.origin;
-  const CLUSTER = 'mainnet-beta';
 
   const canvas = document.getElementById('canvas');
   const ctx = canvas.getContext('2d');
@@ -393,6 +392,7 @@
   let connection = new solanaWeb3.Connection('https://mainnet.helius-rpc.com/?api-key=cfadb209-0424-4c46-86cf-aa6f3f0c8d01');
   let userPublicKey = null;
 
+  // ===== FUNCIONES DE DIBUJO =====
   function drawGrid() {
     ctx.fillStyle = '#555';
     ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
@@ -430,56 +430,33 @@
     return { rawX, rawY, rect };
   }
 
-  function drawSoldOverlays() {
-    document.querySelectorAll('.sold-overlay').forEach(el => el.remove());
-  }
-
+  // ===== CARGAR GRID =====
   async function loadGridFromServer() {
+    console.log('🔄 Iniciando carga del grid...');
+    
     try {
-      // Dibujar grid base
       drawGrid();
+      console.log('✅ Grid base dibujado');
       
-      // Intentar cargar desde el servidor, si falla usar datos locales
-      let sales = [];
+      const res = await fetch(`${API_BASE}/api/sales`);
+      console.log('📡 Respuesta de /api/sales:', res.status);
       
-      try {
-        const res = await fetch(`${API_BASE}/api/sales`, { 
-          method: 'GET',
-          headers: { 'Accept': 'application/json' }
-        });
-        
-        if (res.ok) {
-          const json = await res.json();
-          if (json && json.sales) {
-            sales = json.sales;
-            console.log('✅ Datos cargados desde servidor');
-          }
-        }
-      } catch (apiErr) {
-        console.log('⚠️ No se pudo conectar al servidor, usando datos locales');
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
       }
       
-      // Si no hay datos del servidor, usar datos de ejemplo
-      if (sales.length === 0) {
-        sales = [
-          {
-            metadata: {
-              name: "Proyecto Demo",
-              url: "https://ejemplo.com",
-              logo: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect fill='%234299e1' width='100' height='100'/%3E%3Ctext x='50' y='50' text-anchor='middle' dy='.3em' fill='white' font-size='20'%3EDEMO%3C/text%3E%3C/svg%3E",
-              selection: {
-                minBlockX: 10,
-                minBlockY: 10,
-                blocksX: 5,
-                blocksY: 5
-              }
-            }
-          }
-        ];
+      const json = await res.json();
+      console.log('📊 Datos recibidos:', json);
+      
+      if (!json || !json.sales) {
+        console.warn('⚠️ No hay sales en la respuesta');
+        return;
       }
       
+      const sales = json.sales;
       totalSales = sales.length;
       totalSalesSpan.textContent = totalSales;
+      console.log(`✅ ${sales.length} ventas encontradas`);
       
       blockData = new Array(BLOCKS_PER_SIDE * BLOCKS_PER_SIDE).fill(null);
       soldPixels = 0;
@@ -508,22 +485,22 @@
       });
       
       const projectList = Object.values(projects);
+      console.log(`🎨 Cargando ${projectList.length} proyectos...`);
+      
       for (const project of projectList) {
         await loadProjectOnGrid(project);
       }
       
       soldPixels = Object.values(blockData).filter(b => b !== null).length * BLOCK_SIZE * BLOCK_SIZE;
       soldPixelsSpan.textContent = soldPixels.toLocaleString();
-      drawSoldOverlays();
       
-      console.log(`✅ Grid cargado: ${sales.length} ventas, ${projectList.length} proyectos`);
+      console.log(`✅ Grid cargado completamente`);
       
     } catch (err) {
-      console.error('Error cargando grid:', err);
-      // Mostrar grid vacío aunque haya error
-      drawGrid();
+      console.error('❌ Error cargando grid:', err);
+      alert('Error cargando el grid. Por favor recarga la página.');
     } finally {
-      // SIEMPRE ocultar el loading
+      console.log('🎯 Ocultando loading...');
       loadingEl.style.display = 'none';
     }
   }
@@ -562,7 +539,7 @@
       };
       
       img.onerror = function() {
-        console.warn('No se pudo cargar imagen:', project.logo);
+        console.warn('⚠️ No se pudo cargar imagen:', project.logo);
         project.blocks.forEach(b => {
           const idx = blockIndex(b.x, b.y);
           blockData[idx] = {
@@ -578,6 +555,7 @@
     });
   }
 
+  // ===== WALLET =====
   async function connectWallet() {
     if (!window.solana) {
       alert('Por favor instala Phantom Wallet: https://phantom.app');
@@ -588,10 +566,7 @@
       connectBtn.disabled = true;
       connectBtn.textContent = 'Conectando...';
       
-      const resp = await window.solana.connect({ 
-        onlyIfTrusted: false
-      });
-      
+      const resp = await window.solana.connect({ onlyIfTrusted: false });
       userPublicKey = resp.publicKey;
       walletAddrSpan.textContent = userPublicKey.toString().slice(0, 4) + '...' + userPublicKey.toString().slice(-4);
       connectBtn.textContent = 'Conectado ✓';
@@ -601,15 +576,7 @@
       
     } catch (err) {
       console.error('Error conectando:', err);
-      
-      if (err.code === 4001 || err.message?.includes('User rejected')) {
-        alert('❌ Conexión rechazada. Por favor aprueba la conexión en Phantom para continuar.');
-      } else if (err.code === -32603) {
-        alert('⚠️ Phantom bloqueó la conexión. Ve a Settings → Trusted Apps en Phantom y aprueba este sitio.');
-      } else {
-        alert('Error conectando wallet: ' + err.message);
-      }
-      
+      alert('Error conectando wallet: ' + err.message);
       connectBtn.disabled = false;
       connectBtn.textContent = 'Conectar Wallet';
     }
@@ -617,6 +584,7 @@
 
   connectBtn.onclick = connectWallet;
 
+  // ===== SELECCIÓN =====
   canvas.addEventListener('mousedown', (e) => {
     const { rawX, rawY } = getMousePosInCanvas(e);
     startX = Math.floor(rawX / BLOCK_SIZE) * BLOCK_SIZE;
@@ -633,13 +601,8 @@
     handleHover(e);
   });
 
-  canvas.addEventListener('mouseup', (e) => {
-    handleUp(e);
-  });
-
-  canvas.addEventListener('mouseleave', () => {
-    isDragging = false;
-  });
+  canvas.addEventListener('mouseup', handleUp);
+  canvas.addEventListener('mouseleave', () => { isDragging = false; });
 
   function handleMove(e) {
     if (!isDragging) return;
@@ -758,13 +721,14 @@
     }
   }
 
+  // ===== BOTONES =====
   confirmBtn.addEventListener('click', () => {
     if (!selection) {
       alert('Selecciona un área primero');
       return;
     }
     if (selection.soldInSelection > 0) {
-      alert(`${selection.soldInSelection} bloques ya están ocupados. Selecciona otra área.`);
+      alert(`${selection.soldInSelection} bloques ya están ocupados`);
       return;
     }
     
@@ -786,6 +750,7 @@
     document.getElementById('paymentStatus').textContent = '';
   });
 
+  // ===== PAGO =====
   function showStatus(message, type = 'info') {
     const statusEl = document.getElementById('paymentStatus');
     statusEl.textContent = message;
@@ -820,28 +785,25 @@
       payBtn.textContent = 'Procesando...';
       showStatus('📤 Subiendo logo...', 'warning');
       
-      // Subir logo
       const fd = new FormData();
       fd.append('file', logoFile);
       
-      let logoUrl;
-      try {
-        const uploadRes = await fetch(`${API_BASE}/api/upload-logo`, {
-          method: 'POST',
-          body: fd
-        });
-        const uploadData = await uploadRes.json();
-        
-        if (!uploadRes.ok || !uploadData.ok) {
-          throw new Error(uploadData.error || 'Error subiendo logo');
-        }
-        
-        logoUrl = uploadData.url;
-        console.log('✅ Logo subido:', logoUrl);
-      } catch (uploadErr) {
-        console.warn('Error subiendo logo, usando base64:', uploadErr);
-        logoUrl = await fileToBase64(logoFile);
+      const uploadRes = await fetch(`${API_BASE}/api/upload-logo`, {
+        method: 'POST',
+        body: fd
+      });
+      
+      const uploadData = await uploadRes.json();
+      
+      if (!uploadRes.ok || !uploadData.ok) {
+        throw new Error(uploadData.error || 'Error subiendo logo');
       }
+      
+      const logoUrl = uploadData.url.startsWith('http') 
+        ? uploadData.url 
+        : `${API_BASE}${uploadData.url}`;
+      
+      console.log('✅ Logo subido:', logoUrl);
       
       showStatus('💰 Preparando transacción...', 'warning');
       
@@ -894,23 +856,20 @@
         timestamp: Date.now()
       };
       
-      try {
-        const saveRes = await fetch(`${API_BASE}/api/save-sale`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(saleData)
-        });
-        
-        const saveJson = await saveRes.json();
-        
-        if (!saveRes.ok || !saveJson.ok) {
-          console.warn('Error guardando en servidor:', saveJson.error);
-        }
-      } catch (saveErr) {
-        console.warn('Error guardando en servidor:', saveErr);
+      const saveRes = await fetch(`${API_BASE}/api/save-sale`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(saleData)
+      });
+      
+      const saveJson = await saveRes.json();
+      
+      if (!saveRes.ok || !saveJson.ok) {
+        console.warn('⚠️ Error guardando en servidor:', saveJson.error);
+        throw new Error(saveJson.error || 'Error al guardar la venta');
       }
       
-      showStatus('✅ ¡Compra exitosa! Recargando grid...', 'success');
+      showStatus('✅ ¡Compra exitosa!', 'success');
       
       setTimeout(async () => {
         document.getElementById('modal').style.display = 'none';
@@ -951,14 +910,23 @@
     }
   });
 
-  function fileToBase64(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  }
+  // Click en canvas para abrir URL
+  canvas.addEventListener('click', (e) => {
+    if (isDragging) return;
+    
+    const { rawX, rawY } = getMousePosInCanvas(e);
+    const bx = Math.floor(rawX / BLOCK_SIZE);
+    const by = Math.floor(rawY / BLOCK_SIZE);
+    const data = blockData[blockIndex(bx, by)];
+    
+    if (data && confirm(`🚀 ¿Visitar ${data.name}?`)) {
+      window.open(data.url, '_blank');
+    }
+  });
 
-  // Inicializar
+  // ===== INICIALIZAR =====
+  console.log('🚀 Iniciando aplicación...');
   loadGridFromServer();
+  </script>
+</body>
+</html>
