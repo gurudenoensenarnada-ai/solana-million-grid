@@ -1,5 +1,5 @@
 /**
- * server.js - PRODUCTION VERSION COMPLETO
+ * server.js - PRODUCTION VERSION SEGURO
  */
 
 require('dotenv').config();
@@ -8,7 +8,6 @@ require('dotenv').config();
 if (process.env.APP_CONFIG) {
   try {
     const config = JSON.parse(process.env.APP_CONFIG);
-    // Asignar cada propiedad como variable de entorno
     Object.keys(config).forEach(key => {
       if (!process.env[key]) {
         process.env[key] = String(config[key]);
@@ -36,7 +35,7 @@ app.use(cors());
 // ==============================
 const PORT = process.env.PORT || 3000;
 
-// Usar disco persistente si está disponible, si no usar local
+// Usar disco persistente si está disponible
 const PERSISTENT_DIR = process.env.PERSISTENT_DIR || '/persistent';
 const USE_PERSISTENT = fs.existsSync(PERSISTENT_DIR);
 
@@ -50,7 +49,17 @@ const SALES_FILE = USE_PERSISTENT
 
 const CLUSTER = process.env.CLUSTER || 'mainnet-beta';
 const RPC_URL = process.env.RPC_URL || solanaWeb3.clusterApiUrl(CLUSTER);
-const MERCHANT_WALLET = process.env.MERCHANT_WALLET || '3d7w4r4irLaKVYd4dLjpoiehJVawbbXWFWb1bCk9nGCo';
+const MERCHANT_WALLET = process.env.MERCHANT_WALLET;
+
+// Validar configuración
+if (!MERCHANT_WALLET) {
+  console.error('❌ ERROR: MERCHANT_WALLET no configurada');
+  process.exit(1);
+}
+
+if (!RPC_URL.includes('helius') && !RPC_URL.includes('quicknode') && CLUSTER === 'mainnet-beta') {
+  console.warn('⚠️ ADVERTENCIA: Usando RPC público para mainnet, puede ser lento');
+}
 
 console.log('🚀 Configuración:');
 console.log(`   Cluster: ${CLUSTER}`);
@@ -72,13 +81,8 @@ if (!fs.existsSync(SALES_FILE)) {
   console.log('✅ Archivo sales.json creado');
 }
 
+// Conexión a Solana (segura en el servidor)
 const connection = new solanaWeb3.Connection(RPC_URL, 'confirmed');
-
-console.log('🚀 Configuración:');
-console.log(`   Cluster: ${CLUSTER}`);
-console.log(`   RPC: ${RPC_URL}`);
-console.log(`   Merchant: ${MERCHANT_WALLET}`);
-console.log(`   Puerto: ${PORT}`);
 
 // ==============================
 // SERVIR ARCHIVOS ESTÁTICOS
@@ -141,6 +145,15 @@ const upload = multer({
 // API ENDPOINTS
 // ==============================
 
+// GET /api/config - Configuración pública (SIN secretos)
+app.get('/api/config', (req, res) => {
+  res.json({
+    ok: true,
+    merchantWallet: MERCHANT_WALLET,
+    cluster: CLUSTER
+  });
+});
+
 // GET /api/sales - Obtener todas las ventas
 app.get('/api/sales', (req, res) => {
   try {
@@ -174,6 +187,70 @@ app.post('/api/upload-logo', upload.single('file'), (req, res) => {
   }
 });
 
+// POST /api/verify-transaction - Verificar transacción (NUEVO ENDPOINT PROXY)
+app.post('/api/verify-transaction', async (req, res) => {
+  try {
+    const { signature } = req.body;
+
+    if (!signature) {
+      return res.status(400).json({ 
+        ok: false, 
+        error: 'Signature requerida' 
+      });
+    }
+
+    console.log('🔍 Verificando transacción:', signature);
+
+    // Obtener estado de la transacción
+    const status = await connection.getSignatureStatus(signature);
+
+    if (!status || !status.value) {
+      return res.json({
+        ok: true,
+        confirmed: false,
+        status: null
+      });
+    }
+
+    const confirmed = status.value.confirmationStatus === 'confirmed' || 
+                     status.value.confirmationStatus === 'finalized';
+
+    res.json({
+      ok: true,
+      confirmed,
+      status: status.value,
+      confirmationStatus: status.value.confirmationStatus,
+      err: status.value.err
+    });
+
+  } catch (err) {
+    console.error('Error verificando transacción:', err);
+    res.status(500).json({ 
+      ok: false, 
+      error: 'Error al verificar transacción' 
+    });
+  }
+});
+
+// POST /api/get-latest-blockhash - Obtener blockhash (NUEVO ENDPOINT PROXY)
+app.post('/api/get-latest-blockhash', async (req, res) => {
+  try {
+    const latestBlockhash = await connection.getLatestBlockhash('finalized');
+    
+    res.json({
+      ok: true,
+      blockhash: latestBlockhash.blockhash,
+      lastValidBlockHeight: latestBlockhash.lastValidBlockHeight
+    });
+  } catch (err) {
+    console.error('Error obteniendo blockhash:', err);
+    res.status(500).json({ 
+      ok: false, 
+      error: 'Error al obtener blockhash' 
+    });
+  }
+});
+
 // POST /api/save-sale - Guardar venta
 app.post('/api/save-sale', async (req, res) => {
   try {
@@ -200,7 +277,7 @@ app.post('/api/save-sale', async (req, res) => {
 
     // Validar selección
     const sel = metadata.selection;
-    if (!sel || !sel.minBlockX === undefined || !sel.minBlockY === undefined || !sel.blocksX || !sel.blocksY) {
+    if (!sel || sel.minBlockX === undefined || sel.minBlockY === undefined || !sel.blocksX || !sel.blocksY) {
       return res.status(400).json({ 
         ok: false, 
         error: 'Selección inválida' 
