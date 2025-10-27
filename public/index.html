@@ -368,20 +368,16 @@
   const PRICE_PER_BLOCK = 0.0001;
   const MERCHANT_WALLET = '3d7w4r4irLaKVYd4dLjpoiehJVawbbXWFWb1bCk9nGCo';
   const API_BASE = window.location.origin;
-  //const CLUSTER = 'mainnet-beta';
   const CLUSTER = 'devnet';
 
-  // Conexión correctamente basada en CLUSTER (devnet por defecto)
   const connection = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl(CLUSTER));
 
   const canvas = document.getElementById('canvas');
   const ctx = canvas.getContext('2d');
-  const gridContainer = document.getElementById('gridContainer');
   const soldPixelsSpan = document.getElementById('soldPixels');
   const totalSalesSpan = document.getElementById('totalSales');
   const selectionOverlay = document.getElementById('selectionOverlay');
   const selectionInfo = document.getElementById('selectionInfo');
-  const tooltip = document.getElementById('tooltip');
   const connectBtn = document.getElementById('connectWallet');
   const walletAddrSpan = document.getElementById('walletAddr');
   const loadingEl = document.getElementById('loading');
@@ -401,14 +397,12 @@
     ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
     ctx.strokeStyle = '#333';
     ctx.lineWidth = 1;
-    
     for (let x = 0; x <= CANVAS_SIZE; x += BLOCK_SIZE) {
       ctx.beginPath();
       ctx.moveTo(x + 0.5, 0);
       ctx.lineTo(x + 0.5, CANVAS_SIZE);
       ctx.stroke();
     }
-    
     for (let y = 0; y <= CANVAS_SIZE; y += BLOCK_SIZE) {
       ctx.beginPath();
       ctx.moveTo(0, y + 0.5);
@@ -417,84 +411,83 @@
     }
   }
 
-  function blockIndex(bx, by) {
-    return by * BLOCKS_PER_SIDE + bx;
-  }
-
-  function isBlockSold(bx, by) {
-    if (bx < 0 || by < 0 || bx >= BLOCKS_PER_SIDE || by >= BLOCKS_PER_SIDE) return false;
-    return blockData[blockIndex(bx, by)] !== null;
-  }
-
   function getMousePosInCanvas(e) {
     const rect = canvas.getBoundingClientRect();
     const rawX = Math.floor((e.clientX - rect.left) * (CANVAS_SIZE / rect.width));
     const rawY = Math.floor((e.clientY - rect.top) * (CANVAS_SIZE / rect.height));
-    return { rawX, rawY, rect };
+    return { rawX, rawY };
   }
 
-  async function loadGridFromServer() {
+  // ===== Conexión wallet =====
+  async function connectWallet() {
     try {
-      const res = await fetch(`${API_BASE}/api/sales`);
-      const json = await res.json();
-      
-      if (!json || !json.sales) throw new Error('Error cargando ventas');
-      
-      const { sales } = json;
-      totalSales = sales.length;
-      totalSalesSpan.textContent = totalSales;
-      
-      blockData = new Array(BLOCKS_PER_SIDE * BLOCKS_PER_SIDE).fill(null);
-      soldPixels = 0;
-      
-      const projects = {};
-      sales.forEach(sale => {
-        const meta = sale.metadata;
-        if (!meta || !meta.selection) return;
-        
-        const key = `${meta.name}_${meta.logo}`;
-        if (!projects[key]) {
-          projects[key] = {
-            name: meta.name,
-            url: meta.url,
-            logo: meta.logo,
-            blocks: []
-          };
-        }
-        
-        const sel = meta.selection;
-        for (let by = sel.minBlockY; by < sel.minBlockY + sel.blocksY; by++) {
-          for (let bx = sel.minBlockX; bx < sel.minBlockX + sel.blocksX; bx++) {
-            projects[key].blocks.push({ x: bx, y: by });
-          }
-        }
-      });
-      
-      const projectList = Object.values(projects);
-      for (const project of projectList) {
-        await loadProjectOnGrid(project);
+      if (!window.solana) {
+        alert('Instala Phantom o compatible!');
+        return;
       }
-      
-      soldPixels = Object.values(blockData).filter(b => b !== null).length * BLOCK_SIZE * BLOCK_SIZE;
-      soldPixelsSpan.textContent = soldPixels.toLocaleString();
-      drawSoldOverlays();
-      
-      console.log(`✅ Cargadas ${sales.length} ventas, ${projectList.length} proyectos`);
-      
+      const resp = await window.solana.connect();
+      userPublicKey = resp.publicKey.toString();
+      walletAddrSpan.textContent = userPublicKey;
+      connectBtn.disabled = true;
+      console.log('Wallet conectada:', userPublicKey);
     } catch (err) {
-      console.error('Error cargando grid:', err);
-      showStatus('Error cargando el grid. Recarga la página.', 'error');
-    } finally {
-      loadingEl.style.display = 'none';
+      console.error(err);
+      alert('Error conectando wallet');
     }
   }
+  connectBtn.addEventListener('click', connectWallet);
 
-  // ... resto del código se mantiene intacto ...
-  // (no se modificaron las funciones pay/finalize/verify que ya existían,
-  //  sólo se eliminó la conexión hardcodeada a mainnet y se usa CLUSTER)
-  
+  // ===== Selección bloques =====
+  canvas.addEventListener('mousedown', (e) => {
+    if (!userPublicKey) { alert('Conecta tu wallet primero!'); return; }
+    const pos = getMousePosInCanvas(e);
+    startX = Math.floor(pos.rawX / BLOCK_SIZE);
+    startY = Math.floor(pos.rawY / BLOCK_SIZE);
+    isDragging = true;
+    selectionOverlay.style.display = 'block';
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    const pos = getMousePosInCanvas(e);
+    endX = Math.floor(pos.rawX / BLOCK_SIZE);
+    endY = Math.floor(pos.rawY / BLOCK_SIZE);
+
+    const minX = Math.min(startX, endX);
+    const minY = Math.min(startY, endY);
+    const width = Math.abs(endX - startX) + 1;
+    const height = Math.abs(endY - startY) + 1;
+
+    selectionOverlay.style.left = (minX * BLOCK_SIZE) + 'px';
+    selectionOverlay.style.top = (minY * BLOCK_SIZE) + 'px';
+    selectionOverlay.style.width = (width * BLOCK_SIZE) + 'px';
+    selectionOverlay.style.height = (height * BLOCK_SIZE) + 'px';
+
+    selectionInfo.textContent = `Seleccionando ${width}x${height} bloques`;
+  });
+
+  canvas.addEventListener('mouseup', (e) => {
+    if (!isDragging) return;
+    isDragging = false;
+
+    const minX = Math.min(startX, endX);
+    const minY = Math.min(startY, endY);
+    const width = Math.abs(endX - startX) + 1;
+    const height = Math.abs(endY - startY) + 1;
+
+    selection = { minBlockX: minX, minBlockY: minY, blocksX: width, blocksY: height };
+    confirmBtn.disabled = false;
+  });
+
+  cancelBtn.addEventListener('click', () => {
+    selectionOverlay.style.display = 'none';
+    selectionInfo.textContent = '';
+    confirmBtn.disabled = true;
+    selection = null;
+  });
+
   drawGrid();
-  loadGridFromServer();
+  loadingEl.style.display = 'none';
   </script>
 </body>
 </html>
