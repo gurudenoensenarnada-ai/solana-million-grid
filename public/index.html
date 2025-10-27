@@ -842,7 +842,7 @@
       
       console.log('✅ Signature:', signature);
       
-      showStatus('⏳ Esperando confirmación (puede tardar 20-30s)...', 'warning');
+      showStatus('⏳ Esperando confirmación (puede tardar hasta 60s)...', 'warning');
       
       // Esperar confirmación con timeout más largo
       const confirmationStrategy = {
@@ -853,7 +853,7 @@
       
       let confirmed = false;
       let attempts = 0;
-      const maxAttempts = 30; // 30 segundos
+      const maxAttempts = 60; // 60 segundos
       
       while (!confirmed && attempts < maxAttempts) {
         try {
@@ -888,9 +888,17 @@
       }
       
       if (!confirmed) {
-        throw new Error('Timeout esperando confirmación. La transacción puede estar pendiente. Verifica en Phantom o Solscan: https://solscan.io/tx/' + signature);
+        console.warn('⚠️ Timeout alcanzado, pero la transacción puede haberse procesado');
+        console.log('🔗 Verifica en Solscan: https://solscan.io/tx/' + signature);
+        
+        // Intentar guardar de todas formas
+        showStatus('⏳ Timeout - Intentando guardar de todas formas...', 'warning');
+        
+        // Continuar con el guardado aunque no confirmemos
+        // La transacción probablemente se procesó
       }
       
+      // Guardar la venta (confirmada o no)
       showStatus('💾 Registrando compra...', 'warning');
       
       const saleData = {
@@ -908,7 +916,8 @@
           }
         },
         amount: totalLamports / solanaWeb3.LAMPORTS_PER_SOL,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        confirmed: confirmed
       };
       
       const saveRes = await fetch(`${API_BASE}/api/save-sale`, {
@@ -924,7 +933,14 @@
         throw new Error(saveJson.error || 'Error al guardar la venta');
       }
       
-      showStatus('✅ ¡Compra exitosa!', 'success');
+      if (confirmed) {
+        showStatus('✅ ¡Compra confirmada y registrada!', 'success');
+      } else {
+        showStatus('✅ ¡Compra registrada! (Verifica confirmación en Phantom)', 'success');
+      }
+      
+      console.log('✅ Venta guardada:', saveJson);
+      console.log('🔗 Ver en Solscan: https://solscan.io/tx/' + signature);
       
       setTimeout(async () => {
         document.getElementById('modal').style.display = 'none';
@@ -941,7 +957,11 @@
         loadingEl.style.display = 'flex';
         await loadGridFromServer();
         
-        alert('🎉 ¡Compra exitosa! Tu proyecto ya está en el grid.');
+        if (confirmed) {
+          alert('🎉 ¡Compra exitosa! Tu proyecto ya está en el grid.');
+        } else {
+          alert('⏳ Compra registrada. La transacción puede tardar unos segundos en confirmarse en la blockchain.\n\nTu proyecto aparecerá en el grid una vez confirmado.');
+        }
       }, 2000);
       
     } catch (err) {
