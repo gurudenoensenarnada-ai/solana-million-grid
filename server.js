@@ -19,19 +19,37 @@ app.use(cors());
 // CONFIGURACIÓN
 // ==============================
 const PORT = process.env.PORT || 3000;
-const UPLOADS_DIR = path.resolve(__dirname, 'uploads');
-const SALES_FILE = path.resolve(__dirname, 'sales.json');
+
+// Usar disco persistente si está disponible, si no usar local
+const PERSISTENT_DIR = process.env.PERSISTENT_DIR || '/persistent';
+const USE_PERSISTENT = fs.existsSync(PERSISTENT_DIR);
+
+const UPLOADS_DIR = USE_PERSISTENT 
+  ? path.join(PERSISTENT_DIR, 'uploads')
+  : path.resolve(__dirname, 'uploads');
+  
+const SALES_FILE = USE_PERSISTENT
+  ? path.join(PERSISTENT_DIR, 'sales.json')
+  : path.resolve(__dirname, 'sales.json');
+
 const CLUSTER = process.env.CLUSTER || 'mainnet-beta';
 const RPC_URL = process.env.RPC_URL || solanaWeb3.clusterApiUrl(CLUSTER);
 const MERCHANT_WALLET = process.env.MERCHANT_WALLET || '3d7w4r4irLaKVYd4dLjpoiehJVawbbXWFWb1bCk9nGCo';
 
+console.log('💾 Configuración de almacenamiento:');
+console.log(`   Persistent disk: ${USE_PERSISTENT ? '✅ Activo' : '❌ No disponible'}`);
+console.log(`   Uploads: ${UPLOADS_DIR}`);
+console.log(`   Sales: ${SALES_FILE}`);
+
 // Crear directorios necesarios
 if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+  console.log('✅ Directorio uploads creado');
 }
 
 if (!fs.existsSync(SALES_FILE)) {
   fs.writeFileSync(SALES_FILE, JSON.stringify({ sales: [] }, null, 2));
+  console.log('✅ Archivo sales.json creado');
 }
 
 const connection = new solanaWeb3.Connection(RPC_URL, 'confirmed');
@@ -285,7 +303,8 @@ app.listen(PORT, () => {
   console.log(`\n✅ Servidor iniciado en puerto ${PORT}`);
   console.log(`🌐 Accede en: http://localhost:${PORT}`);
   console.log(`📂 Uploads: ${UPLOADS_DIR}`);
-  console.log(`💾 Sales: ${SALES_FILE}\n`);
+  console.log(`💾 Sales: ${SALES_FILE}`);
+  console.log(`🔒 Persistent storage: ${USE_PERSISTENT ? 'ACTIVADO ✅' : 'DESACTIVADO ⚠️'}\n`);
 });
 
 // Graceful shutdown
