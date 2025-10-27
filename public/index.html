@@ -384,7 +384,6 @@
   const BLOCK_SIZE = 10;
   const BLOCKS_PER_SIDE = CANVAS_SIZE / BLOCK_SIZE;
   const PRICE_PER_BLOCK = 0.0001;
-  const MERCHANT_WALLET = '3d7w4r4irLaKVYd4dLjpoiehJVawbbXWFWb1bCk9nGCo';
   const API_BASE = window.location.origin;
 
   const canvas = document.getElementById('canvas');
@@ -407,8 +406,22 @@
   let isDragging = false;
   let startX, startY, endX, endY;
   let selection = null;
-  let connection = new solanaWeb3.Connection('https://mainnet.helius-rpc.com/?api-key=cfadb209-0424-4c46-86cf-aa6f3f0c8d01');
   let userPublicKey = null;
+  let MERCHANT_WALLET = null;
+
+  // ===== CARGAR CONFIGURACIÓN DEL SERVIDOR =====
+  async function loadConfig() {
+    try {
+      const res = await fetch(`${API_BASE}/api/config`);
+      const config = await res.json();
+      if (config.ok) {
+        MERCHANT_WALLET = config.merchantWallet;
+        console.log('✅ Configuración cargada:', config.cluster);
+      }
+    } catch (err) {
+      console.error('Error cargando configuración:', err);
+    }
+  }
 
   // ===== FUNCIONES DE DIBUJO =====
   function drawGrid() {
@@ -780,3 +793,254 @@
     const url = document.getElementById('projectURL').value.trim();
     const logoFile = document.getElementById('projectLogo').files[0];
     const payBtn = document.getElementById('payBtn');
+    
+    if (!selection) {
+      alert('No hay selección');
+      return;
+    }
+    if (selection.soldInSelection > 0) {
+      alert('Bloques ocupados');
+      return;
+    }
+    if (!name || !url || !logoFile) {
+      alert('Completa todos los campos');
+      return;
+    }
+    if (!window.solana || !userPublicKey) {
+      alert('Conecta tu wallet primero');
+      return;
+    }
+    if (!MERCHANT_WALLET) {
+      alert('Error de configuración del servidor');
+      return;
+    }
+    
+    try {
+      payBtn.disabled = true;
+      payBtn.textContent = 'Procesando...';
+      showStatus('📤 Subiendo logo...', 'warning');
+      
+      const fd = new FormData();
+      fd.append('file', logoFile);
+      
+      const uploadRes = await fetch(`${API_BASE}/api/upload-logo`, {
+        method: 'POST',
+        body: fd
+      });
+      
+      const uploadData = await uploadRes.json();
+      
+      if (!uploadRes.ok || !uploadData.ok) {
+        throw new Error(uploadData.error || 'Error subiendo logo');
+      }
+      
+      const logoUrl = uploadData.url.startsWith('http') 
+        ? uploadData.url 
+        : `${API_BASE}${uploadData.url}`;
+      
+      console.log('✅ Logo subido:', logoUrl);
+      
+      showStatus('💰 Preparando transacción...', 'warning');
+      
+      const blocksTotal = selection.blocksX * selection.blocksY;
+      const totalLamports = Math.floor(blocksTotal * PRICE_PER_BLOCK * solanaWeb3.LAMPORTS_PER_SOL);
+      
+      const transaction = new solanaWeb3.Transaction().add(
+        solanaWeb3.SystemProgram.transfer({
+          fromPubkey: userPublicKey,
+          toPubkey: new solanaWeb3.PublicKey(MERCHANT_WALLET),
+          lamports: totalLamports,
+        })
+      );
+      
+      transaction.feePayer = userPublicKey;
+      
+      // Obtener blockhash a través del servidor (SEGURO)
+      showStatus('⏳ Obteniendo blockhash...', 'warning');
+      const blockhashRes = await fetch(`${API_BASE}/api/get-latest-blockhash`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      const blockhashData = await blockhashRes.json();
+      if (!blockhashData.ok) {
+        throw new Error('Error obteniendo blockhash');
+      }
+      
+      transaction.recentBlockhash = blockhashData.blockhash;
+      
+      console.log('📦 Blockhash:', blockhashData.blockhash);
+      console.log('📦 Last valid height:', blockhashData.lastValidBlockHeight);
+      
+      showStatus('✍️ Firma la transacción en Phantom...', 'warning');
+      
+      const signed = await window.solana.signTransaction(transaction);
+      
+      showStatus('📡 Enviando transacción...', 'warning');
+      
+      // Enviar transacción firmada directamente
+      const rawTransaction = signed.serialize();
+      const signature = await window.solana.signAndSendTransaction(transaction);
+      
+      console.log('✅ Signature:', signature.signature);
+      
+      showStatus('⏳ Esperando confirmación (puede tardar hasta 60s)...', 'warning');
+      
+      // Verificar transacción a través del servidor (SEGURO)
+      let confirmed = false;
+      let attempts = 0;
+      const maxAttempts = 60;
+      
+      while (!confirmed && attempts < maxAttempts) {
+        try {
+          const verifyRes = await fetch(`${API_BASE}/api/verify-transaction`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ signature: signature.signature })
+          });
+          
+          const verifyData = await verifyRes.json();
+          
+          if (verifyData.ok && verifyData.confirmed) {
+            confirmed = true;
+            
+            if (verifyData.status && verifyData.status.err) {
+              throw new Error('La transacción falló en la blockchain: ' + JSON.stringify(verifyData.status.err));
+            }
+            
+            console.log('✅ Transacción confirmada:', signature.signature);
+            break;
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          attempts++;
+          
+          if (attempts % 5 === 0) {
+            console.log(`⏳ Esperando confirmación... (${attempts}s)`);
+          }
+          
+        } catch (err) {
+          console.warn('Error verificando status:', err);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          attempts++;
+        }
+      }
+      
+      if (!confirmed) {
+        console.warn('⚠️ Timeout alcanzado, pero la transacción puede haberse procesado');
+        console.log('🔗 Verifica en Solscan: https://solscan.io/tx/' + signature.signature);
+        showStatus('⏳ Timeout - Intentando guardar de todas formas...', 'warning');
+      }
+      
+      // Guardar la venta
+      showStatus('💾 Registrando compra...', 'warning');
+      
+      const saleData = {
+        signature: signature.signature,
+        buyer: userPublicKey.toString(),
+        metadata: {
+          name: name,
+          url: url,
+          logo: logoUrl,
+          selection: {
+            minBlockX: selection.minBlockX,
+            minBlockY: selection.minBlockY,
+            blocksX: selection.blocksX,
+            blocksY: selection.blocksY
+          }
+        },
+        amount: totalLamports / solanaWeb3.LAMPORTS_PER_SOL,
+        timestamp: Date.now(),
+        confirmed: confirmed
+      };
+      
+      const saveRes = await fetch(`${API_BASE}/api/save-sale`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(saleData)
+      });
+      
+      const saveJson = await saveRes.json();
+      
+      if (!saveRes.ok || !saveJson.ok) {
+        console.warn('⚠️ Error guardando en servidor:', saveJson.error);
+        throw new Error(saveJson.error || 'Error al guardar la venta');
+      }
+      
+      if (confirmed) {
+        showStatus('✅ ¡Compra confirmada y registrada!', 'success');
+      } else {
+        showStatus('✅ ¡Compra registrada! (Verifica confirmación en Phantom)', 'success');
+      }
+      
+      console.log('✅ Venta guardada:', saveJson);
+      console.log('🔗 Ver en Solscan: https://solscan.io/tx/' + signature.signature);
+      
+      setTimeout(async () => {
+        document.getElementById('modal').style.display = 'none';
+        selection = null;
+        selectionOverlay.style.display = 'none';
+        selectionInfo.textContent = '';
+        confirmBtn.disabled = true;
+        
+        document.getElementById('projectName').value = '';
+        document.getElementById('projectURL').value = '';
+        document.getElementById('projectLogo').value = '';
+        document.getElementById('paymentStatus').textContent = '';
+        
+        loadingEl.style.display = 'flex';
+        await loadGridFromServer();
+        
+        if (confirmed) {
+          alert('🎉 ¡Compra exitosa! Tu proyecto ya está en el grid.');
+        } else {
+          alert('⏳ Compra registrada. La transacción puede tardar unos segundos en confirmarse en la blockchain.\n\nTu proyecto aparecerá en el grid una vez confirmado.');
+        }
+      }, 2000);
+      
+    } catch (err) {
+      console.error('❌ Error en el pago:', err);
+      
+      let errorMsg = 'Error en el pago';
+      
+      if (err.message?.includes('User rejected')) {
+        errorMsg = '❌ Transacción cancelada';
+      } else if (err.message?.includes('insufficient')) {
+        errorMsg = '❌ SOL insuficiente';
+      } else if (err.message?.includes('Timeout') || err.message?.includes('expired')) {
+        errorMsg = '⏳ Timeout - Verifica tu transacción en Phantom. Puede haberse completado.';
+      } else if (err.message) {
+        errorMsg = `❌ ${err.message}`;
+      }
+      
+      showStatus(errorMsg, 'error');
+      alert(errorMsg);
+      
+    } finally {
+      payBtn.disabled = false;
+      payBtn.textContent = '💰 Pagar y Registrar';
+    }
+  });
+
+  // Click en canvas para abrir URL
+  canvas.addEventListener('click', (e) => {
+    if (isDragging) return;
+    
+    const { rawX, rawY } = getMousePosInCanvas(e);
+    const bx = Math.floor(rawX / BLOCK_SIZE);
+    const by = Math.floor(rawY / BLOCK_SIZE);
+    const data = blockData[blockIndex(bx, by)];
+    
+    if (data && confirm(`🚀 ¿Visitar ${data.name}?`)) {
+      window.open(data.url, '_blank');
+    }
+  });
+
+  // ===== INICIALIZAR =====
+  console.log('🚀 Iniciando aplicación...');
+  loadConfig().then(() => {
+    loadGridFromServer();
+  });
+  </script>
+</body>
+</html>
