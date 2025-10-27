@@ -781,7 +781,7 @@
     document.getElementById('paymentStatus').textContent = '';
   });
 
-  // ===== PAGO =====
+  // ===== PAGO (CORREGIDO - SIN DOBLE FIRMA) =====
   function showStatus(message, type = 'info') {
     const statusEl = document.getElementById('paymentStatus');
     statusEl.textContent = message;
@@ -820,6 +820,7 @@
       payBtn.textContent = 'Procesando...';
       showStatus('📤 Subiendo logo...', 'warning');
       
+      // 1. SUBIR LOGO
       const fd = new FormData();
       fd.append('file', logoFile);
       
@@ -834,12 +835,10 @@
         throw new Error(uploadData.error || 'Error subiendo logo');
       }
       
-      const logoUrl = uploadData.url.startsWith('http') 
-        ? uploadData.url 
-        : `${API_BASE}${uploadData.url}`;
-      
+      const logoUrl = uploadData.url;
       console.log('✅ Logo subido:', logoUrl);
       
+      // 2. PREPARAR TRANSACCIÓN
       showStatus('💰 Preparando transacción...', 'warning');
       
       const blocksTotal = selection.blocksX * selection.blocksY;
@@ -855,7 +854,7 @@
       
       transaction.feePayer = userPublicKey;
       
-      // Obtener blockhash a través del servidor (SEGURO)
+      // 3. OBTENER BLOCKHASH
       showStatus('⏳ Obteniendo blockhash...', 'warning');
       const blockhashRes = await fetch(`${API_BASE}/api/get-latest-blockhash`, {
         method: 'POST',
@@ -870,23 +869,18 @@
       transaction.recentBlockhash = blockhashData.blockhash;
       
       console.log('📦 Blockhash:', blockhashData.blockhash);
-      console.log('📦 Last valid height:', blockhashData.lastValidBlockHeight);
       
+      // 4. FIRMAR Y ENVIAR (UNA SOLA VEZ - CORREGIDO)
       showStatus('✍️ Firma la transacción en Phantom...', 'warning');
       
-      const signed = await window.solana.signTransaction(transaction);
+      // USAR signAndSendTransaction DIRECTAMENTE (no signTransaction + send)
+      const { signature } = await window.solana.signAndSendTransaction(transaction);
       
-      showStatus('📡 Enviando transacción...', 'warning');
+      console.log('✅ Transacción enviada. Signature:', signature);
       
-      // Enviar transacción firmada directamente
-      const rawTransaction = signed.serialize();
-      const signature = await window.solana.signAndSendTransaction(transaction);
-      
-      console.log('✅ Signature:', signature.signature);
-      
+      // 5. ESPERAR CONFIRMACIÓN
       showStatus('⏳ Esperando confirmación (puede tardar hasta 60s)...', 'warning');
       
-      // Verificar transacción a través del servidor (SEGURO)
       let confirmed = false;
       let attempts = 0;
       const maxAttempts = 60;
@@ -896,7 +890,7 @@
           const verifyRes = await fetch(`${API_BASE}/api/verify-transaction`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ signature: signature.signature })
+            body: JSON.stringify({ signature })
           });
           
           const verifyData = await verifyRes.json();
@@ -905,10 +899,10 @@
             confirmed = true;
             
             if (verifyData.status && verifyData.status.err) {
-              throw new Error('La transacción falló en la blockchain: ' + JSON.stringify(verifyData.status.err));
+              throw new Error('La transacción falló: ' + JSON.stringify(verifyData.status.err));
             }
             
-            console.log('✅ Transacción confirmada:', signature.signature);
+            console.log('✅ Transacción confirmada');
             break;
           }
           
@@ -927,16 +921,15 @@
       }
       
       if (!confirmed) {
-        console.warn('⚠️ Timeout alcanzado, pero la transacción puede haberse procesado');
-        console.log('🔗 Verifica en Solscan: https://solscan.io/tx/' + signature.signature);
-        showStatus('⏳ Timeout - Intentando guardar de todas formas...', 'warning');
+        console.warn('⚠️ Timeout alcanzado');
+        showStatus('⏳ Timeout - Intentando guardar...', 'warning');
       }
       
-      // Guardar la venta
+      // 6. GUARDAR VENTA
       showStatus('💾 Registrando compra...', 'warning');
       
       const saleData = {
-        signature: signature.signature,
+        signature,
         buyer: userPublicKey.toString(),
         metadata: {
           name: name,
@@ -963,19 +956,20 @@
       const saveJson = await saveRes.json();
       
       if (!saveRes.ok || !saveJson.ok) {
-        console.warn('⚠️ Error guardando en servidor:', saveJson.error);
+        console.warn('⚠️ Error guardando:', saveJson.error);
         throw new Error(saveJson.error || 'Error al guardar la venta');
       }
       
       if (confirmed) {
         showStatus('✅ ¡Compra confirmada y registrada!', 'success');
       } else {
-        showStatus('✅ ¡Compra registrada! (Verifica confirmación en Phantom)', 'success');
+        showStatus('✅ ¡Compra registrada! (Verifica en Phantom)', 'success');
       }
       
       console.log('✅ Venta guardada:', saveJson);
-      console.log('🔗 Ver en Solscan: https://solscan.io/tx/' + signature.signature);
+      console.log('🔗 Ver en Solscan: https://solscan.io/tx/' + signature);
       
+      // 7. RECARGAR GRID
       setTimeout(async () => {
         document.getElementById('modal').style.display = 'none';
         selection = null;
@@ -994,7 +988,7 @@
         if (confirmed) {
           alert('🎉 ¡Compra exitosa! Tu proyecto ya está en el grid.');
         } else {
-          alert('⏳ Compra registrada. La transacción puede tardar unos segundos en confirmarse en la blockchain.\n\nTu proyecto aparecerá en el grid una vez confirmado.');
+          alert('⏳ Compra registrada. La transacción puede tardar en confirmarse.\n\nVerifica en Phantom o Solscan.');
         }
       }, 2000);
       
@@ -1008,7 +1002,7 @@
       } else if (err.message?.includes('insufficient')) {
         errorMsg = '❌ SOL insuficiente';
       } else if (err.message?.includes('Timeout') || err.message?.includes('expired')) {
-        errorMsg = '⏳ Timeout - Verifica tu transacción en Phantom. Puede haberse completado.';
+        errorMsg = '⏳ Timeout - Verifica tu transacción en Phantom';
       } else if (err.message) {
         errorMsg = `❌ ${err.message}`;
       }
