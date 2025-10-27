@@ -842,19 +842,54 @@
       
       console.log('✅ Signature:', signature);
       
-      showStatus('⏳ Confirmando transacción...', 'warning');
+      showStatus('⏳ Esperando confirmación (puede tardar 20-30s)...', 'warning');
       
-      const confirmation = await connection.confirmTransaction({
+      // Esperar confirmación con timeout más largo
+      const confirmationStrategy = {
         signature: signature,
         blockhash: latestBlockhash.blockhash,
         lastValidBlockHeight: latestBlockhash.lastValidBlockHeight
-      }, 'confirmed');
+      };
       
-      if (confirmation.value.err) {
-        throw new Error('La transacción falló: ' + JSON.stringify(confirmation.value.err));
+      let confirmed = false;
+      let attempts = 0;
+      const maxAttempts = 30; // 30 segundos
+      
+      while (!confirmed && attempts < maxAttempts) {
+        try {
+          const status = await connection.getSignatureStatus(signature);
+          
+          if (status && status.value) {
+            if (status.value.confirmationStatus === 'confirmed' || status.value.confirmationStatus === 'finalized') {
+              confirmed = true;
+              
+              if (status.value.err) {
+                throw new Error('La transacción falló en la blockchain: ' + JSON.stringify(status.value.err));
+              }
+              
+              console.log('✅ Transacción confirmada:', signature);
+              break;
+            }
+          }
+          
+          // Esperar 1 segundo antes de reintentar
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          attempts++;
+          
+          if (attempts % 5 === 0) {
+            console.log(`⏳ Esperando confirmación... (${attempts}s)`);
+          }
+          
+        } catch (err) {
+          console.warn('Error checking status:', err);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          attempts++;
+        }
       }
       
-      console.log('✅ Transacción confirmada:', signature);
+      if (!confirmed) {
+        throw new Error('Timeout esperando confirmación. La transacción puede estar pendiente. Verifica en Phantom o Solscan: https://solscan.io/tx/' + signature);
+      }
       
       showStatus('💾 Registrando compra...', 'warning');
       
@@ -918,11 +953,22 @@
         errorMsg = '❌ Transacción cancelada';
       } else if (err.message?.includes('insufficient')) {
         errorMsg = '❌ SOL insuficiente';
+      } else if (err.message?.includes('Timeout') || err.message?.includes('expired')) {
+        errorMsg = '⏳ Timeout - Verifica tu transacción en Phantom. Puede haberse completado.';
+        // Intentar guardar de todas formas si tenemos la signature
+        if (err.message.includes('https://solscan.io')) {
+          const match = err.message.match(/tx\/([A-Za-z0-9]+)/);
+          if (match && match[1]) {
+            console.log('⚠️ Intentando guardar venta con signature:', match[1]);
+            // La transacción puede haberse procesado, intentar guardar
+          }
+        }
       } else if (err.message) {
         errorMsg = `❌ ${err.message}`;
       }
       
       showStatus(errorMsg, 'error');
+      alert(errorMsg);
       
     } finally {
       payBtn.disabled = false;
