@@ -819,8 +819,14 @@
       );
       
       transaction.feePayer = userPublicKey;
-      const { blockhash } = await connection.getLatestBlockhash('confirmed');
-      transaction.recentBlockhash = blockhash;
+      
+      // Obtener blockhash justo antes de firmar
+      showStatus('⏳ Obteniendo blockhash...', 'warning');
+      const latestBlockhash = await connection.getLatestBlockhash('finalized');
+      transaction.recentBlockhash = latestBlockhash.blockhash;
+      
+      console.log('📦 Blockhash:', latestBlockhash.blockhash);
+      console.log('📦 Last valid height:', latestBlockhash.lastValidBlockHeight);
       
       showStatus('✍️ Firma la transacción en Phantom...', 'warning');
       
@@ -828,11 +834,25 @@
       
       showStatus('📡 Enviando transacción...', 'warning');
       
-      const signature = await connection.sendRawTransaction(signed.serialize());
+      const signature = await connection.sendRawTransaction(signed.serialize(), {
+        skipPreflight: false,
+        preflightCommitment: 'finalized',
+        maxRetries: 3
+      });
+      
+      console.log('✅ Signature:', signature);
       
       showStatus('⏳ Confirmando transacción...', 'warning');
       
-      await connection.confirmTransaction(signature, 'confirmed');
+      const confirmation = await connection.confirmTransaction({
+        signature: signature,
+        blockhash: latestBlockhash.blockhash,
+        lastValidBlockHeight: latestBlockhash.lastValidBlockHeight
+      }, 'confirmed');
+      
+      if (confirmation.value.err) {
+        throw new Error('La transacción falló: ' + JSON.stringify(confirmation.value.err));
+      }
       
       console.log('✅ Transacción confirmada:', signature);
       
