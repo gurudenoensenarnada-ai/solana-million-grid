@@ -436,33 +436,56 @@
 
   async function loadGridFromServer() {
     try {
+      // Dibujar grid base
       drawGrid();
       
-      // Simular datos de ejemplo para demostración
-      const mockSales = [
-        {
-          metadata: {
-            name: "Proyecto Demo",
-            url: "https://ejemplo.com",
-            logo: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect fill='%234299e1' width='100' height='100'/%3E%3C/svg%3E",
-            selection: {
-              minBlockX: 10,
-              minBlockY: 10,
-              blocksX: 5,
-              blocksY: 5
-            }
+      // Intentar cargar desde el servidor, si falla usar datos locales
+      let sales = [];
+      
+      try {
+        const res = await fetch(`${API_BASE}/api/sales`, { 
+          method: 'GET',
+          headers: { 'Accept': 'application/json' }
+        });
+        
+        if (res.ok) {
+          const json = await res.json();
+          if (json && json.sales) {
+            sales = json.sales;
+            console.log('✅ Datos cargados desde servidor');
           }
         }
-      ];
+      } catch (apiErr) {
+        console.log('⚠️ No se pudo conectar al servidor, usando datos locales');
+      }
       
-      totalSales = mockSales.length;
+      // Si no hay datos del servidor, usar datos de ejemplo
+      if (sales.length === 0) {
+        sales = [
+          {
+            metadata: {
+              name: "Proyecto Demo",
+              url: "https://ejemplo.com",
+              logo: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect fill='%234299e1' width='100' height='100'/%3E%3Ctext x='50' y='50' text-anchor='middle' dy='.3em' fill='white' font-size='20'%3EDEMO%3C/text%3E%3C/svg%3E",
+              selection: {
+                minBlockX: 10,
+                minBlockY: 10,
+                blocksX: 5,
+                blocksY: 5
+              }
+            }
+          }
+        ];
+      }
+      
+      totalSales = sales.length;
       totalSalesSpan.textContent = totalSales;
       
       blockData = new Array(BLOCKS_PER_SIDE * BLOCKS_PER_SIDE).fill(null);
       soldPixels = 0;
       
       const projects = {};
-      mockSales.forEach(sale => {
+      sales.forEach(sale => {
         const meta = sale.metadata;
         if (!meta || !meta.selection) return;
         
@@ -493,12 +516,14 @@
       soldPixelsSpan.textContent = soldPixels.toLocaleString();
       drawSoldOverlays();
       
-      console.log(`✅ Cargadas ${mockSales.length} ventas, ${projectList.length} proyectos`);
+      console.log(`✅ Grid cargado: ${sales.length} ventas, ${projectList.length} proyectos`);
       
     } catch (err) {
       console.error('Error cargando grid:', err);
-      showStatus('Error cargando el grid. Recarga la página.', 'error');
+      // Mostrar grid vacío aunque haya error
+      drawGrid();
     } finally {
+      // SIEMPRE ocultar el loading
       loadingEl.style.display = 'none';
     }
   }
