@@ -33,5 +33,16 @@
     "eslint-plugin-prettier": "^5.5.4",
     "nodemon": "^2.0.22",
     "prettier": "^3.8.0"
+  },
+  "appConfig": {
+    "RPC_URL": "https://mainnet.helius-rpc.com/?api-key=cfadb209-0424-4c46-86cf-aa6f3f0c8d01",
+    "MERCHANT_WALLET": "3d7w4r4irLaKVYd4dLjpoiehJVawbbXWFWb1bCk9nGCo",
+    "SAVE_IMAGES_IN_JSON": true,
+    "CLOUDINARY_CLOUD_NAME": "drubzopvu",
+    "CLOUDINARY_UPLOAD_PRESET": "solana_unsigned",
+    "REMOVE_LOCAL_AFTER_UPLOAD": false,
+    "CLOUDINARY_API_KEY": "599715545777474",
+    "CLOUDINARY_API_SECRET": "5FvUoG8JY6ikf8UAfIXxuvDDzLA",
+    "RESTORE_SECRET": "53545767l"
   }
 }
