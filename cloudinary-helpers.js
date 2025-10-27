@@ -10,6 +10,7 @@
  * - Creación automática del directorio destino si no existe.
  * - Mensajes de error más detallados para facilitar debugging.
  * - Limpieza de archivos temporales en caso de fallo.
+ * - Corrección de retornos y manejo de errores.
  *
  * Uso:
  * const { restoreImagesFromCloudinary } = require('./cloudinary-helpers');
@@ -42,7 +43,11 @@ async function downloadToFileAtomic(url, destPath, timeout = DEFAULT_TIMEOUT_MS)
   const tmpPath = `${destPath}.tmp`;
 
   // limpiar tmp si existe de previos intentos
-  try { if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch (e) { /* ignore */ }
+  try {
+    if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+  } catch (e) {
+    // noop
+  }
 
   const resp = await axios.get(url, { responseType: 'stream', timeout });
   const writer = fs.createWriteStream(tmpPath);
@@ -56,6 +61,8 @@ async function downloadToFileAtomic(url, destPath, timeout = DEFAULT_TIMEOUT_MS)
         fs.renameSync(tmpPath, destPath);
         resolve({ ok: true, url });
       } catch (err) {
+        // cleanup tmp on failure to rename
+        try { if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch (e) { /* ignore */ }
         reject(new Error(`Error renombrando tmp a destino: ${err.message || err}`));
       }
     });
@@ -75,7 +82,8 @@ async function tryDownloadUrlWithRetries(url, destPath, retries = DEFAULT_DOWNLO
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       const res = await downloadToFileAtomic(url, destPath, timeout);
-      return { ok: true, url };
+      // res.ok === true and res.url === url
+      return { ok: true, url: res.url };
     } catch (err) {
       lastErr = err;
       const waitMs = BACKOFF_BASE_MS * Math.pow(2, attempt - 1);
@@ -131,8 +139,8 @@ async function getCloudinaryResourceSecureUrl(publicId, cloudName, apiKey, apiSe
  * Devuelve { ok: true, url } o { ok: false, error }
  */
 async function restoreImagesFromCloudinary(publicId, destPath, cloudName, apiKey, apiSecret, opts = {}) {
-  const downloadRetries = opts.downloadRetries || DEFAULT_DOWNLOAD_RETRIES;
-  const adminRetries = opts.adminRetries || DEFAULT_ADMIN_RETRIES;
+  const downloadRetries = Number.isFinite(opts.downloadRetries) ? opts.downloadRetries : DEFAULT_DOWNLOAD_RETRIES;
+  const adminRetries = Number.isFinite(opts.adminRetries) ? opts.adminRetries : DEFAULT_ADMIN_RETRIES;
   const timeout = opts.timeout || DEFAULT_TIMEOUT_MS;
 
   if (!publicId || !destPath || !cloudName) {
@@ -143,7 +151,7 @@ async function restoreImagesFromCloudinary(publicId, destPath, cloudName, apiKey
   const publicUrl = `https://res.cloudinary.com/${cloudName}/raw/upload/${encodeURIComponent(publicId)}`;
   try {
     const dres = await tryDownloadUrlWithRetries(publicUrl, destPath, downloadRetries, timeout);
-    if (dres.ok) return { ok: true, url: publicUrl };
+    if (dres.ok) return { ok: true, url: dres.url };
     console.warn(`restore: descarga pública falló: ${dres.error}`);
   } catch (e) {
     console.warn('restore: error en descarga pública:', e.message || e);
@@ -155,7 +163,7 @@ async function restoreImagesFromCloudinary(publicId, destPath, cloudName, apiKey
       const secureUrl = await getCloudinaryResourceSecureUrl(publicId, cloudName, apiKey, apiSecret, adminRetries);
       if (secureUrl) {
         const dres2 = await tryDownloadUrlWithRetries(secureUrl, destPath, downloadRetries, timeout);
-        if (dres2.ok) return { ok: true, url: secureUrl };
+        if (dres2.ok) return { ok: true, url: dres2.url };
         return { ok: false, error: `No se pudo descargar secure_url: ${dres2.error}` };
       }
       return { ok: false, error: 'Admin API no devolvió secure_url' };
@@ -164,7 +172,28 @@ async function restoreImagesFromCloudinary(publicId, destPath, cloudName, apiKey
     }
   }
 
+  // 3) Como último recurso, intentar variaciones comunes de publicId
+  // (ej: si el publicId fue subido con path/nombre distinto). Probar sufijos simples no invasivos.
+  try {
+    const altCandidates = [
+      `${publicId}.json`,
+      `${publicId}-backup`,
+      `${publicId}_backup`
+    ];
+    for (const candidate of altCandidates) {
+      const altUrl = `https://res.cloudinary.com/${cloudName}/raw/upload/${encodeURIComponent(candidate)}`;
+      const tryAlt = await tryDownloadUrlWithRetries(altUrl, destPath, downloadRetries, timeout);
+      if (tryAlt.ok) return { ok: true, url: tryAlt.url };
+    }
+  } catch (e) {
+    // noop
+  }
+
   return { ok: false, error: 'No se pudo restaurar desde Cloudinary (ni pública ni Admin API disponible)' };
 }
 
-module.exports = { restoreImagesFromCloudinary, tryDownloadUrlWithRetries, getCloudinaryResourceSecureUrl };
+module.exports = {
+  restoreImagesFromCloudinary,
+  tryDownloadUrlWithRetries,
+  getCloudinaryResourceSecureUrl
+};
