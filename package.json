@@ -9,9 +9,6 @@
     "lint": "eslint . --ext .js",
     "format": "prettier --write \"**/*.{js,json,md,html}\"",
     "test": "echo \"No tests yet\" && exit 0"
-    "engines": {
-  "node": ">=18"
-}
   },
   "keywords": [
     "solana",
@@ -21,6 +18,9 @@
   ],
   "author": "losdesayunosdelabuela-hue",
   "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "@solana/web3.js": "^1.88.0",
     "axios": "^1.4.0",
