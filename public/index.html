@@ -85,7 +85,7 @@
     }
     #canvas { 
       display: block; 
-      cursor: pointer;
+      cursor: crosshair; 
       image-rendering: pixelated; 
       background: #555;
     }
@@ -368,16 +368,16 @@
   const PRICE_PER_BLOCK = 0.0001;
   const MERCHANT_WALLET = '3d7w4r4irLaKVYd4dLjpoiehJVawbbXWFWb1bCk9nGCo';
   const API_BASE = window.location.origin;
-  const CLUSTER = 'devnet';
-
-  const connection = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl(CLUSTER));
+  const CLUSTER = 'mainnet-beta';
 
   const canvas = document.getElementById('canvas');
   const ctx = canvas.getContext('2d');
+  const gridContainer = document.getElementById('gridContainer');
   const soldPixelsSpan = document.getElementById('soldPixels');
   const totalSalesSpan = document.getElementById('totalSales');
   const selectionOverlay = document.getElementById('selectionOverlay');
   const selectionInfo = document.getElementById('selectionInfo');
+  const tooltip = document.getElementById('tooltip');
   const connectBtn = document.getElementById('connectWallet');
   const walletAddrSpan = document.getElementById('walletAddr');
   const loadingEl = document.getElementById('loading');
@@ -390,6 +390,7 @@
   let isDragging = false;
   let startX, startY, endX, endY;
   let selection = null;
+  let connection = new solanaWeb3.Connection('https://mainnet.helius-rpc.com/?api-key=cfadb209-0424-4c46-86cf-aa6f3f0c8d01');
   let userPublicKey = null;
 
   function drawGrid() {
@@ -397,12 +398,14 @@
     ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
     ctx.strokeStyle = '#333';
     ctx.lineWidth = 1;
+    
     for (let x = 0; x <= CANVAS_SIZE; x += BLOCK_SIZE) {
       ctx.beginPath();
       ctx.moveTo(x + 0.5, 0);
       ctx.lineTo(x + 0.5, CANVAS_SIZE);
       ctx.stroke();
     }
+    
     for (let y = 0; y <= CANVAS_SIZE; y += BLOCK_SIZE) {
       ctx.beginPath();
       ctx.moveTo(0, y + 0.5);
@@ -411,83 +414,526 @@
     }
   }
 
+  function blockIndex(bx, by) {
+    return by * BLOCKS_PER_SIDE + bx;
+  }
+
+  function isBlockSold(bx, by) {
+    if (bx < 0 || by < 0 || bx >= BLOCKS_PER_SIDE || by >= BLOCKS_PER_SIDE) return false;
+    return blockData[blockIndex(bx, by)] !== null;
+  }
+
   function getMousePosInCanvas(e) {
     const rect = canvas.getBoundingClientRect();
     const rawX = Math.floor((e.clientX - rect.left) * (CANVAS_SIZE / rect.width));
     const rawY = Math.floor((e.clientY - rect.top) * (CANVAS_SIZE / rect.height));
-    return { rawX, rawY };
+    return { rawX, rawY, rect };
   }
 
-  // ===== Conexión wallet =====
-  async function connectWallet() {
+  function drawSoldOverlays() {
+    document.querySelectorAll('.sold-overlay').forEach(el => el.remove());
+  }
+
+  async function loadGridFromServer() {
     try {
-      if (!window.solana) {
-        alert('Instala Phantom o compatible!');
-        return;
+      drawGrid();
+      
+      // Simular datos de ejemplo para demostración
+      const mockSales = [
+        {
+          metadata: {
+            name: "Proyecto Demo",
+            url: "https://ejemplo.com",
+            logo: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect fill='%234299e1' width='100' height='100'/%3E%3C/svg%3E",
+            selection: {
+              minBlockX: 10,
+              minBlockY: 10,
+              blocksX: 5,
+              blocksY: 5
+            }
+          }
+        }
+      ];
+      
+      totalSales = mockSales.length;
+      totalSalesSpan.textContent = totalSales;
+      
+      blockData = new Array(BLOCKS_PER_SIDE * BLOCKS_PER_SIDE).fill(null);
+      soldPixels = 0;
+      
+      const projects = {};
+      mockSales.forEach(sale => {
+        const meta = sale.metadata;
+        if (!meta || !meta.selection) return;
+        
+        const key = `${meta.name}_${meta.logo}`;
+        if (!projects[key]) {
+          projects[key] = {
+            name: meta.name,
+            url: meta.url,
+            logo: meta.logo,
+            blocks: []
+          };
+        }
+        
+        const sel = meta.selection;
+        for (let by = sel.minBlockY; by < sel.minBlockY + sel.blocksY; by++) {
+          for (let bx = sel.minBlockX; bx < sel.minBlockX + sel.blocksX; bx++) {
+            projects[key].blocks.push({ x: bx, y: by });
+          }
+        }
+      });
+      
+      const projectList = Object.values(projects);
+      for (const project of projectList) {
+        await loadProjectOnGrid(project);
       }
-      const resp = await window.solana.connect();
-      userPublicKey = resp.publicKey.toString();
-      walletAddrSpan.textContent = userPublicKey;
-      connectBtn.disabled = true;
-      console.log('Wallet conectada:', userPublicKey);
+      
+      soldPixels = Object.values(blockData).filter(b => b !== null).length * BLOCK_SIZE * BLOCK_SIZE;
+      soldPixelsSpan.textContent = soldPixels.toLocaleString();
+      drawSoldOverlays();
+      
+      console.log(`✅ Cargadas ${mockSales.length} ventas, ${projectList.length} proyectos`);
+      
     } catch (err) {
-      console.error(err);
-      alert('Error conectando wallet');
+      console.error('Error cargando grid:', err);
+      showStatus('Error cargando el grid. Recarga la página.', 'error');
+    } finally {
+      loadingEl.style.display = 'none';
     }
   }
-  connectBtn.addEventListener('click', connectWallet);
 
-  // ===== Selección bloques =====
+  function loadProjectOnGrid(project) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      
+      img.onload = function() {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        project.blocks.forEach(b => {
+          if (b.x < minX) minX = b.x;
+          if (b.y < minY) minY = b.y;
+          if (b.x > maxX) maxX = b.x;
+          if (b.y > maxY) maxY = b.y;
+        });
+        
+        const drawX = minX * BLOCK_SIZE;
+        const drawY = minY * BLOCK_SIZE;
+        const drawWidth = (maxX - minX + 1) * BLOCK_SIZE;
+        const drawHeight = (maxY - minY + 1) * BLOCK_SIZE;
+        
+        ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+        
+        project.blocks.forEach(b => {
+          const idx = blockIndex(b.x, b.y);
+          blockData[idx] = {
+            name: project.name,
+            url: project.url,
+            logo: project.logo
+          };
+        });
+        
+        resolve();
+      };
+      
+      img.onerror = function() {
+        console.warn('No se pudo cargar imagen:', project.logo);
+        project.blocks.forEach(b => {
+          const idx = blockIndex(b.x, b.y);
+          blockData[idx] = {
+            name: project.name,
+            url: project.url,
+            logo: project.logo
+          };
+        });
+        resolve();
+      };
+      
+      img.src = project.logo;
+    });
+  }
+
+  async function connectWallet() {
+    if (!window.solana) {
+      alert('Por favor instala Phantom Wallet: https://phantom.app');
+      return;
+    }
+    
+    try {
+      connectBtn.disabled = true;
+      connectBtn.textContent = 'Conectando...';
+      
+      const resp = await window.solana.connect({ 
+        onlyIfTrusted: false
+      });
+      
+      userPublicKey = resp.publicKey;
+      walletAddrSpan.textContent = userPublicKey.toString().slice(0, 4) + '...' + userPublicKey.toString().slice(-4);
+      connectBtn.textContent = 'Conectado ✓';
+      connectBtn.style.background = '#28a745';
+      
+      console.log('✅ Wallet conectada:', userPublicKey.toString());
+      
+    } catch (err) {
+      console.error('Error conectando:', err);
+      
+      if (err.code === 4001 || err.message?.includes('User rejected')) {
+        alert('❌ Conexión rechazada. Por favor aprueba la conexión en Phantom para continuar.');
+      } else if (err.code === -32603) {
+        alert('⚠️ Phantom bloqueó la conexión. Ve a Settings → Trusted Apps en Phantom y aprueba este sitio.');
+      } else {
+        alert('Error conectando wallet: ' + err.message);
+      }
+      
+      connectBtn.disabled = false;
+      connectBtn.textContent = 'Conectar Wallet';
+    }
+  }
+
+  connectBtn.onclick = connectWallet;
+
   canvas.addEventListener('mousedown', (e) => {
-    if (!userPublicKey) { alert('Conecta tu wallet primero!'); return; }
-    const pos = getMousePosInCanvas(e);
-    startX = Math.floor(pos.rawX / BLOCK_SIZE);
-    startY = Math.floor(pos.rawY / BLOCK_SIZE);
+    const { rawX, rawY } = getMousePosInCanvas(e);
+    startX = Math.floor(rawX / BLOCK_SIZE) * BLOCK_SIZE;
+    startY = Math.floor(rawY / BLOCK_SIZE) * BLOCK_SIZE;
     isDragging = true;
-    selectionOverlay.style.display = 'block';
+    selection = null;
+    selectionInfo.textContent = '';
+    selectionOverlay.style.display = 'none';
+    confirmBtn.disabled = true;
   });
 
   canvas.addEventListener('mousemove', (e) => {
-    if (!isDragging) return;
-    const pos = getMousePosInCanvas(e);
-    endX = Math.floor(pos.rawX / BLOCK_SIZE);
-    endY = Math.floor(pos.rawY / BLOCK_SIZE);
-
-    const minX = Math.min(startX, endX);
-    const minY = Math.min(startY, endY);
-    const width = Math.abs(endX - startX) + 1;
-    const height = Math.abs(endY - startY) + 1;
-
-    selectionOverlay.style.left = (minX * BLOCK_SIZE) + 'px';
-    selectionOverlay.style.top = (minY * BLOCK_SIZE) + 'px';
-    selectionOverlay.style.width = (width * BLOCK_SIZE) + 'px';
-    selectionOverlay.style.height = (height * BLOCK_SIZE) + 'px';
-
-    selectionInfo.textContent = `Seleccionando ${width}x${height} bloques`;
+    handleMove(e);
+    handleHover(e);
   });
 
   canvas.addEventListener('mouseup', (e) => {
+    handleUp(e);
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    isDragging = false;
+  });
+
+  function handleMove(e) {
+    if (!isDragging) return;
+    
+    const { rawX, rawY } = getMousePosInCanvas(e);
+    endX = Math.floor(rawX / BLOCK_SIZE) * BLOCK_SIZE;
+    endY = Math.floor(rawY / BLOCK_SIZE) * BLOCK_SIZE;
+    
+    const minX = Math.min(startX, endX);
+    const maxX = Math.max(startX, endX);
+    const minY = Math.min(startY, endY);
+    const maxY = Math.max(startY, endY);
+    
+    const width = maxX - minX + BLOCK_SIZE;
+    const height = maxY - minY + BLOCK_SIZE;
+    const blocksX = width / BLOCK_SIZE;
+    const blocksY = height / BLOCK_SIZE;
+    const blocksTotal = blocksX * blocksY;
+    
+    const minBlockX = minX / BLOCK_SIZE;
+    const minBlockY = minY / BLOCK_SIZE;
+    const maxBlockX = maxX / BLOCK_SIZE;
+    const maxBlockY = maxY / BLOCK_SIZE;
+    
+    let soldInSelection = 0;
+    for (let by = minBlockY; by <= maxBlockY; by++) {
+      for (let bx = minBlockX; bx <= maxBlockX; bx++) {
+        if (isBlockSold(bx, by)) soldInSelection++;
+      }
+    }
+    
+    const freeBlocks = blocksTotal - soldInSelection;
+    const totalPrice = (freeBlocks * PRICE_PER_BLOCK).toFixed(4);
+    
+    if (soldInSelection > 0) {
+      selectionInfo.innerHTML = `⚠️ Selección: ${blocksX}×${blocksY} bloques | <span class="error">Ocupados: ${soldInSelection}</span> | Disponibles: ${freeBlocks} | Precio: ${totalPrice} SOL`;
+      selectionOverlay.style.border = '3px solid #dc3545';
+      selectionOverlay.style.boxShadow = '0 0 10px #dc3545';
+    } else {
+      selectionInfo.innerHTML = `✓ Selección: ${blocksX}×${blocksY} bloques | Precio: ${(blocksTotal * PRICE_PER_BLOCK).toFixed(4)} SOL`;
+      selectionOverlay.style.border = '3px solid cyan';
+      selectionOverlay.style.boxShadow = '0 0 10px cyan';
+    }
+    
+    const scale = canvas.getBoundingClientRect().width / CANVAS_SIZE;
+    selectionOverlay.style.display = 'block';
+    selectionOverlay.style.left = (minX * scale) + 'px';
+    selectionOverlay.style.top = (minY * scale) + 'px';
+    selectionOverlay.style.width = (width * scale) + 'px';
+    selectionOverlay.style.height = (height * scale) + 'px';
+  }
+
+  function handleUp(e) {
     if (!isDragging) return;
     isDragging = false;
-
+    
+    if (endX === undefined || endY === undefined) {
+      selection = null;
+      return;
+    }
+    
     const minX = Math.min(startX, endX);
+    const maxX = Math.max(startX, endX);
     const minY = Math.min(startY, endY);
-    const width = Math.abs(endX - startX) + 1;
-    const height = Math.abs(endY - startY) + 1;
+    const maxY = Math.max(startY, endY);
+    
+    const minBlockX = minX / BLOCK_SIZE;
+    const minBlockY = minY / BLOCK_SIZE;
+    const maxBlockX = maxX / BLOCK_SIZE;
+    const maxBlockY = maxY / BLOCK_SIZE;
+    
+    let soldInSelection = 0;
+    for (let by = minBlockY; by <= maxBlockY; by++) {
+      for (let bx = minBlockX; bx <= maxBlockX; bx++) {
+        if (isBlockSold(bx, by)) soldInSelection++;
+      }
+    }
+    
+    selection = {
+      minBlockX,
+      minBlockY,
+      maxBlockX,
+      maxBlockY,
+      blocksX: maxBlockX - minBlockX + 1,
+      blocksY: maxBlockY - minBlockY + 1,
+      soldInSelection
+    };
+    
+    confirmBtn.disabled = soldInSelection > 0;
+  }
 
-    selection = { minBlockX: minX, minBlockY: minY, blocksX: width, blocksY: height };
-    confirmBtn.disabled = false;
+  function handleHover(e) {
+    if (isDragging) {
+      tooltip.style.display = 'none';
+      return;
+    }
+    
+    const { rawX, rawY, rect } = getMousePosInCanvas(e);
+    const bx = Math.floor(rawX / BLOCK_SIZE);
+    const by = Math.floor(rawY / BLOCK_SIZE);
+    
+    if (bx < 0 || by < 0 || bx >= BLOCKS_PER_SIDE || by >= BLOCKS_PER_SIDE) {
+      tooltip.style.display = 'none';
+      return;
+    }
+    
+    const data = blockData[blockIndex(bx, by)];
+    if (data) {
+      tooltip.textContent = `🚀 ${data.name}`;
+      const scale = rect.width / CANVAS_SIZE;
+      tooltip.style.left = (bx * BLOCK_SIZE * scale + 10) + 'px';
+      tooltip.style.top = (by * BLOCK_SIZE * scale - 30) + 'px';
+      tooltip.style.display = 'block';
+    } else {
+      tooltip.style.display = 'none';
+    }
+  }
+
+  confirmBtn.addEventListener('click', () => {
+    if (!selection) {
+      alert('Selecciona un área primero');
+      return;
+    }
+    if (selection.soldInSelection > 0) {
+      alert(`${selection.soldInSelection} bloques ya están ocupados. Selecciona otra área.`);
+      return;
+    }
+    
+    const blocksTotal = selection.blocksX * selection.blocksY;
+    const totalPrice = (blocksTotal * PRICE_PER_BLOCK).toFixed(4);
+    document.getElementById('totalPrice').textContent = totalPrice;
+    document.getElementById('modal').style.display = 'block';
   });
 
   cancelBtn.addEventListener('click', () => {
+    selection = null;
     selectionOverlay.style.display = 'none';
     selectionInfo.textContent = '';
     confirmBtn.disabled = true;
-    selection = null;
   });
 
-  drawGrid();
-  loadingEl.style.display = 'none';
-  </script>
-</body>
-</html>
+  document.getElementById('closeModal').addEventListener('click', () => {
+    document.getElementById('modal').style.display = 'none';
+    document.getElementById('paymentStatus').textContent = '';
+  });
+
+  function showStatus(message, type = 'info') {
+    const statusEl = document.getElementById('paymentStatus');
+    statusEl.textContent = message;
+    statusEl.className = type;
+  }
+
+  document.getElementById('payBtn').addEventListener('click', async () => {
+    const name = document.getElementById('projectName').value.trim();
+    const url = document.getElementById('projectURL').value.trim();
+    const logoFile = document.getElementById('projectLogo').files[0];
+    const payBtn = document.getElementById('payBtn');
+    
+    if (!selection) {
+      alert('No hay selección');
+      return;
+    }
+    if (selection.soldInSelection > 0) {
+      alert('Bloques ocupados');
+      return;
+    }
+    if (!name || !url || !logoFile) {
+      alert('Completa todos los campos');
+      return;
+    }
+    if (!window.solana || !userPublicKey) {
+      alert('Conecta tu wallet primero');
+      return;
+    }
+    
+    try {
+      payBtn.disabled = true;
+      payBtn.textContent = 'Procesando...';
+      showStatus('📤 Subiendo logo...', 'warning');
+      
+      // Subir logo
+      const fd = new FormData();
+      fd.append('file', logoFile);
+      
+      let logoUrl;
+      try {
+        const uploadRes = await fetch(`${API_BASE}/api/upload-logo`, {
+          method: 'POST',
+          body: fd
+        });
+        const uploadData = await uploadRes.json();
+        
+        if (!uploadRes.ok || !uploadData.ok) {
+          throw new Error(uploadData.error || 'Error subiendo logo');
+        }
+        
+        logoUrl = uploadData.url;
+        console.log('✅ Logo subido:', logoUrl);
+      } catch (uploadErr) {
+        console.warn('Error subiendo logo, usando base64:', uploadErr);
+        logoUrl = await fileToBase64(logoFile);
+      }
+      
+      showStatus('💰 Preparando transacción...', 'warning');
+      
+      const blocksTotal = selection.blocksX * selection.blocksY;
+      const totalLamports = Math.floor(blocksTotal * PRICE_PER_BLOCK * solanaWeb3.LAMPORTS_PER_SOL);
+      
+      const transaction = new solanaWeb3.Transaction().add(
+        solanaWeb3.SystemProgram.transfer({
+          fromPubkey: userPublicKey,
+          toPubkey: new solanaWeb3.PublicKey(MERCHANT_WALLET),
+          lamports: totalLamports,
+        })
+      );
+      
+      transaction.feePayer = userPublicKey;
+      const { blockhash } = await connection.getLatestBlockhash('confirmed');
+      transaction.recentBlockhash = blockhash;
+      
+      showStatus('✍️ Firma la transacción en Phantom...', 'warning');
+      
+      const signed = await window.solana.signTransaction(transaction);
+      
+      showStatus('📡 Enviando transacción...', 'warning');
+      
+      const signature = await connection.sendRawTransaction(signed.serialize());
+      
+      showStatus('⏳ Confirmando transacción...', 'warning');
+      
+      await connection.confirmTransaction(signature, 'confirmed');
+      
+      console.log('✅ Transacción confirmada:', signature);
+      
+      showStatus('💾 Registrando compra...', 'warning');
+      
+      const saleData = {
+        signature: signature,
+        buyer: userPublicKey.toString(),
+        metadata: {
+          name: name,
+          url: url,
+          logo: logoUrl,
+          selection: {
+            minBlockX: selection.minBlockX,
+            minBlockY: selection.minBlockY,
+            blocksX: selection.blocksX,
+            blocksY: selection.blocksY
+          }
+        },
+        amount: totalLamports / solanaWeb3.LAMPORTS_PER_SOL,
+        timestamp: Date.now()
+      };
+      
+      try {
+        const saveRes = await fetch(`${API_BASE}/api/save-sale`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(saleData)
+        });
+        
+        const saveJson = await saveRes.json();
+        
+        if (!saveRes.ok || !saveJson.ok) {
+          console.warn('Error guardando en servidor:', saveJson.error);
+        }
+      } catch (saveErr) {
+        console.warn('Error guardando en servidor:', saveErr);
+      }
+      
+      showStatus('✅ ¡Compra exitosa! Recargando grid...', 'success');
+      
+      setTimeout(async () => {
+        document.getElementById('modal').style.display = 'none';
+        selection = null;
+        selectionOverlay.style.display = 'none';
+        selectionInfo.textContent = '';
+        confirmBtn.disabled = true;
+        
+        document.getElementById('projectName').value = '';
+        document.getElementById('projectURL').value = '';
+        document.getElementById('projectLogo').value = '';
+        document.getElementById('paymentStatus').textContent = '';
+        
+        loadingEl.style.display = 'flex';
+        await loadGridFromServer();
+        
+        alert('🎉 ¡Compra exitosa! Tu proyecto ya está en el grid.');
+      }, 2000);
+      
+    } catch (err) {
+      console.error('❌ Error en el pago:', err);
+      
+      let errorMsg = 'Error en el pago';
+      
+      if (err.message?.includes('User rejected')) {
+        errorMsg = '❌ Transacción cancelada';
+      } else if (err.message?.includes('insufficient')) {
+        errorMsg = '❌ SOL insuficiente';
+      } else if (err.message) {
+        errorMsg = `❌ ${err.message}`;
+      }
+      
+      showStatus(errorMsg, 'error');
+      
+    } finally {
+      payBtn.disabled = false;
+      payBtn.textContent = '💰 Pagar y Registrar';
+    }
+  });
+
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Inicializar
+  loadGridFromServer();
