@@ -1,241 +1,229 @@
 /**
- * server.js - PRODUCTION VERSION con persistencia en Render (/persistent)
- *
- * Cambios principales:
- * - UPLOADS_DIR, IMAGES_FILE y BACKUPS_DIR apuntan a /persistent
- * - Mantiene Cloudinary backup/restore
- * - Mantiene appendSaleAtomic, verify-purchase, stats, health
- * - Mantiene SPA fallback y manejo de errores global
+ * server.js - PRODUCTION VERSION COMPLETO
  */
 
 require('dotenv').config();
 
-if (!process.env.PERSISTENT_UPLOADS_DIR) {
-  process.env.PERSISTENT_UPLOADS_DIR = '/persistent';
-}
-
-// APP_CONFIG parseado desde env
-if (process.env.APP_CONFIG) {
-  try {
-    const cfg = JSON.parse(process.env.APP_CONFIG);
-    if (cfg.RPC_URL) process.env.RPC_URL = cfg.RPC_URL;
-    if (cfg.SAVE_IMAGES_IN_JSON !== undefined) process.env.SAVE_IMAGES_IN_JSON = String(cfg.SAVE_IMAGES_IN_JSON);
-    if (cfg.PERSISTENT_UPLOADS_DIR) process.env.PERSISTENT_UPLOADS_DIR = cfg.PERSISTENT_UPLOADS_DIR;
-    if (cfg.REMOVE_LOCAL_AFTER_UPLOAD !== undefined) process.env.REMOVE_LOCAL_AFTER_UPLOAD = String(cfg.REMOVE_LOCAL_AFTER_UPLOAD);
-    if (cfg.CLOUDINARY_CLOUD_NAME) process.env.CLOUDINARY_CLOUD_NAME = cfg.CLOUDINARY_CLOUD_NAME;
-    if (cfg.CLOUDINARY_UPLOAD_PRESET) process.env.CLOUDINARY_UPLOAD_PRESET = cfg.CLOUDINARY_UPLOAD_PRESET;
-    if (cfg.CLOUDINARY_API_KEY) process.env.CLOUDINARY_API_KEY = String(cfg.CLOUDINARY_API_KEY);
-    if (cfg.CLOUDINARY_API_SECRET) process.env.CLOUDINARY_API_SECRET = String(cfg.CLOUDINARY_API_SECRET);
-    if (cfg.RESTORE_SECRET !== undefined) process.env.RESTORE_SECRET = String(cfg.RESTORE_SECRET);
-  } catch (e) {
-    console.warn('APP_CONFIG no es JSON válido:', e.message || e);
-  }
-}
-
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const fsp = fs.promises;
 const multer = require('multer');
 const solanaWeb3 = require('@solana/web3.js');
 const cors = require('cors');
-const axios = require('axios');
-const FormData = require('form-data');
-const { restoreImagesFromCloudinary } = require('./cloudinary-helpers');
 
 const app = express();
-app.use(express.json({ limit: '4mb' }));
+app.use(express.json({ limit: '10mb' }));
 app.use(cors());
 
 // ==============================
-// RUTAS PERSISTENTES RENDER
+// CONFIGURACIÓN
 // ==============================
-const PERSISTENT_DIR = path.resolve(process.env.PERSISTENT_UPLOADS_DIR);
-const UPLOADS_DIR = path.join(PERSISTENT_DIR, 'uploads');
-const IMAGES_FILE = path.join(PERSISTENT_DIR, 'images.json');
-const BACKUPS_DIR = path.join(PERSISTENT_DIR, 'backups');
-
-[UPLOADS_DIR, BACKUPS_DIR].forEach(dir => {
-  try {
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  } catch (err) {
-    console.error(`❌ No se pudo crear o acceder al directorio ${dir}:`, err);
-    throw err;
-  }
-});
-
-// ==============================
-// CONFIGURACIÓN GENERAL
-// ==============================
-const CLUSTER = process.env.CLUSTER || 'mainnet-beta';
-const RPC_URL = (process.env.RPC_URL || '').trim();
-const rpcToUse = RPC_URL || solanaWeb3.clusterApiUrl(CLUSTER);
-
 const PORT = process.env.PORT || 3000;
-const NODE_ENV = process.env.NODE_ENV || 'production';
-const BASE_URL = process.env.BASE_URL || '';
-
-const DEFAULT_MERCHANT = (process.env.MERCHANT_WALLET || '').trim();
-if (!DEFAULT_MERCHANT) console.warn('⚠️ MERCHANT_WALLET no configurada.');
-
-const PAYMENT_TOLERANCE_SOL = parseFloat(process.env.PAYMENT_TOLERANCE_SOL || '0.00001');
-
-const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || '';
-const CLOUDINARY_UPLOAD_PRESET = process.env.CLOUDINARY_UPLOAD_PRESET || '';
-const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY || '';
-const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET || '';
-const CLOUDINARY_RAW_API_URL = CLOUDINARY_CLOUD_NAME ? `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/raw/upload` : null;
-const CLOUDINARY_RAW_DELIVER_BASE = CLOUDINARY_CLOUD_NAME ? `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/raw/upload` : null;
-
+const UPLOADS_DIR = path.resolve(__dirname, 'uploads');
 const SALES_FILE = path.resolve(__dirname, 'sales.json');
+const CLUSTER = process.env.CLUSTER || 'mainnet-beta';
+const RPC_URL = process.env.RPC_URL || solanaWeb3.clusterApiUrl(CLUSTER);
+const MERCHANT_WALLET = process.env.MERCHANT_WALLET || '3d7w4r4irLaKVYd4dLjpoiehJVawbbXWFWb1bCk9nGCo';
 
-const DEFAULT_MEMO_PROGRAM = 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLmfcHr';
-const MEMO_PROGRAM_ID_STR = (process.env.MEMO_PROGRAM_ID || DEFAULT_MEMO_PROGRAM).toString().trim();
+// Crear directorios necesarios
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
 
-const connection = new solanaWeb3.Connection(rpcToUse, { commitment: 'confirmed' });
+if (!fs.existsSync(SALES_FILE)) {
+  fs.writeFileSync(SALES_FILE, JSON.stringify({ sales: [] }, null, 2));
+}
 
-app.use('/uploads', express.static(UPLOADS_DIR));
-app.use('/public', express.static(path.join(__dirname, 'public')));
+const connection = new solanaWeb3.Connection(RPC_URL, 'confirmed');
 
-const SAVE_IMAGES_IN_JSON = process.env.SAVE_IMAGES_IN_JSON === 'true';
+console.log('🚀 Configuración:');
+console.log(`   Cluster: ${CLUSTER}`);
+console.log(`   RPC: ${RPC_URL}`);
+console.log(`   Merchant: ${MERCHANT_WALLET}`);
+console.log(`   Puerto: ${PORT}`);
 
 // ==============================
-// FUNCIONES DE LECTURA/ESCRITURA
+// SERVIR ARCHIVOS ESTÁTICOS
+// ==============================
+app.use('/uploads', express.static(UPLOADS_DIR));
+app.use(express.static(path.join(__dirname, 'public')));
+
+// ==============================
+// FUNCIONES AUXILIARES
 // ==============================
 function readSales() {
   try {
     const data = fs.readFileSync(SALES_FILE, 'utf8');
     return JSON.parse(data);
-  } catch {
+  } catch (err) {
+    console.error('Error leyendo sales.json:', err);
     return { sales: [] };
   }
 }
 
-function readImages() {
+function writeSales(salesData) {
   try {
-    const data = fs.readFileSync(IMAGES_FILE, 'utf8');
-    return JSON.parse(data);
-  } catch {
-    return { images: {} };
-  }
-}
-
-function writeImages(imgs) {
-  try {
-    fs.writeFileSync(IMAGES_FILE, JSON.stringify(imgs, null, 2));
+    fs.writeFileSync(SALES_FILE, JSON.stringify(salesData, null, 2));
   } catch (err) {
-    console.error('❌ Error guardando images.json:', err.message || err);
+    console.error('Error escribiendo sales.json:', err);
     throw err;
   }
 }
 
 // ==============================
-// CLOUDINARY / BACKUPS
+// MULTER PARA SUBIDA DE ARCHIVOS
 // ==============================
-async function uploadFileToCloudinary(filePath, publicId) {
-  if (!CLOUDINARY_RAW_API_URL || !CLOUDINARY_UPLOAD_PRESET) return null;
-  try {
-    const form = new FormData();
-    form.append('file', fs.createReadStream(filePath));
-    form.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-    form.append('resource_type', 'raw');
-    if (publicId) form.append('public_id', publicId);
-
-    const resp = await axios.post(CLOUDINARY_RAW_API_URL, form, { headers: form.getHeaders(), maxContentLength: Infinity, maxBodyLength: Infinity, timeout: 120000 });
-    return resp.data;
-  } catch (err) {
-    console.warn('⚠️ Error subiendo backup a Cloudinary:', err.message || err.toString());
-    return null;
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, UPLOADS_DIR);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    cb(null, uniqueSuffix + ext);
   }
-}
+});
 
-async function uploadDataUrlToCloudinary(dataUrl, publicName) {
-  if (!CLOUDINARY_CLOUD_NAME || (!CLOUDINARY_UPLOAD_PRESET && !(CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET))) return null;
-  const m = String(dataUrl || '').match(/^data:(.+);base64,(.+)$/);
-  if (!m) return null;
-  const buffer = Buffer.from(m[2], 'base64');
-  try {
-    const form = new FormData();
-    form.append('file', buffer, { filename: publicName, contentType: m[1] });
-    if (CLOUDINARY_UPLOAD_PRESET) form.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-    const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
-    const resp = await axios.post(url, form, { headers: form.getHeaders(), maxContentLength: Infinity, maxBodyLength: Infinity, timeout: 120000 });
-    return resp.data;
-  } catch (err) {
-    console.warn('⚠️ Error subiendo dataUrl a Cloudinary:', err.message || err.toString());
-    return null;
-  }
-}
-
-let isUploadingBackups = false;
-let pendingBackupTimeout = null;
-const BACKUP_UPLOAD_DEBOUNCE_MS = 2000;
-
-async function performBackupUpload() {
-  if (!CLOUDINARY_RAW_API_URL || !CLOUDINARY_UPLOAD_PRESET) return;
-  if (isUploadingBackups) return;
-  isUploadingBackups = true;
-
-  try {
-    const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
-    const salesBackupPath = path.join(BACKUPS_DIR, `sales_${timestamp}.json`);
-    fs.copyFileSync(SALES_FILE, salesBackupPath);
-    await uploadFileToCloudinary(salesBackupPath, 'solana_sales_backup');
-
-    if (fs.existsSync(IMAGES_FILE)) {
-      const imagesBackupPath = path.join(BACKUPS_DIR, `images_${timestamp}.json`);
-      fs.copyFileSync(IMAGES_FILE, imagesBackupPath);
-      await uploadFileToCloudinary(imagesBackupPath, 'solana_images_backup');
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Solo se permiten imágenes'));
     }
-  } catch (err) {
-    console.warn('⚠️ Error creando/subiendo backups:', err.message || err);
-  } finally {
-    isUploadingBackups = false;
   }
-}
-
-function scheduleBackupUpload() {
-  if (pendingBackupTimeout) clearTimeout(pendingBackupTimeout);
-  pendingBackupTimeout = setTimeout(() => { pendingBackupTimeout = null; performBackupUpload().catch(() => {}); }, BACKUP_UPLOAD_DEBOUNCE_MS);
-}
+});
 
 // ==============================
-// appendSaleAtomic
+// API ENDPOINTS
 // ==============================
-let _appendLock = Promise.resolve();
-async function appendSaleAtomic(newSale) {
-  _appendLock = _appendLock.then(async () => {
-    for (let attempt = 0; attempt < 5; attempt++) {
-      try {
-        let current = { sales: [] };
-        try { current = JSON.parse(await fsp.readFile(SALES_FILE, 'utf8') || '{"sales":[]}'); } catch {}
-        current.sales.push(newSale);
-        const tmpPath = SALES_FILE + '.tmp';
-        await fsp.writeFile(tmpPath, JSON.stringify(current, null, 2), 'utf8');
-        await fsp.rename(tmpPath, SALES_FILE);
-        try { scheduleBackupUpload(); } catch {}
-        return;
-      } catch {
-        await new Promise(r => setTimeout(r, 100 * (attempt + 1)));
-      }
-    }
-    throw new Error('appendSaleAtomic: fallaron todos los intentos');
-  });
-  return _appendLock;
-}
 
-// ==============================
-// ENDPOINTS
-// ==============================
+// GET /api/sales - Obtener todas las ventas
 app.get('/api/sales', (req, res) => {
   try {
     const sales = readSales();
     res.json(sales);
-  } catch {
-    res.status(500).json({ ok: false, error: 'Error al obtener las ventas' });
+  } catch (err) {
+    console.error('Error en /api/sales:', err);
+    res.status(500).json({ ok: false, error: 'Error al obtener ventas' });
   }
 });
 
+// POST /api/upload-logo - Subir logo
+app.post('/api/upload-logo', upload.single('file'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ ok: false, error: 'No se recibió archivo' });
+    }
+
+    const fileUrl = `/uploads/${req.file.filename}`;
+    
+    console.log('✅ Logo subido:', req.file.filename);
+    
+    res.json({
+      ok: true,
+      url: fileUrl,
+      filename: req.file.filename
+    });
+  } catch (err) {
+    console.error('Error en /api/upload-logo:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// POST /api/save-sale - Guardar venta
+app.post('/api/save-sale', async (req, res) => {
+  try {
+    const { signature, buyer, metadata, amount, timestamp } = req.body;
+
+    if (!signature || !buyer || !metadata || !amount) {
+      return res.status(400).json({ 
+        ok: false, 
+        error: 'Faltan datos requeridos' 
+      });
+    }
+
+    console.log('💾 Guardando venta:', signature);
+
+    // Leer ventas actuales
+    const salesData = readSales();
+
+    // Verificar si ya existe esta transacción
+    const exists = salesData.sales.some(s => s.signature === signature);
+    if (exists) {
+      console.log('⚠️ Venta duplicada, ignorando:', signature);
+      return res.json({ ok: true, message: 'Venta ya registrada' });
+    }
+
+    // Validar selección
+    const sel = metadata.selection;
+    if (!sel || !sel.minBlockX === undefined || !sel.minBlockY === undefined || !sel.blocksX || !sel.blocksY) {
+      return res.status(400).json({ 
+        ok: false, 
+        error: 'Selección inválida' 
+      });
+    }
+
+    // Verificar que los bloques no estén ocupados
+    for (const sale of salesData.sales) {
+      const existingSel = sale.metadata?.selection;
+      if (!existingSel) continue;
+
+      // Detectar overlap
+      const overlap = !(
+        sel.minBlockX + sel.blocksX <= existingSel.minBlockX ||
+        sel.minBlockX >= existingSel.minBlockX + existingSel.blocksX ||
+        sel.minBlockY + sel.blocksY <= existingSel.minBlockY ||
+        sel.minBlockY >= existingSel.minBlockY + existingSel.blocksY
+      );
+
+      if (overlap) {
+        console.log('❌ Bloques ocupados');
+        return res.status(409).json({ 
+          ok: false, 
+          error: 'Los bloques seleccionados ya están ocupados' 
+        });
+      }
+    }
+
+    // Añadir nueva venta
+    const newSale = {
+      signature,
+      buyer,
+      metadata,
+      amountSOL: amount,
+      timestamp: timestamp || Date.now(),
+      createdAt: new Date().toISOString()
+    };
+
+    salesData.sales.push(newSale);
+
+    // Guardar
+    writeSales(salesData);
+
+    console.log('✅ Venta guardada exitosamente');
+
+    res.json({ 
+      ok: true, 
+      message: 'Venta registrada exitosamente',
+      sale: newSale
+    });
+
+  } catch (err) {
+    console.error('Error en /api/save-sale:', err);
+    res.status(500).json({ 
+      ok: false, 
+      error: err.message || 'Error al guardar la venta' 
+    });
+  }
+});
+
+// GET /api/stats - Estadísticas
 app.get('/api/stats', (req, res) => {
   try {
     const sales = readSales();
@@ -251,49 +239,62 @@ app.get('/api/stats', (req, res) => {
       ok: true,
       stats: {
         totalSales,
-        totalSOL: totalSOL.toFixed(2),
+        totalSOL: totalSOL.toFixed(4),
         totalPixels,
         percentageSold: ((totalPixels / 1000000) * 100).toFixed(2)
       }
     });
-  } catch {
+  } catch (err) {
+    console.error('Error en /api/stats:', err);
     res.status(500).json({ ok: false, error: 'Error al obtener estadísticas' });
   }
 });
 
+// GET /api/health - Health check
 app.get('/api/health', (req, res) => {
   res.json({
     ok: true,
     status: 'healthy',
     cluster: CLUSTER,
-    storage: UPLOADS_DIR,
     timestamp: new Date().toISOString()
   });
 });
 
-// SPA fallback
+// ==============================
+// FALLBACK SPA
+// ==============================
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // ==============================
-// INICIO SERVIDOR
+// MANEJO DE ERRORES
 // ==============================
-app.listen(PORT, () => {
-  console.log(`✅ Servidor iniciado en puerto ${PORT}`);
-  if (BASE_URL) console.log(`🌐 Base URL: ${BASE_URL}`);
-  console.log(`🌐 Frontend: http://localhost:${PORT}`);
-  console.log(`📂 Persistent storage: ${PERSISTENT_DIR}`);
+app.use((err, req, res, next) => {
+  console.error('❌ Error no manejado:', err);
+  res.status(500).json({
+    ok: false,
+    error: 'Error interno del servidor'
+  });
 });
 
-process.on('SIGTERM', async () => {
-  console.log('🛑 SIGTERM recibido, creando backup final...');
-  try { await performBackupUpload(); } catch {}
+// ==============================
+// INICIAR SERVIDOR
+// ==============================
+app.listen(PORT, () => {
+  console.log(`\n✅ Servidor iniciado en puerto ${PORT}`);
+  console.log(`🌐 Accede en: http://localhost:${PORT}`);
+  console.log(`📂 Uploads: ${UPLOADS_DIR}`);
+  console.log(`💾 Sales: ${SALES_FILE}\n`);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('🛑 SIGTERM recibido, cerrando servidor...');
   process.exit(0);
 });
 
-process.on('SIGINT', async () => {
-  console.log('🛑 SIGINT recibido, creando backup final...');
-  try { await performBackupUpload(); } catch {}
+process.on('SIGINT', () => {
+  console.log('\n🛑 SIGINT recibido, cerrando servidor...');
   process.exit(0);
 });
