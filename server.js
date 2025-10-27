@@ -12,6 +12,9 @@
  * - Escritura atómica y serializada de ventas (appendSaleAtomic).
  * - Reintentos al obtener transacción parseada (getParsedTransactionWithRetry).
  * - Tolerancia de pago configurable vía env PAYMENT_TOLERANCE_SOL.
+ * - Añadido endpoint /api/config para exponer solo valores no-sensibles al frontend.
+ * - Servir carpeta /uploads de forma estática para que las imágenes locales sean accesibles.
+ * - Validación básica del payload de selección antes de persistir para evitar entradas inválidas.
  */
 
 require('dotenv').config();
@@ -53,6 +56,7 @@ const FormData = require('form-data');
 const { restoreImagesFromCloudinary } = require('./cloudinary-helpers');
 
 const app = express();
+// limitar tamaño JSON (definido previamente)
 app.use(express.json({ limit: '4mb' }));
 app.use(cors());
 
@@ -123,6 +127,10 @@ console.log('   RPC configured:', RPC_URL ? '[CUSTOM RPC]' : `[${CLUSTER} cluste
     throw err;
   }
 });
+
+// Servir uploads de forma estática para accesibilidad de archivos subidos
+app.use('/uploads', express.static(UPLOADS_DIR));
+app.use('/public', express.static(path.join(__dirname, 'public')));
 
 // ============================================
 // UTIL: Cloudinary upload/download para backups (resource_type=raw)
@@ -511,6 +519,23 @@ async function getParsedTransactionWithRetry(signature, attempts = 4, delayMs = 
 }
 
 // ============================================
+// Helper: validar selection objeto simple
+// ============================================
+function isValidSelection(sel) {
+  if (!sel) return false;
+  const keys = ['minBlockX', 'minBlockY', 'blocksX', 'blocksY'];
+  for (const k of keys) {
+    if (typeof sel[k] !== 'number' || !Number.isFinite(sel[k]) || sel[k] < 0) return false;
+  }
+  // blocksX/Y no pueden ser 0
+  if (sel.blocksX <= 0 || sel.blocksY <= 0) return false;
+  // límites razonables
+  if (sel.minBlockX >= 1000 || sel.minBlockY >= 1000) return false;
+  if (sel.blocksX > 1000 || sel.blocksY > 1000) return false;
+  return true;
+}
+
+// ============================================
 // API: VERIFICAR COMPRA
 // ============================================
 app.post('/api/verify-purchase', async (req, res) => {
@@ -527,11 +552,24 @@ app.post('/api/verify-purchase', async (req, res) => {
     });
   }
 
+  // Validar datos de selection si vienen
+  if (metadata.selection && !isValidSelection(metadata.selection)) {
+    return res.status(400).json({ ok: false, error: 'Selection inválida' });
+  }
+
   // Validar que los bloques estén disponibles (pre-check)
   if (metadata.selection && !areBlocksAvailable(metadata.selection)) {
     return res.status(400).json({
       ok: false,
       error: 'Los bloques seleccionados ya están ocupados. Refresca la página.'
+    });
+  }
+
+  // Asegurar merchant configurado
+  if (!DEFAULT_MERCHANT) {
+    return res.status(500).json({
+      ok: false,
+      error: 'MERCHANT_WALLET no configurada en el servidor. Contacta al administrador.'
     });
   }
 
@@ -653,11 +691,27 @@ app.post('/api/verify-purchase', async (req, res) => {
 });
 
 // ============================================
+// Endpoint que expone config no sensible al frontend
+// ============================================
+app.get('/api/config', (req, res) => {
+  try {
+    return res.json({
+      ok: true,
+      cluster: CLUSTER,
+      merchant: DEFAULT_MERCHANT || null,
+      saveImagesInJson: SAVE_IMAGES_IN_JSON || false
+    });
+  } catch (err) {
+    console.error('❌ Error en /api/config:', err);
+    return res.status(500).json({ ok: false, error: 'Error interno' });
+  }
+});
+
+// ============================================
 // Resto de endpoints: /api/sales, /api/stats, health, image upload, etc.
 // Mantengo el resto del código tal cual (ya presente en tu archivo original)
 // ============================================
-
-// API: OBTENER VENTAS
+/* API: OBTENER VENTAS */
 app.get('/api/sales', (req, res) => {
   try {
     const sales = readSales();
@@ -671,7 +725,7 @@ app.get('/api/sales', (req, res) => {
   }
 });
 
-// API: ESTADÍSTICAS
+/* API: ESTADÍSTICAS */
 app.get('/api/stats', (req, res) => {
   try {
     const sales = readSales();
@@ -701,7 +755,7 @@ app.get('/api/stats', (req, res) => {
   }
 });
 
-// HEALTH CHECK
+/* HEALTH CHECK */
 app.get('/api/health', (req, res) => {
   res.json({
     ok: true,
@@ -712,12 +766,12 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// FALLBACK SPA
+/* FALLBACK SPA */
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// MANEJO DE ERRORES GLOBAL
+/* MANEJO DE ERRORES GLOBAL */
 app.use((err, req, res, next) => {
   console.error('❌ Error no manejado:', err);
   res.status(500).json({
@@ -728,14 +782,14 @@ app.use((err, req, res, next) => {
   });
 });
 
-// INICIAR SERVIDOR
+/* INICIAR SERVIDOR */
 app.listen(PORT, () => {
   console.log(`\n✅ Servidor iniciado en puerto ${PORT}`);
   if (BASE_URL) console.log(`🌐 Base URL: ${BASE_URL}`);
   console.log(`🌐 Frontend: http://localhost:${PORT}\n`);
 });
 
-// Graceful shutdown
+/* Graceful shutdown */
 process.on('SIGTERM', async () => {
   console.log('🛑 SIGTERM recibido, creando backup final...');
   try { await performBackupUpload(); } catch(e) { /* ignore */ }
