@@ -3,311 +3,167 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="description" content="Million Grid en Solana - Compra píxeles y muestra tu proyecto">
   <title>Solana Million Grid</title>
   <style>
-    body { font-family: Arial, sans-serif; background:#0f1115; color:#fff; margin:0; padding:0; }
-    header { padding:12px 16px; background: #0b1020; display:flex; justify-content:space-between; align-items:center; }
-    #canvas { background:#111; display:block; margin:12px auto; border:1px solid #333; }
-    #controls { max-width:1000px; margin: 10px auto; display:flex; gap:8px; justify-content:center; align-items:center; }
-    button { padding:10px 12px; border-radius:6px; border:none; cursor:pointer; background:#2b6cb0; color:#fff; }
-    button.secondary { background:#444; }
-    #status { text-align:center; margin:8px; color:#ffda79; min-height:20px; }
-    #merchant { font-size:13px; color:#cfcfcf; }
-    input[type="text"] { padding:8px; border-radius:6px; border:1px solid #333; background:#0b0d12; color:#fff; }
-    #projectForm { display:flex; gap:8px; align-items:center; }
+    /* Estilos mínimos; pega tus estilos reales si quieres */
+    body{background:#0a0a0a;color:#fff;font-family:sans-serif;margin:0}
+    header{padding:12px;background:#222;color:gold;display:flex;justify-content:space-between}
+    #gridWrapper{padding:20px;display:flex;justify-content:center}
+    #modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);align-items:center;justify-content:center}
+    #modalInner{background:#222;padding:20px;border-radius:10px;border:2px solid gold;width:420px;max-width:95%}
+    input,button{font-size:14px;padding:8px}
   </style>
 </head>
 <body>
   <header>
+    <div>🎨 Solana Million Grid</div>
     <div>
-      <strong>Solana Million Grid</strong>
-      <div id="merchant" aria-live="polite"></div>
-    </div>
-    <div>
-      <button id="connectBtn">Conectar wallet</button>
+      <button id="connectWallet">Conectar Wallet</button>
+      <span id="walletAddr"></span>
     </div>
   </header>
 
-  <div id="controls">
-    <button id="selectBtn" class="secondary">Seleccionar bloques</button>
-    <div id="projectForm">
-      <input id="projectName" type="text" placeholder="Nombre del proyecto (opcional)" maxlength="50" />
-      <button id="buyBtn" disabled>💳 Pagar y registrar</button>
+  <div id="gridWrapper">
+    <!-- Pega aquí tu canvas/grid real. Este es un placeholder -->
+    <div>
+      <p style="color:gold">Grid placeholder (reemplaza con tu canvas)</p>
+      <button id="confirmBtn">✓ Comprar Selección</button>
     </div>
-    <div id="price" style="align-self:center;color:#ffd700">Precio: <span id="totalPrice">0.0000</span> SOL</div>
   </div>
 
-  <div style="max-width:1000px;margin:0 auto">
-    <canvas id="canvas" width="1000" height="1000"></canvas>
-    <div id="status" role="status"></div>
+  <div id="modal">
+    <div id="modalInner">
+      <h3 style="color:gold;margin:0 0 12px 0;text-align:center">🎨 Comprar Píxeles</h3>
+      <div class="price-display">Precio total: <span id="totalPrice">0.00</span> SOL</div>
+
+      <div id="projectForm">
+        <div style="margin-bottom:10px">
+          <label style="color:#ccc;display:block">Nombre del Proyecto</label>
+          <input type="text" id="projectName" placeholder="Mi Proyecto">
+        </div>
+
+        <div style="margin-bottom:10px">
+          <label style="color:#ccc;display:block">URL del Proyecto</label>
+          <input type="url" id="projectURL" placeholder="https://tusitio.com">
+        </div>
+
+        <div style="margin-bottom:10px">
+          <label style="color:#ccc;display:block">Logo (PNG/JPG/WebP, máx 5MB)</label>
+          <input type="file" id="projectLogo" accept="image/*">
+        </div>
+
+        <div id="paymentStatus" style="min-height:18px;color:#fff;margin-bottom:8px"></div>
+
+        <div style="display:flex;gap:8px">
+          <button id="payBtn" style="flex:1;background:gold;color:#000">💰 Pagar y Registrar</button>
+          <button id="closeModal" style="flex:1;background:#666;color:#fff">Cancelar</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
   <script>
-    // Config / constants
-    const CANVAS_SIZE = 1000;
-    const BLOCK_SIZE = 10;
-    const PRICE_PER_BLOCK_SOL = 0.001; // mantener en sync con servidor si se cambia
-    const BACKEND_VERIFY_PATH = '/api/verify-purchase';
+    // ---------- CONFIGURA ESTOS VALORES ----------
+    const CLOUDINARY_CLOUD_NAME = 'drubzopvu';
+    const CLOUDINARY_UPLOAD_PRESET = 'solana_unsigned';
+    const MERCHANT_WALLET = '3d7w4r4irLaKVYd4dLjpoiehJVawbbXWFWb1bCk9nGCo';
+    const API_BASE = window.location.origin;
+    const PRICE_PER_BLOCK = 0.0001;
+    // Para consistencia en testing:
+    const CLUSTER = 'devnet';
+    // ---------------------------------------------
 
-    // UI elements
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    const statusEl = document.getElementById('status');
-    const connectBtn = document.getElementById('connectBtn');
-    const buyBtn = document.getElementById('buyBtn');
-    const totalPriceEl = document.getElementById('totalPrice');
-    const merchantEl = document.getElementById('merchant');
-    const projectNameInput = document.getElementById('projectName');
+    // Elementos UI mínimos
+    const confirmBtn = document.getElementById('confirmBtn');
+    const paymentStatus = document.getElementById('paymentStatus');
+    const modal = document.getElementById('modal');
+    const closeModal = document.getElementById('closeModal');
+    const payBtn = document.getElementById('payBtn');
 
-    // State
-    let connection = null;
-    let cluster = 'devnet';
-    let merchant = null;
-    let walletConnected = false;
-    let userPublicKey = null;
-    let selection = null;
+    // Simulación de selection (para demo solo)
+    let selection = { blocksX: 1, blocksY: 1, minBlockX:0, minBlockY:0, soldInSelection: 0 };
 
-    // Draw grid
-    function drawGrid() {
-      ctx.fillStyle = '#111';
-      ctx.fillRect(0,0,CANVAS_SIZE,CANVAS_SIZE);
-      ctx.strokeStyle = '#222';
-      ctx.lineWidth = 1;
-      for (let x=0;x<=CANVAS_SIZE;x+=BLOCK_SIZE) {
-        ctx.beginPath();
-        ctx.moveTo(x,0); ctx.lineTo(x,CANVAS_SIZE); ctx.stroke();
+    confirmBtn.addEventListener('click', () => {
+      const totalPrice = (selection.blocksX * selection.blocksY * PRICE_PER_BLOCK).toFixed(4);
+      document.getElementById('totalPrice').textContent = totalPrice;
+      modal.style.display = 'flex';
+      const logoInput = document.getElementById('projectLogo');
+      if (!logoInput.files || logoInput.files.length === 0) {
+        setTimeout(() => logoInput.click(), 180);
       }
-      for (let y=0;y<=CANVAS_SIZE;y+=BLOCK_SIZE) {
-        ctx.beginPath();
-        ctx.moveTo(0,y); ctx.lineTo(CANVAS_SIZE,y); ctx.stroke();
-      }
-    }
-    drawGrid();
-
-    function renderSelection() {
-      drawGrid();
-      if (!selection) return;
-      ctx.fillStyle = 'rgba(255,215,0,0.6)';
-      ctx.fillRect(selection.x * BLOCK_SIZE, selection.y * BLOCK_SIZE, selection.w * BLOCK_SIZE, selection.h * BLOCK_SIZE);
-    }
-
-    function updatePrice() {
-      if (!selection) { totalPriceEl.textContent = '0.0000'; buyBtn.disabled = true; return; }
-      const blocks = Math.max(1, selection.w * selection.h);
-      const price = (blocks * PRICE_PER_BLOCK_SOL).toFixed(4);
-      totalPriceEl.textContent = price;
-      buyBtn.disabled = !walletConnected;
-    }
-
-    // Selection handlers: simple 1x1 click selection, with Shift to expand
-    canvas.addEventListener('mousedown', (e) => {
-      const rect = canvas.getBoundingClientRect();
-      const x = Math.floor((e.clientX - rect.left) / BLOCK_SIZE);
-      const y = Math.floor((e.clientY - rect.top) / BLOCK_SIZE);
-      // If shift pressed, expand selection (toggle example)
-      if (selection && e.shiftKey) {
-        selection.w = Math.min(100, selection.w + 1);
-        selection.h = Math.min(100, selection.h + 1);
-      } else {
-        selection = { x, y, w: 1, h: 1 };
-      }
-      renderSelection();
-      updatePrice();
     });
 
-    // Status helper
-    function status(msg, isError = false) {
-      statusEl.textContent = msg || '';
-      statusEl.style.color = isError ? '#ff6b6b' : '#ffda79';
+    closeModal.addEventListener('click', () => {
+      modal.style.display = 'none';
+      paymentStatus.textContent = '';
+    });
+
+    // Subir a Cloudinary (unsigned preset) - desde el navegador
+    async function uploadLogoToServer(file) {
+      if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
+        throw new Error('Cloudinary no configurado. Define CLOUDINARY_CLOUD_NAME y CLOUDINARY_UPLOAD_PRESET.');
+      }
+      const maxMB = 5;
+      if (file.size > maxMB * 1024 * 1024) throw new Error(`El logo supera ${maxMB}MB`);
+      if (!/^image\//.test(file.type)) throw new Error('El archivo debe ser una imagen');
+
+      const form = new FormData();
+      form.append('file', file);
+      form.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+
+      const url = `https://api.cloudinary.com/v1_1/${encodeURIComponent(CLOUDINARY_CLOUD_NAME)}/upload`;
+      const res = await fetch(url, { method: 'POST', body: form });
+      const json = await res.json();
+      if (!res.ok) {
+        const errMsg = json?.error?.message || JSON.stringify(json);
+        throw new Error('Error subiendo a Cloudinary: ' + errMsg);
+      }
+      return { ok: true, url: json.secure_url, public_id: json.public_id, raw: json };
     }
 
-    // Fetch config from backend (/api/config) to get cluster and merchant (non-sensitive)
-    async function loadConfig() {
-      try {
-        const resp = await fetch('/api/config');
-        if (!resp.ok) {
-          console.warn('No se pudo leer /api/config. Usando devnet y merchant por defecto.');
-          setClientConfig({ cluster: 'devnet', merchant: null, saveImagesInJson: false });
-          return;
-        }
-        const json = await resp.json();
-        if (json.ok && json.cluster) {
-          setClientConfig({ cluster: json.cluster, merchant: json.merchant || null, saveImagesInJson: json.saveImagesInJson });
-        } else {
-          setClientConfig({ cluster: 'devnet', merchant: null, saveImagesInJson: false });
-        }
-      } catch (err) {
-        console.warn('Error fetching /api/config:', err);
-        setClientConfig({ cluster: 'devnet', merchant: null, saveImagesInJson: false });
-      }
+    // Helper para mostrar status en modal
+    function showStatus(msg, type='info') {
+      paymentStatus.textContent = msg;
+      paymentStatus.className = type;
     }
 
-    function setClientConfig(cfg) {
-      cluster = cfg.cluster || 'devnet';
-      merchant = cfg.merchant || null;
-      merchantEl.textContent = merchant ? `Merchant: ${merchant}` : 'Merchant: no configurado en el servidor';
-      // create connection for this client (public cluster RPC)
-      try {
-        connection = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl(cluster), { commitment: 'confirmed' });
-      } catch (e) {
-        console.warn('No se pudo crear connection con clusterApiUrl, usando devnet por defecto');
-        connection = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl('devnet'), { commitment: 'confirmed' });
-      }
-    }
+    // Flujo payBtn (sube logo → simula pago → avisa y cierra)
+    payBtn.addEventListener('click', async () => {
+      const name = document.getElementById('projectName').value.trim();
+      const url = document.getElementById('projectURL').value.trim();
+      const logoFile = document.getElementById('projectLogo').files[0];
 
-    // Wallet connect for Phantom (or compatible)
-    async function connectWallet() {
-      if (!window.solana) {
-        alert('Instala Phantom u otra wallet compatible con window.solana.');
-        return;
-      }
-      try {
-        const resp = await window.solana.connect();
-        // Phantom returns object with publicKey
-        userPublicKey = resp.publicKey || resp; // support variations
-        walletConnected = !!userPublicKey;
-        connectBtn.textContent = walletConnected ? ('Conectado: ' + String(userPublicKey).slice(0,6) + '...') : 'Conectar wallet';
-        status('Wallet conectada');
-        updatePrice();
-      } catch (err) {
-        console.error('Wallet connect error', err);
-        status('Error conectando wallet', true);
-      }
-    }
-    connectBtn.addEventListener('click', connectWallet);
-
-    // Helper to call backend verify with retries (handles case txn not yet indexed)
-    async function callVerifyWithRetries(payload, attempts = 6, delayMs = 2000) {
-      let last = null;
-      for (let i = 0; i < attempts; i++) {
-        try {
-          const resp = await fetch(BACKEND_VERIFY_PATH, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-          const json = await resp.json().catch(() => ({ ok: false, error: 'Respuesta inválida' }));
-          if (json.ok) return { ok: true, json };
-          // If server says tx not found or not confirmed, retry
-          last = json;
-          // If error is amount mismatch or blocks occupied, stop retrying
-          if (json.error && (json.error.includes('Monto insuficiente') || json.error.includes('ocupado') || resp.status === 400)) {
-            return { ok: false, json };
-          }
-        } catch (err) {
-          last = { ok: false, error: err.message || String(err) };
-        }
-        await new Promise(r => setTimeout(r, delayMs * (i + 1)));
-      }
-      return { ok: false, json: last };
-    }
-
-    // Main payment flow
-    async function payAndRegister() {
-      if (!walletConnected || !userPublicKey) return alert('Conecta la wallet primero');
-      if (!selection) return alert('Selecciona bloques primero');
-
-      const priceSOL = parseFloat(totalPriceEl.textContent);
-      if (!priceSOL || priceSOL <= 0) return alert('Precio inválido');
-
-      if (!merchant) {
-        alert('Merchant wallet no configurada en el servidor. Intenta más tarde.');
-        return;
-      }
+      if (!name || !url) { alert('Completa nombre y URL'); return; }
+      if (!logoFile) { alert('Selecciona un logo'); return; }
 
       try {
-        status('Preparando transacción...');
-        const fromPubkey = userPublicKey;
-        const toPubkey = new solanaWeb3.PublicKey(merchant);
-        const lamports = Math.round(priceSOL * solanaWeb3.LAMPORTS_PER_SOL);
+        payBtn.disabled = true;
+        showStatus('📤 Subiendo logo...', 'warning');
 
-        const transferIx = solanaWeb3.SystemProgram.transfer({
-          fromPubkey,
-          toPubkey,
-          lamports
-        });
+        const uploadRes = await uploadLogoToServer(logoFile);
+        const logoUrl = uploadRes.url;
+        showStatus('✅ Logo subido. Preparando transacción...', 'warning');
 
-        const memoObj = {
-          type: 'million-grid-sale',
-          selection: {
-            minBlockX: selection.x,
-            minBlockY: selection.y,
-            blocksX: selection.w,
-            blocksY: selection.h
-          },
-          projectName: (projectNameInput.value || '').trim()
-        };
+        // Aquí iría creación/firma de tx con Phantom y llamada a /api/verify-purchase
+        await new Promise(r => setTimeout(r, 1200));
 
-        const memoIx = new solanaWeb3.TransactionInstruction({
-          keys: [],
-          programId: new solanaWeb3.PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLmfcHr'),
-          data: Buffer.from(JSON.stringify(memoObj), 'utf8')
-        });
-
-        const tx = new solanaWeb3.Transaction().add(transferIx, memoIx);
-        tx.feePayer = fromPubkey;
-        const { blockhash } = await connection.getLatestBlockhash('finalized');
-        tx.recentBlockhash = blockhash;
-
-        status('Por favor firma y envía la transacción en la wallet...');
-        // Phantom: signAndSendTransaction
-        const signed = await window.solana.signAndSendTransaction(tx);
-        const signature = signed.signature || signed;
-        status('Transacción enviada: ' + signature);
-
-        // Call backend to verify and register. Backend will do on-chain parsing & checks.
-        status('Registrando la transacción en el servidor (esto puede tardar unos segundos)...');
-        const payload = {
-          signature,
-          expectedAmountSOL: priceSOL,
-          metadata: {
-            name: memoObj.projectName || 'Sin nombre',
-            selection: memoObj.selection
-          }
-        };
-
-        const result = await callVerifyWithRetries(payload, 6, 2000);
-        if (result.ok) {
-          status('Compra verificada y registrada ✔️');
-          console.log('Venta registrada:', result.json.sale);
-          // Optionally disable selection or mark sold on UI
-        } else {
-          const errJson = result.json || {};
-          status('Error registrando compra: ' + (errJson.error || 'unknown'), true);
-          console.error('verify-purchase error', errJson);
-        }
+        showStatus('✅ Compra simulada. Todo OK', 'success');
+        setTimeout(() => {
+          modal.style.display = 'none';
+          document.getElementById('projectName').value = '';
+          document.getElementById('projectURL').value = '';
+          document.getElementById('projectLogo').value = '';
+          paymentStatus.textContent = '';
+          payBtn.disabled = false;
+        }, 1000);
 
       } catch (err) {
-        console.error('Error en pago:', err);
-        status('Error en pago: ' + (err.message || err.toString()), true);
+        console.error(err);
+        showStatus('❌ ' + (err.message || err), 'error');
+        payBtn.disabled = false;
       }
-    }
-
-    buyBtn.addEventListener('click', payAndRegister);
-
-    // Initialize: load config then try to auto-connect wallet if possible
-    (async function init() {
-      await loadConfig();
-      // If phantom is available and auto-approve is set, you may try auto-connect
-      if (window.solana && window.solana.isPhantom) {
-        // Optionally detect if already connected
-        try {
-          const resp = await window.solana.connect({ onlyIfTrusted: true }).catch(() => null);
-          if (resp && resp.publicKey) {
-            userPublicKey = resp.publicKey;
-            walletConnected = true;
-            connectBtn.textContent = 'Conectado: ' + String(userPublicKey).slice(0,6) + '...';
-            status('Wallet conectada (auto)');
-            updatePrice();
-          }
-        } catch (e) {
-          // ignore
-        }
-      }
-      status('Listo');
-    })();
+    });
   </script>
 </body>
 </html>
