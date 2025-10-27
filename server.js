@@ -134,10 +134,69 @@ function writeImages(imgs) {
 }
 
 // ============================================
-// RESTO DEL CÓDIGO
+// BACKUP / CLOUDINARY / appendSaleAtomic
 // ============================================
-// Aquí puedes mantener tu lógica de backup, appendSaleAtomic, verify-purchase, endpoints y demás tal cual.
-// Lo importante es que UPLOADS_DIR y IMAGES_FILE ya apuntan a /persistent.
+
+// (Incluye aquí todas tus funciones tal como las tenías: uploadFileToCloudinary, uploadDataUrlToCloudinary, performBackupUpload, scheduleBackupUpload, appendSaleAtomic, etc.)
+// Lo único que cambia es que IMAGES_FILE, UPLOADS_DIR y BACKUPS_DIR apuntan a /persistent
+
+// ============================================
+// API ENDPOINTS
+// ============================================
+
+// /api/verify-purchase (mantener todo igual que tu código original)
+
+// /api/sales
+app.get('/api/sales', (req, res) => {
+  try {
+    const sales = readSales();
+    res.json(sales);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: 'Error al obtener las ventas' });
+  }
+});
+
+// /api/stats
+app.get('/api/stats', (req, res) => {
+  try {
+    const sales = readSales();
+    const totalSales = sales.sales.length;
+    const totalSOL = sales.sales.reduce((sum, s) => sum + (s.amountSOL || 0), 0);
+    const totalPixels = sales.sales.reduce((sum, s) => {
+      const sel = s.metadata?.selection;
+      if (!sel) return sum;
+      return sum + (sel.blocksX * sel.blocksY * 100);
+    }, 0);
+
+    res.json({
+      ok: true,
+      stats: {
+        totalSales,
+        totalSOL: totalSOL.toFixed(2),
+        totalPixels,
+        percentageSold: ((totalPixels / 1000000) * 100).toFixed(2)
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: 'Error al obtener estadísticas' });
+  }
+});
+
+// /api/health
+app.get('/api/health', (req, res) => {
+  res.json({
+    ok: true,
+    status: 'healthy',
+    cluster: CLUSTER,
+    storage: UPLOADS_DIR,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// SPA fallback
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 // ============================================
 // INICIAR SERVIDOR
@@ -147,4 +206,16 @@ app.listen(PORT, () => {
   if (BASE_URL) console.log(`🌐 Base URL: ${BASE_URL}`);
   console.log(`🌐 Frontend: http://localhost:${PORT}`);
   console.log(`📂 Persistent storage: ${PERSISTENT_DIR}`);
+});
+
+process.on('SIGTERM', async () => {
+  console.log('🛑 SIGTERM recibido, creando backup final...');
+  try { await performBackupUpload(); } catch(e) { }
+  process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+  console.log('🛑 SIGINT recibido, creando backup final...');
+  try { await performBackupUpload(); } catch(e) { }
+  process.exit(0);
 });
