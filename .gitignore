@@ -1,12 +1,38 @@
+# Dependencies
 node_modules/
+package-lock.json
+
+# Environment variables (NUNCA subir)
 .env
 .env.local
+.env.production
+
+# Archivos de datos
+sales.json
+uploads/
+/persistent/
+
+# Logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Sistema operativo
 .DS_Store
 Thumbs.db
-backups/
-uploads/*.png
-uploads/*.jpg
-uploads/*.jpeg
-uploads/*.gif
-!uploads/.gitkeep
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Build
+dist/
+build/
+
+# Temporal
+tmp/
+temp/
