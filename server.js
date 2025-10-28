@@ -7,7 +7,7 @@ const fs = require('fs');
 const { Connection, PublicKey, clusterApiUrl } = require('@solana/web3.js');
 
 const app = express();
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 3000;
 
 // ===== CONFIGURACIÓN =====
 const CLUSTER = process.env.CLUSTER || 'mainnet-beta';
