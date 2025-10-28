@@ -21,92 +21,6 @@
       display: flex; 
       justify-content: space-between; 
       align-items: center;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.5);
-      backdrop-filter: blur(10px);
-    }
-    .logo { 
-      font-size: 32px; 
-      font-weight: bold; 
-      display: flex; 
-      align-items: center; 
-      gap: 15px;
-    }
-    .logo img {
-      width: 50px;
-      height: 50px;
-      object-fit: contain;
-    }
-    .connectBtn { 
-      padding: 10px 20px; 
-      background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-      border: none; 
-      border-radius: 8px; 
-      color: #fff; 
-      cursor: pointer;
-      font-weight: bold;
-      transition: transform 0.2s;
-    }
-    .connectBtn:hover { transform: scale(1.05); }
-    .connectBtn:disabled { 
-      background: #666; 
-      cursor: not-allowed;
-      transform: none;
-    }
-    
-    #info { 
-      padding: 15px; 
-      background: rgba(51, 51, 51, 0.8); 
-      text-align: center;
-      backdrop-filter: blur(10px);
-    }
-    
-    #stats {
-      display: flex;
-      justify-content: center;
-      gap: 30px;
-      padding: 10px;
-      flex-wrap: wrap;
-    }
-    .stat-item {
-      text-align: center;
-    }
-    .stat-value {
-      font-size: 24px;
-      font-weight: bold;
-      color: gold;
-    }
-    .stat-label {
-      font-size: 12px;
-      color: #aaa;
-      text-transform: uppercase;
-    }
-    
-    #gridWrapper { 
-      display: flex; 
-      justify-content: center; 
-      padding: 20px;
-    }
-    #gridContainer { 
-      position: relative; 
-      display: inline-block; 
-      border: 3px solid #444;
-      border-radius: 8px;
-      overflow: hidden;
-      box-shadow: 0 0 30px rgba(255, 215, 0, 0.3);
-    }
-    #canvas { 
-      display: block; 
-      cursor: pointer; 
-      image-rendering: pixelated; 
-      background: #555;
-    }
-    #selectionOverlay { 
-      position: absolute; 
-      pointer-events: none; 
-      display: none; 
-      z-index: 20; 
-      background: rgba(0, 255, 255, 0.1);
-      border: 2px solid cyan;
       box-shadow: 0 0 10px cyan;
     }
     #tooltip { 
@@ -414,8 +328,8 @@
   const PRICE_GOLD = 1.0;
   const PRICE_SILVER = 0.5;
   const PRICE_BRONZE = 0.1;
-  const PRICE_OWNER = 0.0001; // 🌟 Precio especial para el owner
-  const OWNER_WALLET = 'B7nB9QX1KC4QXp5GMxR8xzh3yzoqp6NjxSwfNBXtgPc1'; // 🌟 Wallet del owner
+  const PRICE_OWNER = 0.0001;
+  const OWNER_WALLET = 'B7nB9QX1KC4QXp5GMxR8xzh3yzoqp6NjxSwfNBXtgPc1';
   const API_BASE = window.location.origin;
   
   const GOLD_END = 24;
@@ -456,9 +370,9 @@
   let selection = null;
   let userPublicKey = null;
   let MERCHANT_WALLET = null;
-  let isOwner = false; // 🌟 Flag para saber si es el owner
+  let isOwner = false;
 
-  // ===== CARGAR CONFIGURACIÓN DEL SERVIDOR =====
+  // ===== CARGAR CONFIGURACIÓN =====
   async function loadConfig() {
     try {
       const res = await fetch(`${API_BASE}/api/config`);
@@ -472,18 +386,15 @@
     }
   }
 
-  // 🌟 Función para verificar si la wallet es del owner
   function checkIfOwner(walletAddress) {
     return walletAddress === OWNER_WALLET;
   }
 
-  // 🌟 Función para obtener el precio según wallet y zona
   function getPriceForBlock(zone) {
     if (isOwner) {
-      return PRICE_OWNER; // 0.0001 SOL para el owner
+      return PRICE_OWNER;
     }
     
-    // Precios normales según zona
     if (zone === 'gold') return PRICE_GOLD;
     if (zone === 'silver') return PRICE_SILVER;
     if (zone === 'bronze') return PRICE_BRONZE;
@@ -720,14 +631,12 @@
       userPublicKey = resp.publicKey;
       const walletString = userPublicKey.toString();
       
-      // 🌟 Verificar si es el owner
       isOwner = checkIfOwner(walletString);
       
       walletAddrSpan.textContent = walletString.slice(0, 4) + '...' + walletString.slice(-4);
       connectBtn.textContent = 'Conectado ✓';
       connectBtn.style.background = '#28a745';
       
-      // 🌟 Mostrar badge si es owner
       if (isOwner) {
         ownerBadge.style.display = 'inline-block';
         console.log('⭐ OWNER WALLET DETECTADA - Precio especial: 0.0001 SOL/bloque');
@@ -799,80 +708,6 @@
       }
     }
     
-    const freeBlocks = blocksTotal - soldInSelection;
-    
-    // 🌟 Calcular precio según si es owner o no
-    const pricePerBlock = getPriceForBlock(startZone);
-    const totalPrice = (freeBlocks * pricePerBlock).toFixed(4);
-    
-    // Actualizar el monto de selección actual
-    if (startZone !== endZone) {
-      selectionAmountSpan.textContent = '-';
-    } else {
-      selectionAmountSpan.textContent = (blocksTotal * pricePerBlock).toFixed(4);
-    }
-    
-    if (startZone !== endZone) {
-      selectionInfo.innerHTML = `❌ Selección inválida: No puedes mezclar zonas diferentes`;
-      selectionOverlay.style.border = '3px solid #dc3545';
-      selectionOverlay.style.boxShadow = '0 0 10px #dc3545';
-    } else if (soldInSelection > 0) {
-      selectionInfo.innerHTML = `⚠️ Selección: ${blocksX}×${blocksY} bloques (${getZoneName(startZone)}) | <span class="error">Ocupados: ${soldInSelection}</span> | Disponibles: ${freeBlocks} | Precio: ${totalPrice} SOL`;
-      selectionOverlay.style.border = '3px solid #dc3545';
-      selectionOverlay.style.boxShadow = '0 0 10px #dc3545';
-    } else {
-      selectionInfo.innerHTML = `✓ Selección: ${blocksX}×${blocksY} bloques (${getZoneName(startZone)}) | Precio: ${(blocksTotal * pricePerBlock).toFixed(4)} SOL`;
-      selectionOverlay.style.border = '3px solid cyan';
-      selectionOverlay.style.boxShadow = '0 0 10px cyan';
-    }
-    
-    const scale = canvas.getBoundingClientRect().width / CANVAS_SIZE;
-    selectionOverlay.style.display = 'block';
-    selectionOverlay.style.left = (minX * scale) + 'px';
-    selectionOverlay.style.top = (minY * scale) + 'px';
-    selectionOverlay.style.width = (width * scale) + 'px';
-    selectionOverlay.style.height = (height * scale) + 'px';
-  }
-
-  function handleUp(e) {
-    if (!isDragging) return;
-    isDragging = false;
-    
-    if (endX === undefined || endY === undefined) {
-      selection = null;
-      return;
-    }
-    
-    const minX = Math.min(startX, endX);
-    const maxX = Math.max(startX, endX);
-    const minY = Math.min(startY, endY);
-    const maxY = Math.max(startY, endY);
-    
-    const minBlockX = minX / BLOCK_SIZE;
-    const minBlockY = minY / BLOCK_SIZE;
-    const maxBlockX = maxX / BLOCK_SIZE;
-    const maxBlockY = maxY / BLOCK_SIZE;
-    
-    const startZone = getZone(minBlockY);
-    const endZone = getZone(maxBlockY);
-    
-    if (startZone !== endZone) {
-      alert(`❌ No puedes seleccionar bloques de zonas diferentes.`);
-      selection = null;
-      selectionOverlay.style.display = 'none';
-      selectionInfo.textContent = '';
-      selectionAmountSpan.textContent = '-';
-      confirmBtn.disabled = true;
-      return;
-    }
-    
-    let soldInSelection = 0;
-    for (let by = minBlockY; by <= maxBlockY; by++) {
-      for (let bx = minBlockX; bx <= maxBlockX; bx++) {
-        if (isBlockSold(bx, by)) soldInSelection++;
-      }
-    }
-    
     selection = {
       minBlockX,
       minBlockY,
@@ -926,13 +761,11 @@
     }
     
     const blocksTotal = selection.blocksX * selection.blocksY;
-    // 🌟 Usar precio según si es owner
     const pricePerBlock = getPriceForBlock(selection.zone);
     const totalPrice = (blocksTotal * pricePerBlock).toFixed(4);
     
     document.getElementById('totalPrice').textContent = totalPrice;
     
-    // 🌟 Mostrar nota de precio especial si es owner
     const ownerNote = document.getElementById('ownerPriceNote');
     if (isOwner) {
       ownerNote.style.display = 'block';
@@ -956,7 +789,30 @@
     document.getElementById('paymentStatus').textContent = '';
   });
 
-  // ===== PAGO =====
+  // ===== FUNCIÓN AUXILIAR PARA RESETEAR UI =====
+  function resetPaymentUI() {
+    const payBtn = document.getElementById('payBtn');
+    payBtn.disabled = false;
+    payBtn.textContent = '💰 Pagar y Registrar';
+  }
+
+  function resetAfterPurchase() {
+    document.getElementById('modal').style.display = 'none';
+    selection = null;
+    selectionOverlay.style.display = 'none';
+    selectionInfo.textContent = '';
+    selectionAmountSpan.textContent = '-';
+    confirmBtn.disabled = true;
+    
+    document.getElementById('projectName').value = '';
+    document.getElementById('projectURL').value = '';
+    document.getElementById('projectLogo').value = '';
+    document.getElementById('paymentStatus').textContent = '';
+    
+    resetPaymentUI();
+  }
+
+  // ===== PAGO (CORREGIDO) =====
   function showStatus(message, type = 'info') {
     const statusEl = document.getElementById('paymentStatus');
     statusEl.textContent = message;
@@ -1028,7 +884,6 @@
       showStatus('💰 Preparando transacción...', 'warning');
       
       const blocksTotal = savedSelection.blocksX * savedSelection.blocksY;
-      // 🌟 Usar precio especial si es owner
       const pricePerBlock = getPriceForBlock(savedSelection.zone);
       const totalLamports = Math.floor(blocksTotal * pricePerBlock * solanaWeb3.LAMPORTS_PER_SOL);
       
@@ -1068,12 +923,12 @@
       
       console.log('✅ Transacción enviada. Signature:', signature);
       
-      // 5. ESPERAR CONFIRMACIÓN
-      showStatus('⏳ Esperando confirmación (puede tardar hasta 60s)...', 'warning');
+      // 5. ESPERAR CONFIRMACIÓN (REDUCIDO A 30s)
+      showStatus('⏳ Esperando confirmación (máx 30s)...', 'warning');
       
       let confirmed = false;
       let attempts = 0;
-      const maxAttempts = 60;
+      const maxAttempts = 30; // 🔧 Reducido de 60 a 30 segundos
       
       while (!confirmed && attempts < maxAttempts) {
         try {
@@ -1111,8 +966,8 @@
       }
       
       if (!confirmed) {
-        console.warn('⏳ Timeout alcanzado');
-        showStatus('⏳ Timeout - Intentando guardar...', 'warning');
+        console.warn('⏳ Timeout alcanzado después de 30s');
+        showStatus('⏳ Guardando (verifica después en Phantom)...', 'warning');
       }
       
       // 6. GUARDAR VENTA
@@ -1159,27 +1014,23 @@
       console.log('✅ Venta guardada:', saveJson);
       console.log('🔗 Ver en Solscan: https://solscan.io/tx/' + signature);
       
-      // 7. RECARGAR GRID
+      // 7. RECARGAR GRID (CORREGIDO)
       setTimeout(async () => {
-        document.getElementById('modal').style.display = 'none';
-        selection = null;
-        selectionOverlay.style.display = 'none';
-        selectionInfo.textContent = '';
-        selectionAmountSpan.textContent = '-';
-        confirmBtn.disabled = true;
-        
-        document.getElementById('projectName').value = '';
-        document.getElementById('projectURL').value = '';
-        document.getElementById('projectLogo').value = '';
-        document.getElementById('paymentStatus').textContent = '';
+        resetAfterPurchase();
         
         loadingEl.style.display = 'flex';
-        await loadGridFromServer();
         
-        if (confirmed) {
-          alert('🎉 ¡Compra exitosa! Tu proyecto ya está en el grid.');
-        } else {
-          alert('⏳ Compra registrada. La transacción puede tardar en confirmarse.\n\nVerifica en Phantom o Solscan.');
+        try {
+          await loadGridFromServer();
+          
+          if (confirmed) {
+            alert('🎉 ¡Compra exitosa! Tu proyecto ya está en el grid.');
+          } else {
+            alert('⏳ Compra registrada. La transacción puede tardar en confirmarse.\n\nVerifica en Phantom o Solscan:\nhttps://solscan.io/tx/' + signature);
+          }
+        } catch (err) {
+          console.error('Error recargando grid:', err);
+          alert('⚠️ Compra registrada pero hubo un error al recargar el grid. Por favor recarga la página manualmente.');
         }
       }, 2000);
       
@@ -1200,8 +1051,8 @@
       
       showStatus(errorMsg, 'error');
       
-      payBtn.disabled = false;
-      payBtn.textContent = '💰 Pagar y Registrar';
+      // 🔧 CRÍTICO: Resetear botón siempre que haya error
+      resetPaymentUI();
       
       alert(errorMsg);
     }
@@ -1228,4 +1079,161 @@
   });
   </script>
 </body>
-</html>
+</html>Selection = 0;
+    for (let by = minBlockY; by <= maxBlockY; by++) {
+      for (let bx = minBlockX; bx <= maxBlockX; bx++) {
+        if (isBlockSold(bx, by)) soldInSelection++;
+      }
+    }
+    
+    const freeBlocks = blocksTotal - soldInSelection;
+    const pricePerBlock = getPriceForBlock(startZone);
+    const totalPrice = (freeBlocks * pricePerBlock).toFixed(4);
+    
+    if (startZone !== endZone) {
+      selectionAmountSpan.textContent = '-';
+    } else {
+      selectionAmountSpan.textContent = (blocksTotal * pricePerBlock).toFixed(4);
+    }
+    
+    if (startZone !== endZone) {
+      selectionInfo.innerHTML = `❌ Selección inválida: No puedes mezclar zonas diferentes`;
+      selectionOverlay.style.border = '3px solid #dc3545';
+      selectionOverlay.style.boxShadow = '0 0 10px #dc3545';
+    } else if (soldInSelection > 0) {
+      selectionInfo.innerHTML = `⚠️ Selección: ${blocksX}×${blocksY} bloques (${getZoneName(startZone)}) | <span class="error">Ocupados: ${soldInSelection}</span> | Disponibles: ${freeBlocks} | Precio: ${totalPrice} SOL`;
+      selectionOverlay.style.border = '3px solid #dc3545';
+      selectionOverlay.style.boxShadow = '0 0 10px #dc3545';
+    } else {
+      selectionInfo.innerHTML = `✓ Selección: ${blocksX}×${blocksY} bloques (${getZoneName(startZone)}) | Precio: ${(blocksTotal * pricePerBlock).toFixed(4)} SOL`;
+      selectionOverlay.style.border = '3px solid cyan';
+      selectionOverlay.style.boxShadow = '0 0 10px cyan';
+    }
+    
+    const scale = canvas.getBoundingClientRect().width / CANVAS_SIZE;
+    selectionOverlay.style.display = 'block';
+    selectionOverlay.style.left = (minX * scale) + 'px';
+    selectionOverlay.style.top = (minY * scale) + 'px';
+    selectionOverlay.style.width = (width * scale) + 'px';
+    selectionOverlay.style.height = (height * scale) + 'px';
+  }
+
+  function handleUp(e) {
+    if (!isDragging) return;
+    isDragging = false;
+    
+    if (endX === undefined || endY === undefined) {
+      selection = null;
+      return;
+    }
+    
+    const minX = Math.min(startX, endX);
+    const maxX = Math.max(startX, endX);
+    const minY = Math.min(startY, endY);
+    const maxY = Math.max(startY, endY);
+    
+    const minBlockX = minX / BLOCK_SIZE;
+    const minBlockY = minY / BLOCK_SIZE;
+    const maxBlockX = maxX / BLOCK_SIZE;
+    const maxBlockY = maxY / BLOCK_SIZE;
+    
+    const startZone = getZone(minBlockY);
+    const endZone = getZone(maxBlockY);
+    
+    if (startZone !== endZone) {
+      alert(`❌ No puedes seleccionar bloques de zonas diferentes.`);
+      selection = null;
+      selectionOverlay.style.display = 'none';
+      selectionInfo.textContent = '';
+      selectionAmountSpan.textContent = '-';
+      confirmBtn.disabled = true;
+      return;
+    }
+    
+    let soldIn 0 2px 10px rgba(0,0,0,0.5);
+      backdrop-filter: blur(10px);
+    }
+    .logo { 
+      font-size: 32px; 
+      font-weight: bold; 
+      display: flex; 
+      align-items: center; 
+      gap: 15px;
+    }
+    .logo img {
+      width: 50px;
+      height: 50px;
+      object-fit: contain;
+    }
+    .connectBtn { 
+      padding: 10px 20px; 
+      background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+      border: none; 
+      border-radius: 8px; 
+      color: #fff; 
+      cursor: pointer;
+      font-weight: bold;
+      transition: transform 0.2s;
+    }
+    .connectBtn:hover { transform: scale(1.05); }
+    .connectBtn:disabled { 
+      background: #666; 
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    #info { 
+      padding: 15px; 
+      background: rgba(51, 51, 51, 0.8); 
+      text-align: center;
+      backdrop-filter: blur(10px);
+    }
+    
+    #stats {
+      display: flex;
+      justify-content: center;
+      gap: 30px;
+      padding: 10px;
+      flex-wrap: wrap;
+    }
+    .stat-item {
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 24px;
+      font-weight: bold;
+      color: gold;
+    }
+    .stat-label {
+      font-size: 12px;
+      color: #aaa;
+      text-transform: uppercase;
+    }
+    
+    #gridWrapper { 
+      display: flex; 
+      justify-content: center; 
+      padding: 20px;
+    }
+    #gridContainer { 
+      position: relative; 
+      display: inline-block; 
+      border: 3px solid #444;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 0 30px rgba(255, 215, 0, 0.3);
+    }
+    #canvas { 
+      display: block; 
+      cursor: pointer; 
+      image-rendering: pixelated; 
+      background: #555;
+    }
+    #selectionOverlay { 
+      position: absolute; 
+      pointer-events: none; 
+      display: none; 
+      z-index: 20; 
+      background: rgba(0, 255, 255, 0.1);
+      border: 2px solid cyan;
+      box-shadow:
