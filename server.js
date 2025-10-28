@@ -9,7 +9,25 @@ const PORT = process.env.PORT || 3000;
 
 // ===== CONFIGURACIÓN =====
 const CLUSTER = process.env.SOLANA_CLUSTER || 'devnet';
-const MERCHANT_WALLET = process.env.MERCHANT_WALLET || 'TU_WALLET_AQUI';
+const MERCHANT_WALLET = process.env.MERCHANT_WALLET;
+
+// Validar configuración crítica
+if (!MERCHANT_WALLET || MERCHANT_WALLET === 'TU_WALLET_AQUI') {
+  console.error('❌ ERROR CRÍTICO: MERCHANT_WALLET no está configurada');
+  console.error('⚠️  Configura la variable de entorno MERCHANT_WALLET en Render');
+  console.error('📝 Ejemplo: MERCHANT_WALLET=B7nB9QX1KC4QXp5GMxR8xzh3yzoqp6NjxSwfNBXtgPc1');
+}
+
+// Validar formato de wallet
+try {
+  if (MERCHANT_WALLET && MERCHANT_WALLET !== 'TU_WALLET_AQUI') {
+    new PublicKey(MERCHANT_WALLET);
+    console.log('✅ MERCHANT_WALLET válida');
+  }
+} catch (err) {
+  console.error('❌ ERROR: MERCHANT_WALLET tiene formato inválido:', MERCHANT_WALLET);
+  console.error('⚠️  Debe ser una dirección válida de Solana (base58)');
+}
 
 // Rutas de almacenamiento persistente
 const PERSISTENT_DIR = process.env.RENDER ? '/persistent' : path.join(__dirname, 'persistent');
