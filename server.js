@@ -224,10 +224,10 @@ function writeSales(data) {
   }
 }
 
-// ===== FUNCIONES DE TELEGRAM (ARREGLADO - ESCAPE MARKDOWN) =====
-function escapeMarkdown(text) {
-  // Escapar caracteres especiales de Markdown
-  return text.replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, '\\$1');
+// ===== FUNCIONES DE TELEGRAM (ARREGLADO - ESCAPE COMPLETO) =====
+function escapeMarkdownV2(text) {
+  // Escapar TODOS los caracteres especiales de MarkdownV2
+  return String(text).replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, '\\$1');
 }
 
 async function sendTelegramNotification(saleData) {
@@ -237,8 +237,6 @@ async function sendTelegramNotification(saleData) {
   
   if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
     console.log('⚠️ Telegram NO configurado');
-    console.log('   BOT_TOKEN:', TELEGRAM_BOT_TOKEN ? 'SÍ' : 'NO');
-    console.log('   CHAT_ID:', TELEGRAM_CHAT_ID ? 'SÍ' : 'NO');
     return { ok: true, skipped: true };
   }
 
@@ -262,11 +260,18 @@ async function sendTelegramNotification(saleData) {
     const amount = saleData.amount.toFixed(4);
     const isOwnerWallet = saleData.buyer === OWNER_WALLET;
     
-    // 🔧 CRÍTICO: Escapar caracteres especiales de Markdown
-    const safeName = escapeMarkdown(meta.name);
-    const safeUrl = escapeMarkdown(meta.url);
-    const safeBuyer = escapeMarkdown(saleData.buyer);
-    const safeSignature = escapeMarkdown(saleData.signature);
+    // 🔧 Escapar TODOS los datos
+    const safeName = escapeMarkdownV2(meta.name);
+    const safeUrl = escapeMarkdownV2(meta.url);
+    const safeAmount = escapeMarkdownV2(amount);
+    const safeBlocksTotal = escapeMarkdownV2(blocksTotal);
+    const safeBlocksX = escapeMarkdownV2(sel.blocksX);
+    const safeBlocksY = escapeMarkdownV2(sel.blocksY);
+    const safeRow = escapeMarkdownV2(sel.minBlockY + 1);
+    const safeCol = escapeMarkdownV2(sel.minBlockX + 1);
+    const safeBuyerStart = escapeMarkdownV2(saleData.buyer.substring(0, 8));
+    const safeBuyerEnd = escapeMarkdownV2(saleData.buyer.substring(saleData.buyer.length - 8));
+    const safeDate = escapeMarkdownV2(new Date(saleData.timestamp).toLocaleString('es-ES', { timeZone: 'Europe/Madrid' }));
     
     let message;
     
@@ -279,18 +284,18 @@ ${zoneEmoji} *Zona:* ${zone}
 📊 *Datos de la compra:*
 • Proyecto: *${safeName}*
 • URL: ${safeUrl}
-• Bloques: *${blocksTotal}* \\(${sel.blocksX}×${sel.blocksY}\\)
-• Posición: Fila ${sel.minBlockY + 1}, Columna ${sel.minBlockX + 1}
+• Bloques: *${safeBlocksTotal}* \\(${safeBlocksX}×${safeBlocksY}\\)
+• Posición: Fila ${safeRow}, Columna ${safeCol}
 
 💰 *Pago:*
-• Monto: *${amount} SOL*
+• Monto: *${safeAmount} SOL*
 • Precio/bloque: *0\\.0001 SOL* 🌟
-• Comprador: \`${safeBuyer.substring(0, 8)}\\.\\.\\.${safeBuyer.substring(safeBuyer.length - 8)}\`
+• Comprador: \`${safeBuyerStart}\\.\\.\\.${safeBuyerEnd}\`
 
 🔗 *Transacción:*
-[Ver en Solscan](https://solscan.io/tx/${safeSignature})
+[Ver en Solscan](https://solscan\\.io/tx/${saleData.signature})
 
-⏰ ${new Date(saleData.timestamp).toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}`;
+⏰ ${safeDate}`;
     } else {
       message = `🎉 *¡NUEVA COMPRA EN SOLANA MILLION GRID\\!*
 
@@ -299,17 +304,17 @@ ${zoneEmoji} *Zona:* ${zone}
 📊 *Datos de la compra:*
 • Proyecto: *${safeName}*
 • URL: ${safeUrl}
-• Bloques: *${blocksTotal}* \\(${sel.blocksX}×${sel.blocksY}\\)
-• Posición: Fila ${sel.minBlockY + 1}, Columna ${sel.minBlockX + 1}
+• Bloques: *${safeBlocksTotal}* \\(${safeBlocksX}×${safeBlocksY}\\)
+• Posición: Fila ${safeRow}, Columna ${safeCol}
 
 💰 *Pago:*
-• Monto: *${amount} SOL*
-• Comprador: \`${safeBuyer.substring(0, 8)}\\.\\.\\.${safeBuyer.substring(safeBuyer.length - 8)}\`
+• Monto: *${safeAmount} SOL*
+• Comprador: \`${safeBuyerStart}\\.\\.\\.${safeBuyerEnd}\`
 
 🔗 *Transacción:*
-[Ver en Solscan](https://solscan.io/tx/${safeSignature})
+[Ver en Solscan](https://solscan\\.io/tx/${saleData.signature})
 
-⏰ ${new Date(saleData.timestamp).toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}`;
+⏰ ${safeDate}`;
     }
 
     console.log('📝 Mensaje preparado (longitud:', message.length, 'chars)');
@@ -329,7 +334,7 @@ ${zoneEmoji} *Zona:* ${zone}
     formData.append('chat_id', TELEGRAM_CHAT_ID);
     formData.append('photo', logoUrl);
     formData.append('caption', message);
-    formData.append('parse_mode', 'MarkdownV2'); // 🔧 Usar MarkdownV2 en lugar de Markdown
+    formData.append('parse_mode', 'MarkdownV2');
 
     console.log('🚀 Enviando request a Telegram API...');
     console.log('   Chat ID:', TELEGRAM_CHAT_ID);
@@ -345,7 +350,7 @@ ${zoneEmoji} *Zona:* ${zone}
     console.log('📥 Respuesta recibida - Status:', response.status);
 
     const result = await response.json();
-    console.log('📦 Resultado:', JSON.stringify(result, null, 2));
+    console.log('📦 Resultado OK:', result.ok);
     
     if (result.ok) {
       console.log('✅ ¡TELEGRAM ENVIADO CORRECTAMENTE!');
@@ -355,7 +360,6 @@ ${zoneEmoji} *Zona:* ${zone}
       return { ok: true, sent: true };
     } else {
       console.error('❌ ERROR EN RESPUESTA DE TELEGRAM');
-      console.error('   ok:', result.ok);
       console.error('   error_code:', result.error_code);
       console.error('   description:', result.description);
       return { ok: false, error: result.description };
@@ -363,7 +367,6 @@ ${zoneEmoji} *Zona:* ${zone}
   } catch (err) {
     console.error('❌ EXCEPCIÓN EN sendTelegramNotification');
     console.error('   Error:', err.message);
-    console.error('   Stack:', err.stack);
     return { ok: false, error: err.message };
   } finally {
     console.log('=== FIN DEBUG TELEGRAM ===\n');
