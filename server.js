@@ -224,20 +224,30 @@ function writeSales(data) {
   }
 }
 
-// ===== FUNCIONES DE TELEGRAM (MEJORADO) =====
+// ===== FUNCIONES DE TELEGRAM (ARREGLADO - ESCAPE MARKDOWN) =====
+function escapeMarkdown(text) {
+  // Escapar caracteres especiales de Markdown
+  return text.replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, '\\$1');
+}
+
 async function sendTelegramNotification(saleData) {
+  console.log('\n🔍 === DEBUG TELEGRAM ===');
+  console.log('TELEGRAM_BOT_TOKEN existe?', !!TELEGRAM_BOT_TOKEN);
+  console.log('TELEGRAM_CHAT_ID existe?', !!TELEGRAM_CHAT_ID);
+  
   if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
-    console.log('⚠️ Telegram no configurado, omitiendo notificación');
+    console.log('⚠️ Telegram NO configurado');
+    console.log('   BOT_TOKEN:', TELEGRAM_BOT_TOKEN ? 'SÍ' : 'NO');
+    console.log('   CHAT_ID:', TELEGRAM_CHAT_ID ? 'SÍ' : 'NO');
     return { ok: true, skipped: true };
   }
 
   try {
-    console.log('📱 Preparando notificación de Telegram...');
+    console.log('📱 Preparando notificación...');
     
     const meta = saleData.metadata;
     const sel = meta.selection;
     
-    // Determinar zona
     let zone = '🥉 BRONCE';
     let zoneEmoji = '🥉';
     if (sel.minBlockY <= 24) {
@@ -252,55 +262,61 @@ async function sendTelegramNotification(saleData) {
     const amount = saleData.amount.toFixed(4);
     const isOwnerWallet = saleData.buyer === OWNER_WALLET;
     
-    // Crear mensaje
+    // 🔧 CRÍTICO: Escapar caracteres especiales de Markdown
+    const safeName = escapeMarkdown(meta.name);
+    const safeUrl = escapeMarkdown(meta.url);
+    const safeBuyer = escapeMarkdown(saleData.buyer);
+    const safeSignature = escapeMarkdown(saleData.signature);
+    
     let message;
     
     if (isOwnerWallet) {
-      message = `🎉 *¡NUEVA COMPRA EN SOLANA MILLION GRID!*
+      message = `🎉 *¡NUEVA COMPRA EN SOLANA MILLION GRID\\!*
 
 ${zoneEmoji} *Zona:* ${zone}
-⭐ *COMPRA DEL OWNER - PRECIO ESPECIAL*
+⭐ *COMPRA DEL OWNER \\- PRECIO ESPECIAL*
 
 📊 *Datos de la compra:*
-• Proyecto: *${meta.name}*
-• URL: ${meta.url}
-• Bloques: *${blocksTotal}* (${sel.blocksX}×${sel.blocksY})
+• Proyecto: *${safeName}*
+• URL: ${safeUrl}
+• Bloques: *${blocksTotal}* \\(${sel.blocksX}×${sel.blocksY}\\)
 • Posición: Fila ${sel.minBlockY + 1}, Columna ${sel.minBlockX + 1}
 
 💰 *Pago:*
 • Monto: *${amount} SOL*
-• Precio/bloque: *0.0001 SOL* 🌟
-• Comprador: \`${saleData.buyer.substring(0, 8)}...${saleData.buyer.substring(saleData.buyer.length - 8)}\`
+• Precio/bloque: *0\\.0001 SOL* 🌟
+• Comprador: \`${safeBuyer.substring(0, 8)}\\.\\.\\.${safeBuyer.substring(safeBuyer.length - 8)}\`
 
 🔗 *Transacción:*
-[Ver en Solscan](https://solscan.io/tx/${saleData.signature})
+[Ver en Solscan](https://solscan.io/tx/${safeSignature})
 
 ⏰ ${new Date(saleData.timestamp).toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}`;
     } else {
-      message = `🎉 *¡NUEVA COMPRA EN SOLANA MILLION GRID!*
+      message = `🎉 *¡NUEVA COMPRA EN SOLANA MILLION GRID\\!*
 
 ${zoneEmoji} *Zona:* ${zone}
 
 📊 *Datos de la compra:*
-• Proyecto: *${meta.name}*
-• URL: ${meta.url}
-• Bloques: *${blocksTotal}* (${sel.blocksX}×${sel.blocksY})
+• Proyecto: *${safeName}*
+• URL: ${safeUrl}
+• Bloques: *${blocksTotal}* \\(${sel.blocksX}×${sel.blocksY}\\)
 • Posición: Fila ${sel.minBlockY + 1}, Columna ${sel.minBlockX + 1}
 
 💰 *Pago:*
 • Monto: *${amount} SOL*
-• Comprador: \`${saleData.buyer.substring(0, 8)}...${saleData.buyer.substring(saleData.buyer.length - 8)}\`
+• Comprador: \`${safeBuyer.substring(0, 8)}\\.\\.\\.${safeBuyer.substring(safeBuyer.length - 8)}\`
 
 🔗 *Transacción:*
-[Ver en Solscan](https://solscan.io/tx/${saleData.signature})
+[Ver en Solscan](https://solscan.io/tx/${safeSignature})
 
 ⏰ ${new Date(saleData.timestamp).toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}`;
     }
 
-    // Construir URL completa del logo
+    console.log('📝 Mensaje preparado (longitud:', message.length, 'chars)');
+
+    // Construir URL del logo
     let logoUrl = meta.logo;
     if (!logoUrl.startsWith('http')) {
-      // Si es ruta relativa, construir URL completa
       const host = process.env.RENDER ? 'https://www.solanamillondollar.com' : 'http://localhost:3000';
       logoUrl = `${host}${meta.logo}`;
     }
@@ -313,37 +329,44 @@ ${zoneEmoji} *Zona:* ${zone}
     formData.append('chat_id', TELEGRAM_CHAT_ID);
     formData.append('photo', logoUrl);
     formData.append('caption', message);
-    formData.append('parse_mode', 'Markdown');
+    formData.append('parse_mode', 'MarkdownV2'); // 🔧 Usar MarkdownV2 en lugar de Markdown
 
-    console.log('🚀 Enviando a Telegram...');
+    console.log('🚀 Enviando request a Telegram API...');
+    console.log('   Chat ID:', TELEGRAM_CHAT_ID);
     
     const response = await fetch(telegramApiUrl, {
       method: 'POST',
       body: formData,
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      timeout: 10000 // 10 segundos de timeout
+      }
     });
 
+    console.log('📥 Respuesta recibida - Status:', response.status);
+
     const result = await response.json();
+    console.log('📦 Resultado:', JSON.stringify(result, null, 2));
     
     if (result.ok) {
-      console.log('✅ ¡Notificación de Telegram enviada correctamente!');
+      console.log('✅ ¡TELEGRAM ENVIADO CORRECTAMENTE!');
       if (isOwnerWallet) {
-        console.log('⭐ Era una compra del OWNER');
+        console.log('⭐ Era compra del OWNER');
       }
       return { ok: true, sent: true };
     } else {
-      console.error('❌ Error en respuesta de Telegram:', result);
-      console.error('   Description:', result.description);
-      console.error('   Error code:', result.error_code);
+      console.error('❌ ERROR EN RESPUESTA DE TELEGRAM');
+      console.error('   ok:', result.ok);
+      console.error('   error_code:', result.error_code);
+      console.error('   description:', result.description);
       return { ok: false, error: result.description };
     }
   } catch (err) {
-    console.error('❌ Error crítico enviando a Telegram:', err.message);
+    console.error('❌ EXCEPCIÓN EN sendTelegramNotification');
+    console.error('   Error:', err.message);
     console.error('   Stack:', err.stack);
     return { ok: false, error: err.message };
+  } finally {
+    console.log('=== FIN DEBUG TELEGRAM ===\n');
   }
 }
 
