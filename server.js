@@ -88,6 +88,19 @@ if (TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID) {
   console.log('⚠️  Notificaciones de Telegram desactivadas (falta configuración)');
 }
 
+// ===== REDIRECCIÓN WWW =====
+app.use((req, res, next) => {
+  const host = req.get('host');
+  
+  // Si NO tiene www y NO es localhost, redirigir a www
+  if (host && !host.startsWith('www.') && !host.startsWith('localhost')) {
+    console.log(`🔀 Redirigiendo: ${host} → www.${host}`);
+    return res.redirect(301, `https://www.${host}${req.originalUrl}`);
+  }
+  
+  next();
+});
+
 // ===== MIDDLEWARE =====
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -304,7 +317,7 @@ ${zoneEmoji} *Zona:* ${zone}
     // Enviar mensaje con foto
     const logoUrl = meta.logo.startsWith('http') 
       ? meta.logo 
-      : `https://solanamilliongrid.onrender.com${meta.logo}`;
+      : `https://www.solanamillondollar.com${meta.logo}`;
 
     const telegramApiUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`;
     
@@ -578,5 +591,6 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`💰 Wallet: ${MERCHANT_WALLET}`);
   console.log(`⭐ Owner Wallet: ${OWNER_WALLET} (Precio especial: 0.0001 SOL/bloque)`);
   console.log(`⚠️  MODO: ${CLUSTER === 'mainnet-beta' ? '🔴 PRODUCCIÓN (SOL REAL)' : '🟡 DESARROLLO (SOL FALSO)'}`);
-  console.log(`📱 Telegram: ${TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID ? '✅ Activado' : '❌ Desactivado'}\n`);
+  console.log(`📱 Telegram: ${TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID ? '✅ Activado' : '❌ Desactivado'}`);
+  console.log(`🔀 Redirección WWW: ✅ Activada\n`);
 });
