@@ -13,6 +13,8 @@ const PORT = process.env.PORT || 10000;
 const CLUSTER = process.env.CLUSTER || 'mainnet-beta';
 const MERCHANT_WALLET = process.env.MERCHANT_WALLET;
 const RPC_URL = process.env.RPC_URL;
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
 // Validar configuración crítica
 if (!MERCHANT_WALLET || MERCHANT_WALLET === 'TU_WALLET_AQUI') {
@@ -83,6 +85,14 @@ console.log(`🌐 Cluster configurado: ${CLUSTER}`);
 console.log(`💰 Wallet del comerciante: ${MERCHANT_WALLET}`);
 console.log(`⚠️  MODO PRODUCCIÓN: Transacciones con SOL REAL`);
 
+// Verificar Telegram
+if (TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID) {
+  console.log('✅ Notificaciones de Telegram activadas');
+  console.log(`📱 Chat ID: ${TELEGRAM_CHAT_ID}`);
+} else {
+  console.log('⚠️  Notificaciones de Telegram desactivadas (falta configuración)');
+}
+
 // ===== MIDDLEWARE =====
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -151,6 +161,86 @@ function writeSales(data) {
   } catch (err) {
     console.error('❌ Error guardando sales.json:', err);
     return false;
+  }
+}
+
+// ===== FUNCIONES DE TELEGRAM =====
+async function sendTelegramNotification(saleData) {
+  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
+    console.log('⚠️ Telegram no configurado, omitiendo notificación');
+    return;
+  }
+
+  try {
+    const meta = saleData.metadata;
+    const sel = meta.selection;
+    
+    // Determinar zona
+    let zone = '🥉 BRONCE';
+    let zoneEmoji = '🥉';
+    if (sel.minBlockY <= 24) {
+      zone = '🥇 ORO';
+      zoneEmoji = '🥇';
+    } else if (sel.minBlockY >= 25 && sel.minBlockY <= 59) {
+      zone = '🥈 PLATA';
+      zoneEmoji = '🥈';
+    }
+    
+    const blocksTotal = sel.blocksX * sel.blocksY;
+    const amount = saleData.amount.toFixed(4);
+    
+    // Crear mensaje
+    const message = `
+🎉 *¡NUEVA COMPRA EN SOLANA MILLION GRID!*
+
+${zoneEmoji} *Zona:* ${zone}
+
+📊 *Datos de la compra:*
+• Proyecto: *${meta.name}*
+• URL: ${meta.url}
+• Bloques: *${blocksTotal}* (${sel.blocksX}×${sel.blocksY})
+• Posición: Fila ${sel.minBlockY + 1}, Columna ${sel.minBlockX + 1}
+
+💰 *Pago:*
+• Monto: *${amount} SOL*
+• Comprador: \`${saleData.buyer.substring(0, 8)}...${saleData.buyer.substring(saleData.buyer.length - 8)}\`
+
+🔗 *Transacción:*
+[Ver en Solscan](https://solscan.io/tx/${saleData.signature})
+
+⏰ ${new Date(saleData.timestamp).toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}
+`;
+
+    // Enviar mensaje con foto
+    const logoUrl = meta.logo.startsWith('http') 
+      ? meta.logo 
+      : `https://solanamilliongrid.onrender.com${meta.logo}`;
+
+    const telegramApiUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`;
+    
+    const formData = new URLSearchParams();
+    formData.append('chat_id', TELEGRAM_CHAT_ID);
+    formData.append('photo', logoUrl);
+    formData.append('caption', message);
+    formData.append('parse_mode', 'Markdown');
+
+    const response = await fetch(telegramApiUrl, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    });
+
+    const result = await response.json();
+    
+    if (result.ok) {
+      console.log('✅ Notificación enviada a Telegram');
+    } else {
+      console.error('❌ Error enviando a Telegram:', result.description);
+    }
+  } catch (err) {
+    console.error('❌ Error en notificación de Telegram:', err);
   }
 }
 
@@ -287,6 +377,11 @@ app.post('/api/save-sale', (req, res) => {
     console.log('✅ Venta guardada. Total ventas:', data.sales.length);
     console.log('💰 Monto:', saleData.amount, 'SOL');
     
+    // Enviar notificación a Telegram
+    sendTelegramNotification(saleData).catch(err => {
+      console.error('Error enviando notificación:', err);
+    });
+    
     res.json({ ok: true, message: 'Venta guardada correctamente' });
     
   } catch (err) {
@@ -320,7 +415,8 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     salesCount: data.sales.length,
     totalRevenue: totalRevenue.toFixed(4) + ' SOL',
-    merchantWallet: MERCHANT_WALLET
+    merchantWallet: MERCHANT_WALLET,
+    telegramEnabled: !!(TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID)
   });
 });
 
@@ -376,5 +472,6 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`📄 Archivo sales: ${SALES_FILE}`);
   console.log(`🌐 Cluster: ${CLUSTER}`);
   console.log(`💰 Wallet: ${MERCHANT_WALLET}`);
-  console.log(`⚠️  MODO: ${CLUSTER === 'mainnet-beta' ? '🔴 PRODUCCIÓN (SOL REAL)' : '🟡 DESARROLLO (SOL FALSO)'}\n`);
+  console.log(`⚠️  MODO: ${CLUSTER === 'mainnet-beta' ? '🔴 PRODUCCIÓN (SOL REAL)' : '🟡 DESARROLLO (SOL FALSO)'}`);
+  console.log(`📱 Telegram: ${TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID ? '✅ Activado' : '❌ Desactivado'}\n`);
 });
