@@ -300,8 +300,7 @@
 
   <header>
     <div class="logo">
-      <img src="https://i.postimg.cc/FKmB5hG4/imagen-2025-01-27-201104246-removebg-preview.png" alt="Solana Logo">
-      SOLANA MILLION DOLAR
+      SOLANA MILLION DOLLAR
     </div>
     <div>
       <button id="connectWallet" class="connectBtn">Conectar Wallet</button>
@@ -971,8 +970,8 @@
       // 2. PREPARAR TRANSACCIÓN
       showStatus('💰 Preparando transacción...', 'warning');
       
-      const blocksTotal = selection.blocksX * selection.blocksY;
-      const pricePerBlock = getPriceForZone(selection.zone);
+      const blocksTotal = savedSelection.blocksX * savedSelection.blocksY;
+      const pricePerBlock = getPriceForZone(savedSelection.zone);
       const totalLamports = Math.floor(blocksTotal * pricePerBlock * solanaWeb3.LAMPORTS_PER_SOL);
       
       const transaction = new solanaWeb3.Transaction().add(
@@ -1067,10 +1066,10 @@
           url: url,
           logo: logoUrl,
           selection: {
-            minBlockX: selection.minBlockX,
-            minBlockY: selection.minBlockY,
-            blocksX: selection.blocksX,
-            blocksY: selection.blocksY
+            minBlockX: savedSelection.minBlockX,
+            minBlockY: savedSelection.minBlockY,
+            blocksX: savedSelection.blocksX,
+            blocksY: savedSelection.blocksY
           }
         },
         amount: totalLamports / solanaWeb3.LAMPORTS_PER_SOL,
