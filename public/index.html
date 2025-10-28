@@ -312,15 +312,15 @@
     <div id="stats">
       <div class="stat-item">
         <div class="stat-value" id="goldSold">0/2,500</div>
-        <div class="stat-label">🥇 Bloques Oro</div>
+        <div class="stat-label">🥇 Bloques Oro (1 SOL)</div>
       </div>
       <div class="stat-item">
         <div class="stat-value" id="silverSold">0/3,500</div>
-        <div class="stat-label">🥈 Bloques Plata</div>
+        <div class="stat-label">🥈 Bloques Plata (0.5 SOL)</div>
       </div>
       <div class="stat-item">
         <div class="stat-value" id="bronzeSold">0/4,000</div>
-        <div class="stat-label">🥉 Bloques Bronce</div>
+        <div class="stat-label">🥉 Bloques Bronce (0.1 SOL)</div>
       </div>
       <div class="stat-item">
         <div class="stat-value" id="totalSales">0</div>
@@ -390,9 +390,9 @@
   const CANVAS_SIZE = 1000;
   const BLOCK_SIZE = 10;
   const BLOCKS_PER_SIDE = CANVAS_SIZE / BLOCK_SIZE;
-  const PRICE_GOLD = 0.001;   // Filas 0-24
-  const PRICE_SILVER = 0.0005; // Filas 25-59
-  const PRICE_BRONZE = 0.0001; // Filas 60-99
+  const PRICE_GOLD = 1.0;      // ORO: 1 SOL por bloque
+  const PRICE_SILVER = 0.5;    // PLATA: 0.5 SOL por bloque
+  const PRICE_BRONZE = 0.1;    // BRONCE: 0.1 SOL por bloque
   const API_BASE = window.location.origin;
   
   // Definir límites de zonas
@@ -498,9 +498,9 @@
   }
   
   function getZoneName(zone) {
-    if (zone === 'gold') return 'ORO';
-    if (zone === 'silver') return 'PLATA';
-    if (zone === 'bronze') return 'BRONCE';
+    if (zone === 'gold') return 'ORO (1 SOL/bloque)';
+    if (zone === 'silver') return 'PLATA (0.5 SOL/bloque)';
+    if (zone === 'bronze') return 'BRONCE (0.1 SOL/bloque)';
     return '';
   }
 
@@ -765,7 +765,7 @@
     }
     
     if (startZone !== endZone) {
-      selectionInfo.innerHTML = `❌ Selección inválida: No puedes mezclar zonas ${getZoneName(startZone)} y ${getZoneName(endZone)}`;
+      selectionInfo.innerHTML = `❌ Selección inválida: No puedes mezclar zonas diferentes`;
       selectionOverlay.style.border = '3px solid #dc3545';
       selectionOverlay.style.boxShadow = '0 0 10px #dc3545';
     } else if (soldInSelection > 0) {
@@ -810,7 +810,7 @@
     const endZone = getZone(maxBlockY);
     
     if (startZone !== endZone) {
-      alert(`❌ No puedes seleccionar bloques de zonas diferentes.\nEstás mezclando ${getZoneName(startZone)} con ${getZoneName(endZone)}.`);
+      alert(`❌ No puedes seleccionar bloques de zonas diferentes.`);
       selection = null;
       selectionOverlay.style.display = 'none';
       selectionInfo.textContent = '';
@@ -898,7 +898,7 @@
     document.getElementById('paymentStatus').textContent = '';
   });
 
-  // ===== PAGO (CORREGIDO - SIN DOBLE FIRMA) =====
+  // ===== PAGO =====
   function showStatus(message, type = 'info') {
     const statusEl = document.getElementById('paymentStatus');
     statusEl.textContent = message;
@@ -932,7 +932,6 @@
       return;
     }
     
-    // GUARDAR COPIA DE LA SELECCIÓN PARA EVITAR QUE SE PIERDA
     const savedSelection = {
       minBlockX: selection.minBlockX,
       minBlockY: selection.minBlockY,
@@ -1000,10 +999,9 @@
       
       console.log('📦 Blockhash:', blockhashData.blockhash);
       
-      // 4. FIRMAR Y ENVIAR (UNA SOLA VEZ - CORREGIDO)
+      // 4. FIRMAR Y ENVIAR
       showStatus('✍️ Firma la transacción en Phantom...', 'warning');
       
-      // USAR signAndSendTransaction DIRECTAMENTE (no signTransaction + send)
       const { signature } = await window.solana.signAndSendTransaction(transaction);
       
       console.log('✅ Transacción enviada. Signature:', signature);
