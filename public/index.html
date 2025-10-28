@@ -425,8 +425,20 @@
 
   // ===== FUNCIONES DE DIBUJO =====
   function drawGrid() {
-    ctx.fillStyle = '#555';
-    ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+    // Dibujar fondos de colores por filas
+    // Filas 0-24 (25 filas) = ORO
+    ctx.fillStyle = '#FFD700';
+    ctx.fillRect(0, 0, CANVAS_SIZE, 25 * BLOCK_SIZE);
+    
+    // Filas 25-59 (35 filas) = PLATA
+    ctx.fillStyle = '#C0C0C0';
+    ctx.fillRect(0, 25 * BLOCK_SIZE, CANVAS_SIZE, 35 * BLOCK_SIZE);
+    
+    // Filas 60-99 (40 filas) = BRONCE
+    ctx.fillStyle = '#CD7F32';
+    ctx.fillRect(0, 60 * BLOCK_SIZE, CANVAS_SIZE, 40 * BLOCK_SIZE);
+    
+    // Dibujar cuadrícula
     ctx.strokeStyle = '#333';
     ctx.lineWidth = 1;
     
