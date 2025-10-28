@@ -162,6 +162,23 @@
       font-weight: bold;
     }
     
+    .owner-badge {
+      background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+      color: #000;
+      padding: 5px 15px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: bold;
+      display: inline-block;
+      margin-left: 10px;
+      animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+    
     .sold-overlay { 
       position: absolute; 
       pointer-events: none; 
@@ -305,6 +322,7 @@
     <div>
       <button id="connectWallet" class="connectBtn">Conectar Wallet</button>
       <span id="walletAddr" style="margin-left:10px;color:#ddd;font-size:13px"></span>
+      <span id="ownerBadge" style="display:none;" class="owner-badge">⭐ OWNER</span>
     </div>
   </header>
 
@@ -355,6 +373,9 @@
         
         <div class="price-display">
           Precio total: <span id="totalPrice">0.00</span> SOL
+          <div id="ownerPriceNote" style="display:none;color:#FFD700;font-size:14px;margin-top:5px;">
+            ⭐ Precio especial de owner: 0.0001 SOL/bloque
+          </div>
         </div>
         
         <div id="projectForm">
@@ -390,21 +411,21 @@
   const CANVAS_SIZE = 1000;
   const BLOCK_SIZE = 10;
   const BLOCKS_PER_SIDE = CANVAS_SIZE / BLOCK_SIZE;
-  const PRICE_GOLD = 1.0;      // ORO: 1 SOL por bloque
-  const PRICE_SILVER = 0.5;    // PLATA: 0.5 SOL por bloque
-  const PRICE_BRONZE = 0.1;    // BRONCE: 0.1 SOL por bloque
+  const PRICE_GOLD = 1.0;
+  const PRICE_SILVER = 0.5;
+  const PRICE_BRONZE = 0.1;
+  const PRICE_OWNER = 0.0001; // 🌟 Precio especial para el owner
+  const OWNER_WALLET = 'B7nB9QX1KC4QXp5GMxR8xzh3yzoqp6NjxSwfNBXtgPc1'; // 🌟 Wallet del owner
   const API_BASE = window.location.origin;
   
-  // Definir límites de zonas
   const GOLD_END = 24;
   const SILVER_START = 25;
   const SILVER_END = 59;
   const BRONZE_START = 60;
   
-  // Totales de bloques por zona
-  const GOLD_TOTAL = 25 * 100;    // 25 filas × 100 bloques = 2500
-  const SILVER_TOTAL = 35 * 100;  // 35 filas × 100 bloques = 3500
-  const BRONZE_TOTAL = 40 * 100;  // 40 filas × 100 bloques = 4000
+  const GOLD_TOTAL = 25 * 100;
+  const SILVER_TOTAL = 35 * 100;
+  const BRONZE_TOTAL = 40 * 100;
 
   const canvas = document.getElementById('canvas');
   const ctx = canvas.getContext('2d');
@@ -419,6 +440,7 @@
   const tooltip = document.getElementById('tooltip');
   const connectBtn = document.getElementById('connectWallet');
   const walletAddrSpan = document.getElementById('walletAddr');
+  const ownerBadge = document.getElementById('ownerBadge');
   const loadingEl = document.getElementById('loading');
   const confirmBtn = document.getElementById('confirmBtn');
   const cancelBtn = document.getElementById('cancelBtn');
@@ -434,6 +456,7 @@
   let selection = null;
   let userPublicKey = null;
   let MERCHANT_WALLET = null;
+  let isOwner = false; // 🌟 Flag para saber si es el owner
 
   // ===== CARGAR CONFIGURACIÓN DEL SERVIDOR =====
   async function loadConfig() {
@@ -449,22 +472,35 @@
     }
   }
 
+  // 🌟 Función para verificar si la wallet es del owner
+  function checkIfOwner(walletAddress) {
+    return walletAddress === OWNER_WALLET;
+  }
+
+  // 🌟 Función para obtener el precio según wallet y zona
+  function getPriceForBlock(zone) {
+    if (isOwner) {
+      return PRICE_OWNER; // 0.0001 SOL para el owner
+    }
+    
+    // Precios normales según zona
+    if (zone === 'gold') return PRICE_GOLD;
+    if (zone === 'silver') return PRICE_SILVER;
+    if (zone === 'bronze') return PRICE_BRONZE;
+    return PRICE_BRONZE;
+  }
+
   // ===== FUNCIONES DE DIBUJO =====
   function drawGrid() {
-    // Dibujar fondos de colores por filas
-    // Filas 0-24 (25 filas) = ORO
     ctx.fillStyle = '#FFD700';
     ctx.fillRect(0, 0, CANVAS_SIZE, 25 * BLOCK_SIZE);
     
-    // Filas 25-59 (35 filas) = PLATA
     ctx.fillStyle = '#C0C0C0';
     ctx.fillRect(0, 25 * BLOCK_SIZE, CANVAS_SIZE, 35 * BLOCK_SIZE);
     
-    // Filas 60-99 (40 filas) = BRONCE
     ctx.fillStyle = '#CD7F32';
     ctx.fillRect(0, 60 * BLOCK_SIZE, CANVAS_SIZE, 40 * BLOCK_SIZE);
     
-    // Dibujar cuadrícula
     ctx.strokeStyle = '#333';
     ctx.lineWidth = 1;
     
@@ -498,6 +534,9 @@
   }
   
   function getZoneName(zone) {
+    if (isOwner) {
+      return '⭐ OWNER (0.0001 SOL/bloque)';
+    }
     if (zone === 'gold') return 'ORO (1 SOL/bloque)';
     if (zone === 'silver') return 'PLATA (0.5 SOL/bloque)';
     if (zone === 'bronze') return 'BRONCE (0.1 SOL/bloque)';
@@ -584,7 +623,6 @@
         await loadProjectOnGrid(project);
       }
       
-      // Contar bloques vendidos por zona
       goldSold = 0;
       silverSold = 0;
       bronzeSold = 0;
@@ -680,11 +718,22 @@
       
       const resp = await window.solana.connect({ onlyIfTrusted: false });
       userPublicKey = resp.publicKey;
-      walletAddrSpan.textContent = userPublicKey.toString().slice(0, 4) + '...' + userPublicKey.toString().slice(-4);
+      const walletString = userPublicKey.toString();
+      
+      // 🌟 Verificar si es el owner
+      isOwner = checkIfOwner(walletString);
+      
+      walletAddrSpan.textContent = walletString.slice(0, 4) + '...' + walletString.slice(-4);
       connectBtn.textContent = 'Conectado ✓';
       connectBtn.style.background = '#28a745';
       
-      console.log('✅ Wallet conectada:', userPublicKey.toString());
+      // 🌟 Mostrar badge si es owner
+      if (isOwner) {
+        ownerBadge.style.display = 'inline-block';
+        console.log('⭐ OWNER WALLET DETECTADA - Precio especial: 0.0001 SOL/bloque');
+      }
+      
+      console.log('✅ Wallet conectada:', walletString);
       
     } catch (err) {
       console.error('Error conectando:', err);
@@ -740,7 +789,6 @@
     const maxBlockX = maxX / BLOCK_SIZE;
     const maxBlockY = maxY / BLOCK_SIZE;
     
-    // Verificar si la selección cruza zonas
     const startZone = getZone(minBlockY);
     const endZone = getZone(maxBlockY);
     
@@ -753,8 +801,8 @@
     
     const freeBlocks = blocksTotal - soldInSelection;
     
-    // Calcular precio según la zona
-    const pricePerBlock = getPriceForZone(startZone);
+    // 🌟 Calcular precio según si es owner o no
+    const pricePerBlock = getPriceForBlock(startZone);
     const totalPrice = (freeBlocks * pricePerBlock).toFixed(4);
     
     // Actualizar el monto de selección actual
@@ -805,7 +853,6 @@
     const maxBlockX = maxX / BLOCK_SIZE;
     const maxBlockY = maxY / BLOCK_SIZE;
     
-    // Verificar si cruza zonas
     const startZone = getZone(minBlockY);
     const endZone = getZone(maxBlockY);
     
@@ -879,9 +926,20 @@
     }
     
     const blocksTotal = selection.blocksX * selection.blocksY;
-    const pricePerBlock = getPriceForZone(selection.zone);
+    // 🌟 Usar precio según si es owner
+    const pricePerBlock = getPriceForBlock(selection.zone);
     const totalPrice = (blocksTotal * pricePerBlock).toFixed(4);
+    
     document.getElementById('totalPrice').textContent = totalPrice;
+    
+    // 🌟 Mostrar nota de precio especial si es owner
+    const ownerNote = document.getElementById('ownerPriceNote');
+    if (isOwner) {
+      ownerNote.style.display = 'block';
+    } else {
+      ownerNote.style.display = 'none';
+    }
+    
     document.getElementById('modal').style.display = 'block';
   });
 
@@ -970,8 +1028,12 @@
       showStatus('💰 Preparando transacción...', 'warning');
       
       const blocksTotal = savedSelection.blocksX * savedSelection.blocksY;
-      const pricePerBlock = getPriceForZone(savedSelection.zone);
+      // 🌟 Usar precio especial si es owner
+      const pricePerBlock = getPriceForBlock(savedSelection.zone);
       const totalLamports = Math.floor(blocksTotal * pricePerBlock * solanaWeb3.LAMPORTS_PER_SOL);
+      
+      console.log(`💰 Precio por bloque: ${pricePerBlock} SOL (${isOwner ? 'OWNER' : 'NORMAL'})`);
+      console.log(`💰 Total: ${(totalLamports / solanaWeb3.LAMPORTS_PER_SOL).toFixed(4)} SOL`);
       
       const transaction = new solanaWeb3.Transaction().add(
         solanaWeb3.SystemProgram.transfer({
@@ -1049,7 +1111,7 @@
       }
       
       if (!confirmed) {
-        console.warn('⚠️ Timeout alcanzado');
+        console.warn('⏳ Timeout alcanzado');
         showStatus('⏳ Timeout - Intentando guardar...', 'warning');
       }
       
@@ -1122,28 +1184,27 @@
       }, 2000);
       
     } catch (err) {
-  console.error('❌ Error en el pago:', err);
-  
-  let errorMsg = 'Error en el pago';
-  
-  if (err.message?.includes('User rejected')) {
-    errorMsg = '❌ Transacción cancelada';
-  } else if (err.message?.includes('insufficient')) {
-    errorMsg = '❌ SOL insuficiente';
-  } else if (err.message?.includes('Timeout') || err.message?.includes('expired')) {
-    errorMsg = '⏳ Timeout - Verifica tu transacción en Phantom';
-  } else if (err.message) {
-    errorMsg = `❌ ${err.message}`;
-  }
-  
-  showStatus(errorMsg, 'error');
-  
-  // RESTAURAR EL BOTÓN Y PERMITIR REINTENTAR
-  payBtn.disabled = false;
-  payBtn.textContent = '💰 Pagar y Registrar';
-  
-  alert(errorMsg);
-}
+      console.error('❌ Error en el pago:', err);
+      
+      let errorMsg = 'Error en el pago';
+      
+      if (err.message?.includes('User rejected')) {
+        errorMsg = '❌ Transacción cancelada';
+      } else if (err.message?.includes('insufficient')) {
+        errorMsg = '❌ SOL insuficiente';
+      } else if (err.message?.includes('Timeout') || err.message?.includes('expired')) {
+        errorMsg = '⏳ Timeout - Verifica tu transacción en Phantom';
+      } else if (err.message) {
+        errorMsg = `❌ ${err.message}`;
+      }
+      
+      showStatus(errorMsg, 'error');
+      
+      payBtn.disabled = false;
+      payBtn.textContent = '💰 Pagar y Registrar';
+      
+      alert(errorMsg);
+    }
   });
 
   // Click en canvas para abrir URL
