@@ -5,10 +5,10 @@ const fs = require('fs');
 const { Connection, PublicKey, clusterApiUrl } = require('@solana/web3.js');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
 // ===== CONFIGURACIÓN =====
-const CLUSTER = process.env.CLUSTER || process.env.SOLANA_CLUSTER || 'devnet';
+const CLUSTER = process.env.CLUSTER || 'mainnet-beta';
 const MERCHANT_WALLET = process.env.MERCHANT_WALLET;
 const RPC_URL = process.env.RPC_URL;
 
@@ -17,19 +17,17 @@ if (!MERCHANT_WALLET || MERCHANT_WALLET === 'TU_WALLET_AQUI') {
   console.error('❌ ERROR CRÍTICO: MERCHANT_WALLET no está configurada');
   console.error('⚠️  Configura la variable de entorno MERCHANT_WALLET en Render');
   console.error('📝 Ejemplo: MERCHANT_WALLET=3d7w4r4irLaKVYd4dLjpoiehJVawbbXWFWb1bCk9nGCo');
-} else {
-  console.log('✅ MERCHANT_WALLET configurada');
+  process.exit(1); // Detener servidor si no hay wallet
 }
 
 // Validar formato de wallet
 try {
-  if (MERCHANT_WALLET && MERCHANT_WALLET !== 'TU_WALLET_AQUI') {
-    new PublicKey(MERCHANT_WALLET);
-    console.log('✅ MERCHANT_WALLET válida:', MERCHANT_WALLET);
-  }
+  new PublicKey(MERCHANT_WALLET);
+  console.log('✅ MERCHANT_WALLET válida:', MERCHANT_WALLET);
 } catch (err) {
   console.error('❌ ERROR: MERCHANT_WALLET tiene formato inválido:', MERCHANT_WALLET);
   console.error('⚠️  Debe ser una dirección válida de Solana (base58)');
+  process.exit(1);
 }
 
 // Rutas de almacenamiento persistente
@@ -70,7 +68,6 @@ function initializeStorage() {
 initializeStorage();
 
 // ===== CONEXIÓN SOLANA =====
-// Usar RPC_URL personalizado si existe, sino usar el cluster por defecto
 let connection;
 if (RPC_URL) {
   console.log('🔗 Usando RPC personalizado (Helius)');
@@ -82,25 +79,26 @@ if (RPC_URL) {
 
 console.log(`🌐 Cluster configurado: ${CLUSTER}`);
 console.log(`💰 Wallet del comerciante: ${MERCHANT_WALLET}`);
+console.log(`⚠️  MODO PRODUCCIÓN: Transacciones con SOL REAL`);
 
 // ===== MIDDLEWARE =====
-app.use(express.json());
-app.use(express.static('public'));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Servir archivos subidos (logos)
+// Servir archivos estáticos
+app.use(express.static('public'));
 app.use('/uploads', express.static(UPLOADS_DIR));
 
 // ===== CONFIGURACIÓN MULTER =====
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    // Asegurarse de que el directorio existe antes de guardar
     if (!fs.existsSync(UPLOADS_DIR)) {
       fs.mkdirSync(UPLOADS_DIR, { recursive: true });
     }
     cb(null, UPLOADS_DIR);
   },
   filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E8);
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     cb(null, uniqueSuffix + path.extname(file.originalname));
   }
 });
@@ -109,14 +107,14 @@ const upload = multer({
   storage: storage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
   fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif/;
+    const allowedTypes = /jpeg|jpg|png|gif|webp/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
     const mimetype = allowedTypes.test(file.mimetype);
     
     if (mimetype && extname) {
       return cb(null, true);
     } else {
-      cb(new Error('Solo se permiten imágenes (jpg, png, gif)'));
+      cb(new Error('Solo se permiten imágenes (jpg, png, gif, webp)'));
     }
   }
 });
@@ -124,7 +122,6 @@ const upload = multer({
 // ===== FUNCIONES DE PERSISTENCIA =====
 function readSales() {
   try {
-    // Verificar si el archivo existe antes de leerlo
     if (!fs.existsSync(SALES_FILE)) {
       console.log('⚠️ sales.json no existe, creándolo...');
       const emptyData = { sales: [] };
@@ -136,14 +133,12 @@ function readSales() {
     return JSON.parse(data);
   } catch (err) {
     console.error('❌ Error leyendo sales.json:', err);
-    // Si hay error, devolver estructura vacía
     return { sales: [] };
   }
 }
 
 function writeSales(data) {
   try {
-    // Asegurarse de que el directorio existe
     if (!fs.existsSync(PERSISTENT_DIR)) {
       fs.mkdirSync(PERSISTENT_DIR, { recursive: true });
     }
@@ -169,7 +164,8 @@ app.get('/api/config', (req, res) => {
   res.json({
     ok: true,
     cluster: CLUSTER,
-    merchantWallet: MERCHANT_WALLET
+    merchantWallet: MERCHANT_WALLET,
+    isMainnet: CLUSTER === 'mainnet-beta'
   });
 });
 
@@ -246,9 +242,29 @@ app.post('/api/save-sale', (req, res) => {
       return res.status(400).json({ ok: false, error: 'Datos incompletos' });
     }
     
-    console.log('💾 Guardando venta:', saleData.signature);
-    
+    // Validar que la selección no solape con ventas existentes
     const data = readSales();
+    const newSel = saleData.metadata.selection;
+    
+    for (const sale of data.sales) {
+      const existingSel = sale.metadata.selection;
+      
+      // Verificar solapamiento
+      const overlapX = !(newSel.minBlockX > existingSel.minBlockX + existingSel.blocksX - 1 ||
+                         newSel.minBlockX + newSel.blocksX - 1 < existingSel.minBlockX);
+      const overlapY = !(newSel.minBlockY > existingSel.minBlockY + existingSel.blocksY - 1 ||
+                         newSel.minBlockY + newSel.blocksY - 1 < existingSel.minBlockY);
+      
+      if (overlapX && overlapY) {
+        console.log('❌ Intento de compra sobre bloques ocupados');
+        return res.status(400).json({ 
+          ok: false, 
+          error: 'Algunos bloques ya están ocupados. Por favor recarga la página.' 
+        });
+      }
+    }
+    
+    console.log('💾 Guardando venta:', saleData.signature);
     
     // Verificar si ya existe
     const exists = data.sales.some(s => s.signature === saleData.signature);
@@ -267,6 +283,7 @@ app.post('/api/save-sale', (req, res) => {
     }
     
     console.log('✅ Venta guardada. Total ventas:', data.sales.length);
+    console.log('💰 Monto:', saleData.amount, 'SOL');
     
     res.json({ ok: true, message: 'Venta guardada correctamente' });
     
@@ -290,13 +307,57 @@ app.get('/api/sales', (req, res) => {
 
 // Health check
 app.get('/health', (req, res) => {
+  const data = readSales();
+  const totalRevenue = data.sales.reduce((sum, sale) => sum + (sale.amount || 0), 0);
+  
   res.json({ 
     ok: true, 
     status: 'Server running',
     cluster: CLUSTER,
+    isMainnet: CLUSTER === 'mainnet-beta',
     timestamp: new Date().toISOString(),
-    salesCount: readSales().sales.length
+    salesCount: data.sales.length,
+    totalRevenue: totalRevenue.toFixed(4) + ' SOL',
+    merchantWallet: MERCHANT_WALLET
   });
+});
+
+// Endpoint para estadísticas (opcional)
+app.get('/api/stats', (req, res) => {
+  try {
+    const data = readSales();
+    
+    let goldSold = 0, silverSold = 0, bronzeSold = 0;
+    let totalRevenue = 0;
+    
+    data.sales.forEach(sale => {
+      const sel = sale.metadata.selection;
+      const blocksTotal = sel.blocksX * sel.blocksY;
+      
+      // Determinar zona
+      if (sel.minBlockY <= 24) {
+        goldSold += blocksTotal;
+      } else if (sel.minBlockY >= 25 && sel.minBlockY <= 59) {
+        silverSold += blocksTotal;
+      } else {
+        bronzeSold += blocksTotal;
+      }
+      
+      totalRevenue += sale.amount || 0;
+    });
+    
+    res.json({
+      ok: true,
+      goldSold,
+      silverSold,
+      bronzeSold,
+      totalSales: data.sales.length,
+      totalRevenue: totalRevenue.toFixed(4)
+    });
+  } catch (err) {
+    console.error('❌ Error obteniendo stats:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 // ===== MANEJO DE ERRORES =====
@@ -306,11 +367,12 @@ app.use((err, req, res, next) => {
 });
 
 // ===== INICIAR SERVIDOR =====
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n🚀 Servidor corriendo en puerto ${PORT}`);
   console.log(`📁 Directorio persistent: ${PERSISTENT_DIR}`);
   console.log(`🖼️  Directorio uploads: ${UPLOADS_DIR}`);
   console.log(`📄 Archivo sales: ${SALES_FILE}`);
   console.log(`🌐 Cluster: ${CLUSTER}`);
-  console.log(`💰 Wallet: ${MERCHANT_WALLET}\n`);
+  console.log(`💰 Wallet: ${MERCHANT_WALLET}`);
+  console.log(`⚠️  MODO: ${CLUSTER === 'mainnet-beta' ? '🔴 PRODUCCIÓN (SOL REAL)' : '🟡 DESARROLLO (SOL FALSO)'}\n`);
 });
