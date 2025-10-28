@@ -8,21 +8,24 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ===== CONFIGURACIÓN =====
-const CLUSTER = process.env.SOLANA_CLUSTER || 'devnet';
+const CLUSTER = process.env.CLUSTER || process.env.SOLANA_CLUSTER || 'devnet';
 const MERCHANT_WALLET = process.env.MERCHANT_WALLET;
+const RPC_URL = process.env.RPC_URL;
 
 // Validar configuración crítica
 if (!MERCHANT_WALLET || MERCHANT_WALLET === 'TU_WALLET_AQUI') {
   console.error('❌ ERROR CRÍTICO: MERCHANT_WALLET no está configurada');
   console.error('⚠️  Configura la variable de entorno MERCHANT_WALLET en Render');
-  console.error('📝 Ejemplo: MERCHANT_WALLET=B7nB9QX1KC4QXp5GMxR8xzh3yzoqp6NjxSwfNBXtgPc1');
+  console.error('📝 Ejemplo: MERCHANT_WALLET=3d7w4r4irLaKVYd4dLjpoiehJVawbbXWFWb1bCk9nGCo');
+} else {
+  console.log('✅ MERCHANT_WALLET configurada');
 }
 
 // Validar formato de wallet
 try {
   if (MERCHANT_WALLET && MERCHANT_WALLET !== 'TU_WALLET_AQUI') {
     new PublicKey(MERCHANT_WALLET);
-    console.log('✅ MERCHANT_WALLET válida');
+    console.log('✅ MERCHANT_WALLET válida:', MERCHANT_WALLET);
   }
 } catch (err) {
   console.error('❌ ERROR: MERCHANT_WALLET tiene formato inválido:', MERCHANT_WALLET);
@@ -30,7 +33,8 @@ try {
 }
 
 // Rutas de almacenamiento persistente
-const PERSISTENT_DIR = process.env.RENDER ? '/persistent' : path.join(__dirname, 'persistent');
+const PERSISTENT_DIR = process.env.PERSISTENT_DIR || 
+                       (process.env.RENDER ? '/persistent' : path.join(__dirname, 'persistent'));
 const UPLOADS_DIR = path.join(PERSISTENT_DIR, 'uploads');
 const SALES_FILE = path.join(PERSISTENT_DIR, 'sales.json');
 
@@ -66,8 +70,17 @@ function initializeStorage() {
 initializeStorage();
 
 // ===== CONEXIÓN SOLANA =====
-const connection = new Connection(clusterApiUrl(CLUSTER), 'confirmed');
-console.log(`🔗 Conectado a Solana ${CLUSTER}`);
+// Usar RPC_URL personalizado si existe, sino usar el cluster por defecto
+let connection;
+if (RPC_URL) {
+  console.log('🔗 Usando RPC personalizado (Helius)');
+  connection = new Connection(RPC_URL, 'confirmed');
+} else {
+  console.log(`🔗 Usando RPC público: ${CLUSTER}`);
+  connection = new Connection(clusterApiUrl(CLUSTER), 'confirmed');
+}
+
+console.log(`🌐 Cluster configurado: ${CLUSTER}`);
 console.log(`💰 Wallet del comerciante: ${MERCHANT_WALLET}`);
 
 // ===== MIDDLEWARE =====
@@ -145,6 +158,11 @@ function writeSales(data) {
 }
 
 // ===== ENDPOINTS =====
+
+// Favicon (evitar error 404)
+app.get('/favicon.ico', (req, res) => {
+  res.status(204).end();
+});
 
 // Endpoint de configuración
 app.get('/api/config', (req, res) => {
