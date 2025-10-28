@@ -383,8 +383,16 @@
   const CANVAS_SIZE = 1000;
   const BLOCK_SIZE = 10;
   const BLOCKS_PER_SIDE = CANVAS_SIZE / BLOCK_SIZE;
-  const PRICE_PER_BLOCK = 0.0001;
+  const PRICE_GOLD = 0.001;   // Filas 0-24
+  const PRICE_SILVER = 0.0005; // Filas 25-59
+  const PRICE_BRONZE = 0.0001; // Filas 60-99
   const API_BASE = window.location.origin;
+  
+  // Definir límites de zonas
+  const GOLD_END = 24;
+  const SILVER_START = 25;
+  const SILVER_END = 59;
+  const BRONZE_START = 60;
 
   const canvas = document.getElementById('canvas');
   const ctx = canvas.getContext('2d');
@@ -455,6 +463,27 @@
       ctx.lineTo(CANVAS_SIZE, y + 0.5);
       ctx.stroke();
     }
+  }
+
+  function getZone(blockY) {
+    if (blockY <= GOLD_END) return 'gold';
+    if (blockY >= SILVER_START && blockY <= SILVER_END) return 'silver';
+    if (blockY >= BRONZE_START) return 'bronze';
+    return null;
+  }
+  
+  function getPriceForZone(zone) {
+    if (zone === 'gold') return PRICE_GOLD;
+    if (zone === 'silver') return PRICE_SILVER;
+    if (zone === 'bronze') return PRICE_BRONZE;
+    return PRICE_BRONZE;
+  }
+  
+  function getZoneName(zone) {
+    if (zone === 'gold') return 'ORO';
+    if (zone === 'silver') return 'PLATA';
+    if (zone === 'bronze') return 'BRONCE';
+    return '';
   }
 
   function blockIndex(bx, by) {
@@ -670,6 +699,10 @@
     const maxBlockX = maxX / BLOCK_SIZE;
     const maxBlockY = maxY / BLOCK_SIZE;
     
+    // Verificar si la selección cruza zonas
+    const startZone = getZone(minBlockY);
+    const endZone = getZone(maxBlockY);
+    
     let soldInSelection = 0;
     for (let by = minBlockY; by <= maxBlockY; by++) {
       for (let bx = minBlockX; bx <= maxBlockX; bx++) {
@@ -678,14 +711,21 @@
     }
     
     const freeBlocks = blocksTotal - soldInSelection;
-    const totalPrice = (freeBlocks * PRICE_PER_BLOCK).toFixed(4);
     
-    if (soldInSelection > 0) {
-      selectionInfo.innerHTML = `⚠️ Selección: ${blocksX}×${blocksY} bloques | <span class="error">Ocupados: ${soldInSelection}</span> | Disponibles: ${freeBlocks} | Precio: ${totalPrice} SOL`;
+    // Calcular precio según la zona
+    const pricePerBlock = getPriceForZone(startZone);
+    const totalPrice = (freeBlocks * pricePerBlock).toFixed(4);
+    
+    if (startZone !== endZone) {
+      selectionInfo.innerHTML = `❌ Selección inválida: No puedes mezclar zonas ${getZoneName(startZone)} y ${getZoneName(endZone)}`;
+      selectionOverlay.style.border = '3px solid #dc3545';
+      selectionOverlay.style.boxShadow = '0 0 10px #dc3545';
+    } else if (soldInSelection > 0) {
+      selectionInfo.innerHTML = `⚠️ Selección: ${blocksX}×${blocksY} bloques (${getZoneName(startZone)}) | <span class="error">Ocupados: ${soldInSelection}</span> | Disponibles: ${freeBlocks} | Precio: ${totalPrice} SOL`;
       selectionOverlay.style.border = '3px solid #dc3545';
       selectionOverlay.style.boxShadow = '0 0 10px #dc3545';
     } else {
-      selectionInfo.innerHTML = `✓ Selección: ${blocksX}×${blocksY} bloques | Precio: ${(blocksTotal * PRICE_PER_BLOCK).toFixed(4)} SOL`;
+      selectionInfo.innerHTML = `✓ Selección: ${blocksX}×${blocksY} bloques (${getZoneName(startZone)}) | Precio: ${(blocksTotal * pricePerBlock).toFixed(4)} SOL`;
       selectionOverlay.style.border = '3px solid cyan';
       selectionOverlay.style.boxShadow = '0 0 10px cyan';
     }
@@ -717,6 +757,19 @@
     const maxBlockX = maxX / BLOCK_SIZE;
     const maxBlockY = maxY / BLOCK_SIZE;
     
+    // Verificar si cruza zonas
+    const startZone = getZone(minBlockY);
+    const endZone = getZone(maxBlockY);
+    
+    if (startZone !== endZone) {
+      alert(`❌ No puedes seleccionar bloques de zonas diferentes.\nEstás mezclando ${getZoneName(startZone)} con ${getZoneName(endZone)}.`);
+      selection = null;
+      selectionOverlay.style.display = 'none';
+      selectionInfo.textContent = '';
+      confirmBtn.disabled = true;
+      return;
+    }
+    
     let soldInSelection = 0;
     for (let by = minBlockY; by <= maxBlockY; by++) {
       for (let bx = minBlockX; bx <= maxBlockX; bx++) {
@@ -731,7 +784,8 @@
       maxBlockY,
       blocksX: maxBlockX - minBlockX + 1,
       blocksY: maxBlockY - minBlockY + 1,
-      soldInSelection
+      soldInSelection,
+      zone: startZone
     };
     
     confirmBtn.disabled = soldInSelection > 0;
@@ -776,7 +830,8 @@
     }
     
     const blocksTotal = selection.blocksX * selection.blocksY;
-    const totalPrice = (blocksTotal * PRICE_PER_BLOCK).toFixed(4);
+    const pricePerBlock = getPriceForZone(selection.zone);
+    const totalPrice = (blocksTotal * pricePerBlock).toFixed(4);
     document.getElementById('totalPrice').textContent = totalPrice;
     document.getElementById('modal').style.display = 'block';
   });
@@ -854,7 +909,8 @@
       showStatus('💰 Preparando transacción...', 'warning');
       
       const blocksTotal = selection.blocksX * selection.blocksY;
-      const totalLamports = Math.floor(blocksTotal * PRICE_PER_BLOCK * solanaWeb3.LAMPORTS_PER_SOL);
+      const pricePerBlock = getPriceForZone(selection.zone);
+      const totalLamports = Math.floor(blocksTotal * pricePerBlock * solanaWeb3.LAMPORTS_PER_SOL);
       
       const transaction = new solanaWeb3.Transaction().add(
         solanaWeb3.SystemProgram.transfer({
