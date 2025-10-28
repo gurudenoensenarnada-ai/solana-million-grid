@@ -15,6 +15,7 @@ const MERCHANT_WALLET = process.env.MERCHANT_WALLET;
 const RPC_URL = process.env.RPC_URL;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+const OWNER_WALLET = 'B7nB9QX1KC4QXp5GMxR8xzh3yzoqp6NjxSwfNBXtgPc1'; // Wallet del dueño
 
 // Validar configuración crítica
 if (!MERCHANT_WALLET || MERCHANT_WALLET === 'TU_WALLET_AQUI') {
@@ -189,18 +190,19 @@ async function sendTelegramNotification(saleData) {
     const blocksTotal = sel.blocksX * sel.blocksY;
     const amount = saleData.amount.toFixed(4);
     
-    // Verificar si es tu wallet (ocultar precio)
-    const isOwnerWallet = saleData.buyer === 'B7nB9QX1KC4QXp5GMxR8xzh3yzoqp6NjxSwfNBXtgPc1';
+    // Verificar si es la wallet del dueño
+    const isOwnerWallet = saleData.buyer === OWNER_WALLET;
     
     // Crear mensaje
     let message;
     
     if (isOwnerWallet) {
-      // Mensaje sin precio para tu wallet
+      // Mensaje con precio real para la wallet del dueño
       message = `
 🎉 *¡NUEVA COMPRA EN SOLANA MILLION GRID!*
 
 ${zoneEmoji} *Zona:* ${zone}
+🌟 *PRECIO ESPECIAL DUEÑO*
 
 📊 *Datos de la compra:*
 • Proyecto: *${meta.name}*
@@ -208,13 +210,17 @@ ${zoneEmoji} *Zona:* ${zone}
 • Bloques: *${blocksTotal}* (${sel.blocksX}×${sel.blocksY})
 • Posición: Fila ${sel.minBlockY + 1}, Columna ${sel.minBlockX + 1}
 
+💰 *Pago:*
+• Monto: *${amount} SOL* (0.0001 SOL/bloque)
+• Comprador: \`${saleData.buyer.substring(0, 8)}...${saleData.buyer.substring(saleData.buyer.length - 8)}\`
+
 🔗 *Transacción:*
 [Ver en Solscan](https://solscan.io/tx/${saleData.signature})
 
 ⏰ ${new Date(saleData.timestamp).toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}
 `;
     } else {
-      // Mensaje normal con precio para otras wallets
+      // Mensaje normal con precio estándar para otras wallets
       message = `
 🎉 *¡NUEVA COMPRA EN SOLANA MILLION GRID!*
 
