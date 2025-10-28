@@ -1,4 +1,4 @@
-require('dotenv').config(); // Cargar variables de .env
+require('dotenv').config();
 
 const express = require('express');
 const multer = require('multer');
@@ -15,17 +15,16 @@ const MERCHANT_WALLET = process.env.MERCHANT_WALLET;
 const RPC_URL = process.env.RPC_URL;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
-const OWNER_WALLET = 'B7nB9QX1KC4QXp5GMxR8xzh3yzoqp6NjxSwfNBXtgPc1'; // Wallet del dueño
+const OWNER_WALLET = 'B7nB9QX1KC4QXp5GMxR8xzh3yzoqp6NjxSwfNBXtgPc1'; // 🌟 Wallet del dueño
 
 // Validar configuración crítica
 if (!MERCHANT_WALLET || MERCHANT_WALLET === 'TU_WALLET_AQUI') {
   console.error('❌ ERROR CRÍTICO: MERCHANT_WALLET no está configurada');
   console.error('⚠️  Configura la variable de entorno MERCHANT_WALLET en Render');
   console.error('📝 Ejemplo: MERCHANT_WALLET=3d7w4r4irLaKVYd4dLjpoiehJVawbbXWFWb1bCk9nGCo');
-  process.exit(1); // Detener servidor si no hay wallet
+  process.exit(1);
 }
 
-// Validar formato de wallet
 try {
   new PublicKey(MERCHANT_WALLET);
   console.log('✅ MERCHANT_WALLET válida:', MERCHANT_WALLET);
@@ -41,22 +40,19 @@ const PERSISTENT_DIR = process.env.PERSISTENT_DIR ||
 const UPLOADS_DIR = path.join(PERSISTENT_DIR, 'uploads');
 const SALES_FILE = path.join(PERSISTENT_DIR, 'sales.json');
 
-// ===== INICIALIZACIÓN: CREAR CARPETAS Y ARCHIVOS SI NO EXISTEN =====
+// ===== INICIALIZACIÓN =====
 function initializeStorage() {
   try {
-    // Crear directorio persistent si no existe
     if (!fs.existsSync(PERSISTENT_DIR)) {
       fs.mkdirSync(PERSISTENT_DIR, { recursive: true });
       console.log('✅ Directorio persistent creado');
     }
     
-    // Crear directorio uploads si no existe
     if (!fs.existsSync(UPLOADS_DIR)) {
       fs.mkdirSync(UPLOADS_DIR, { recursive: true });
       console.log('✅ Directorio uploads creado');
     }
     
-    // Crear sales.json si no existe
     if (!fs.existsSync(SALES_FILE)) {
       fs.writeFileSync(SALES_FILE, JSON.stringify({ sales: [] }, null, 2));
       console.log('✅ Archivo sales.json creado');
@@ -65,11 +61,9 @@ function initializeStorage() {
     console.log('✅ Sistema de almacenamiento inicializado correctamente');
   } catch (err) {
     console.error('❌ Error inicializando almacenamiento:', err);
-    // No lanzar error, continuar la ejecución
   }
 }
 
-// Inicializar al arrancar
 initializeStorage();
 
 // ===== CONEXIÓN SOLANA =====
@@ -84,9 +78,9 @@ if (RPC_URL) {
 
 console.log(`🌐 Cluster configurado: ${CLUSTER}`);
 console.log(`💰 Wallet del comerciante: ${MERCHANT_WALLET}`);
+console.log(`⭐ Wallet del owner: ${OWNER_WALLET}`); // 🌟
 console.log(`⚠️  MODO PRODUCCIÓN: Transacciones con SOL REAL`);
 
-// Verificar Telegram
 if (TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID) {
   console.log('✅ Notificaciones de Telegram activadas');
   console.log(`📱 Chat ID: ${TELEGRAM_CHAT_ID}`);
@@ -98,7 +92,6 @@ if (TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID) {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Servir archivos estáticos
 app.use(express.static('public'));
 app.use('/uploads', express.static(UPLOADS_DIR));
 
@@ -118,7 +111,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowedTypes = /jpeg|jpg|png|gif|webp/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
@@ -190,19 +183,19 @@ async function sendTelegramNotification(saleData) {
     const blocksTotal = sel.blocksX * sel.blocksY;
     const amount = saleData.amount.toFixed(4);
     
-    // Verificar si es la wallet del dueño
+    // 🌟 Verificar si es la wallet del dueño
     const isOwnerWallet = saleData.buyer === OWNER_WALLET;
     
     // Crear mensaje
     let message;
     
     if (isOwnerWallet) {
-      // Mensaje con precio real para la wallet del dueño
+      // 🌟 Mensaje especial para el owner mostrando el precio real
       message = `
 🎉 *¡NUEVA COMPRA EN SOLANA MILLION GRID!*
 
 ${zoneEmoji} *Zona:* ${zone}
-🌟 *PRECIO ESPECIAL DUEÑO*
+⭐ *COMPRA DEL OWNER - PRECIO ESPECIAL*
 
 📊 *Datos de la compra:*
 • Proyecto: *${meta.name}*
@@ -211,7 +204,8 @@ ${zoneEmoji} *Zona:* ${zone}
 • Posición: Fila ${sel.minBlockY + 1}, Columna ${sel.minBlockX + 1}
 
 💰 *Pago:*
-• Monto: *${amount} SOL* (0.0001 SOL/bloque)
+• Monto: *${amount} SOL*
+• Precio/bloque: *0.0001 SOL* 🌟
 • Comprador: \`${saleData.buyer.substring(0, 8)}...${saleData.buyer.substring(saleData.buyer.length - 8)}\`
 
 🔗 *Transacción:*
@@ -220,7 +214,7 @@ ${zoneEmoji} *Zona:* ${zone}
 ⏰ ${new Date(saleData.timestamp).toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}
 `;
     } else {
-      // Mensaje normal con precio estándar para otras wallets
+      // Mensaje normal para otras wallets
       message = `
 🎉 *¡NUEVA COMPRA EN SOLANA MILLION GRID!*
 
@@ -268,6 +262,9 @@ ${zoneEmoji} *Zona:* ${zone}
     
     if (result.ok) {
       console.log('✅ Notificación enviada a Telegram');
+      if (isOwnerWallet) {
+        console.log('⭐ Notificación de compra del OWNER enviada');
+      }
     } else {
       console.error('❌ Error enviando a Telegram:', result.description);
     }
@@ -278,12 +275,10 @@ ${zoneEmoji} *Zona:* ${zone}
 
 // ===== ENDPOINTS =====
 
-// Favicon (evitar error 404)
 app.get('/favicon.ico', (req, res) => {
   res.status(204).end();
 });
 
-// Endpoint de configuración
 app.get('/api/config', (req, res) => {
   res.json({
     ok: true,
@@ -293,7 +288,6 @@ app.get('/api/config', (req, res) => {
   });
 });
 
-// Subir logo
 app.post('/api/upload-logo', upload.single('file'), (req, res) => {
   try {
     if (!req.file) {
@@ -310,7 +304,6 @@ app.post('/api/upload-logo', upload.single('file'), (req, res) => {
   }
 });
 
-// Obtener blockhash reciente
 app.post('/api/get-latest-blockhash', async (req, res) => {
   try {
     const { blockhash } = await connection.getLatestBlockhash('finalized');
@@ -322,7 +315,6 @@ app.post('/api/get-latest-blockhash', async (req, res) => {
   }
 });
 
-// Verificar transacción
 app.post('/api/verify-transaction', async (req, res) => {
   try {
     const { signature } = req.body;
@@ -356,14 +348,19 @@ app.post('/api/verify-transaction', async (req, res) => {
   }
 });
 
-// Guardar venta
 app.post('/api/save-sale', (req, res) => {
   try {
     const saleData = req.body;
     
-    // Validar datos básicos
     if (!saleData.signature || !saleData.buyer || !saleData.metadata) {
       return res.status(400).json({ ok: false, error: 'Datos incompletos' });
+    }
+    
+    // 🌟 Verificar si es el owner
+    const isOwner = saleData.buyer === OWNER_WALLET;
+    if (isOwner) {
+      console.log('⭐ COMPRA DEL OWNER DETECTADA');
+      console.log(`💰 Monto: ${saleData.amount} SOL (precio especial 0.0001 SOL/bloque)`);
     }
     
     // Validar que la selección no solape con ventas existentes
@@ -373,7 +370,6 @@ app.post('/api/save-sale', (req, res) => {
     for (const sale of data.sales) {
       const existingSel = sale.metadata.selection;
       
-      // Verificar solapamiento
       const overlapX = !(newSel.minBlockX > existingSel.minBlockX + existingSel.blocksX - 1 ||
                          newSel.minBlockX + newSel.blocksX - 1 < existingSel.minBlockX);
       const overlapY = !(newSel.minBlockY > existingSel.minBlockY + existingSel.blocksY - 1 ||
@@ -422,7 +418,6 @@ app.post('/api/save-sale', (req, res) => {
   }
 });
 
-// Obtener todas las ventas
 app.get('/api/sales', (req, res) => {
   try {
     const data = readSales();
@@ -434,10 +429,15 @@ app.get('/api/sales', (req, res) => {
   }
 });
 
-// Health check
 app.get('/health', (req, res) => {
   const data = readSales();
   const totalRevenue = data.sales.reduce((sum, sale) => sum + (sale.amount || 0), 0);
+  
+  // 🌟 Contar ventas del owner
+  const ownerSales = data.sales.filter(s => s.buyer === OWNER_WALLET).length;
+  const ownerRevenue = data.sales
+    .filter(s => s.buyer === OWNER_WALLET)
+    .reduce((sum, sale) => sum + (sale.amount || 0), 0);
   
   res.json({ 
     ok: true, 
@@ -447,24 +447,26 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     salesCount: data.sales.length,
     totalRevenue: totalRevenue.toFixed(4) + ' SOL',
+    ownerSales: ownerSales,
+    ownerRevenue: ownerRevenue.toFixed(4) + ' SOL',
     merchantWallet: MERCHANT_WALLET,
+    ownerWallet: OWNER_WALLET,
     telegramEnabled: !!(TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID)
   });
 });
 
-// Endpoint para estadísticas (opcional)
 app.get('/api/stats', (req, res) => {
   try {
     const data = readSales();
     
     let goldSold = 0, silverSold = 0, bronzeSold = 0;
     let totalRevenue = 0;
+    let ownerRevenue = 0;
     
     data.sales.forEach(sale => {
       const sel = sale.metadata.selection;
       const blocksTotal = sel.blocksX * sel.blocksY;
       
-      // Determinar zona
       if (sel.minBlockY <= 24) {
         goldSold += blocksTotal;
       } else if (sel.minBlockY >= 25 && sel.minBlockY <= 59) {
@@ -474,6 +476,11 @@ app.get('/api/stats', (req, res) => {
       }
       
       totalRevenue += sale.amount || 0;
+      
+      // 🌟 Contar revenue del owner
+      if (sale.buyer === OWNER_WALLET) {
+        ownerRevenue += sale.amount || 0;
+      }
     });
     
     res.json({
@@ -482,7 +489,8 @@ app.get('/api/stats', (req, res) => {
       silverSold,
       bronzeSold,
       totalSales: data.sales.length,
-      totalRevenue: totalRevenue.toFixed(4)
+      totalRevenue: totalRevenue.toFixed(4),
+      ownerRevenue: ownerRevenue.toFixed(4)
     });
   } catch (err) {
     console.error('❌ Error obteniendo stats:', err);
@@ -504,6 +512,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`📄 Archivo sales: ${SALES_FILE}`);
   console.log(`🌐 Cluster: ${CLUSTER}`);
   console.log(`💰 Wallet: ${MERCHANT_WALLET}`);
+  console.log(`⭐ Owner Wallet: ${OWNER_WALLET} (Precio especial: 0.0001 SOL/bloque)`);
   console.log(`⚠️  MODO: ${CLUSTER === 'mainnet-beta' ? '🔴 PRODUCCIÓN (SOL REAL)' : '🟡 DESARROLLO (SOL FALSO)'}`);
   console.log(`📱 Telegram: ${TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID ? '✅ Activado' : '❌ Desactivado'}\n`);
 });
