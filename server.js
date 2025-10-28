@@ -224,7 +224,7 @@ function writeSales(data) {
   }
 }
 
-// ===== FUNCIONES DE TELEGRAM (CORREGIDO) =====
+// ===== FUNCIONES DE TELEGRAM (MEJORADO) =====
 async function sendTelegramNotification(saleData) {
   if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
     console.log('⚠️ Telegram no configurado, omitiendo notificación');
@@ -232,7 +232,7 @@ async function sendTelegramNotification(saleData) {
   }
 
   try {
-    console.log('📱 Enviando notificación a Telegram...');
+    console.log('📱 Preparando notificación de Telegram...');
     
     const meta = saleData.metadata;
     const sel = meta.selection;
@@ -297,10 +297,15 @@ ${zoneEmoji} *Zona:* ${zone}
 ⏰ ${new Date(saleData.timestamp).toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}`;
     }
 
-    // Enviar mensaje con foto
-    const logoUrl = meta.logo.startsWith('http') 
-      ? meta.logo 
-      : `https://www.solanamillondollar.com${meta.logo}`;
+    // Construir URL completa del logo
+    let logoUrl = meta.logo;
+    if (!logoUrl.startsWith('http')) {
+      // Si es ruta relativa, construir URL completa
+      const host = process.env.RENDER ? 'https://www.solanamillondollar.com' : 'http://localhost:3000';
+      logoUrl = `${host}${meta.logo}`;
+    }
+
+    console.log('📷 URL del logo:', logoUrl);
 
     const telegramApiUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`;
     
@@ -310,28 +315,34 @@ ${zoneEmoji} *Zona:* ${zone}
     formData.append('caption', message);
     formData.append('parse_mode', 'Markdown');
 
+    console.log('🚀 Enviando a Telegram...');
+    
     const response = await fetch(telegramApiUrl, {
       method: 'POST',
       body: formData,
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded'
-      }
+      },
+      timeout: 10000 // 10 segundos de timeout
     });
 
     const result = await response.json();
     
     if (result.ok) {
-      console.log('✅ Notificación enviada a Telegram correctamente');
+      console.log('✅ ¡Notificación de Telegram enviada correctamente!');
       if (isOwnerWallet) {
-        console.log('⭐ Notificación de compra del OWNER enviada');
+        console.log('⭐ Era una compra del OWNER');
       }
       return { ok: true, sent: true };
     } else {
-      console.error('❌ Error en respuesta de Telegram:', result.description);
+      console.error('❌ Error en respuesta de Telegram:', result);
+      console.error('   Description:', result.description);
+      console.error('   Error code:', result.error_code);
       return { ok: false, error: result.description };
     }
   } catch (err) {
-    console.error('❌ Error crítico en notificación de Telegram:', err);
+    console.error('❌ Error crítico enviando a Telegram:', err.message);
+    console.error('   Stack:', err.stack);
     return { ok: false, error: err.message };
   }
 }
@@ -411,12 +422,18 @@ app.post('/api/verify-transaction', async (req, res) => {
   }
 });
 
-// ===== SAVE-SALE CORREGIDO =====
+// ===== SAVE-SALE CORREGIDO Y MEJORADO =====
 app.post('/api/save-sale', async (req, res) => {
   try {
     const saleData = req.body;
     
+    console.log('\n=== 💾 NUEVA VENTA RECIBIDA ===');
+    console.log('Signature:', saleData.signature);
+    console.log('Buyer:', saleData.buyer);
+    console.log('Amount:', saleData.amount, 'SOL');
+    
     if (!saleData.signature || !saleData.buyer || !saleData.metadata) {
+      console.error('❌ Datos incompletos');
       return res.status(400).json({ ok: false, error: 'Datos incompletos' });
     }
     
@@ -429,6 +446,8 @@ app.post('/api/save-sale', async (req, res) => {
     // Validar que la selección no solape con ventas existentes
     const data = readSales();
     const newSel = saleData.metadata.selection;
+    
+    console.log(`📦 Selección: ${newSel.blocksX}x${newSel.blocksY} bloques en (${newSel.minBlockX}, ${newSel.minBlockY})`);
     
     for (const sale of data.sales) {
       const existingSel = sale.metadata.selection;
@@ -447,7 +466,7 @@ app.post('/api/save-sale', async (req, res) => {
       }
     }
     
-    console.log('💾 Guardando venta:', saleData.signature);
+    console.log('💾 Guardando venta...');
     
     // Verificar si ya existe
     const exists = data.sales.some(s => s.signature === saleData.signature);
@@ -462,26 +481,30 @@ app.post('/api/save-sale', async (req, res) => {
     const saved = writeSales(data);
     
     if (!saved) {
+      console.error('❌ Error guardando archivo sales.json');
       return res.status(500).json({ ok: false, error: 'Error guardando venta' });
     }
     
     console.log('✅ Venta guardada. Total ventas:', data.sales.length);
     console.log('💰 Monto:', saleData.amount, 'SOL');
     
-    // 🔧 CORREGIDO: Enviar notificación ANTES de responder
+    // 🔧 CRÍTICO: Enviar notificación ANTES de responder
     console.log('📱 Intentando enviar notificación a Telegram...');
     const telegramResult = await sendTelegramNotification(saleData);
     
     if (telegramResult.ok) {
       if (telegramResult.skipped) {
-        console.log('⚠️ Telegram no configurado, continuando sin notificación');
+        console.log('⚠️ Telegram no configurado - continuando sin notificación');
       } else if (telegramResult.sent) {
-        console.log('✅ Notificación de Telegram enviada correctamente');
+        console.log('✅ ¡Notificación de Telegram enviada exitosamente!');
       }
     } else {
-      console.error('❌ Error enviando notificación:', telegramResult.error);
-      // No falla la venta si Telegram falla
+      console.error('❌ Error enviando notificación de Telegram:', telegramResult.error);
+      console.error('⚠️ La venta se guardó pero Telegram falló - NO CRÍTICO');
+      // NO fallar la venta si Telegram falla
     }
+    
+    console.log('=== ✅ VENTA COMPLETADA ===\n');
     
     res.json({ ok: true, message: 'Venta guardada correctamente' });
     
