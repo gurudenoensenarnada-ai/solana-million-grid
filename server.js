@@ -189,8 +189,33 @@ async function sendTelegramNotification(saleData) {
     const blocksTotal = sel.blocksX * sel.blocksY;
     const amount = saleData.amount.toFixed(4);
     
+    // Verificar si es tu wallet (ocultar precio)
+    const isOwnerWallet = saleData.buyer === 'B7nB9QX1KC4QXp5GMxR8xzh3yzoqp6NjxSwfNBXtgPc1';
+    
     // Crear mensaje
-    const message = `
+    let message;
+    
+    if (isOwnerWallet) {
+      // Mensaje sin precio para tu wallet
+      message = `
+🎉 *¡NUEVA COMPRA EN SOLANA MILLION GRID!*
+
+${zoneEmoji} *Zona:* ${zone}
+
+📊 *Datos de la compra:*
+• Proyecto: *${meta.name}*
+• URL: ${meta.url}
+• Bloques: *${blocksTotal}* (${sel.blocksX}×${sel.blocksY})
+• Posición: Fila ${sel.minBlockY + 1}, Columna ${sel.minBlockX + 1}
+
+🔗 *Transacción:*
+[Ver en Solscan](https://solscan.io/tx/${saleData.signature})
+
+⏰ ${new Date(saleData.timestamp).toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}
+`;
+    } else {
+      // Mensaje normal con precio para otras wallets
+      message = `
 🎉 *¡NUEVA COMPRA EN SOLANA MILLION GRID!*
 
 ${zoneEmoji} *Zona:* ${zone}
@@ -210,6 +235,7 @@ ${zoneEmoji} *Zona:* ${zone}
 
 ⏰ ${new Date(saleData.timestamp).toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}
 `;
+    }
 
     // Enviar mensaje con foto
     const logoUrl = meta.logo.startsWith('http') 
