@@ -92,8 +92,72 @@ if (TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID) {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-app.use(express.static('public'));
+// Servir archivos estáticos desde la raíz del proyecto
+app.use(express.static(__dirname));
 app.use('/uploads', express.static(UPLOADS_DIR));
+
+// Ruta específica para el index
+app.get('/', (req, res) => {
+  const indexPath = path.join(__dirname, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(404).send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Error - Archivo no encontrado</title>
+        <style>
+          body { 
+            font-family: Arial, sans-serif; 
+            background: #0a0a0a; 
+            color: #fff; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            height: 100vh; 
+            margin: 0;
+            text-align: center;
+          }
+          .error-box {
+            background: #1a1a2e;
+            padding: 40px;
+            border-radius: 10px;
+            border: 2px solid gold;
+            max-width: 600px;
+          }
+          h1 { color: gold; }
+          code { 
+            background: #333; 
+            padding: 2px 8px; 
+            border-radius: 4px; 
+            color: #ffd700;
+          }
+          .path { color: #aaa; font-size: 12px; margin-top: 20px; }
+        </style>
+      </head>
+      <body>
+        <div class="error-box">
+          <h1>❌ Error 404</h1>
+          <p>No se encontró el archivo <code>index.html</code></p>
+          <p>Por favor asegúrate de que el archivo existe en:</p>
+          <div class="path">${indexPath}</div>
+          <p style="margin-top: 30px;">Estructura esperada:</p>
+          <code style="display: block; text-align: left; padding: 15px;">
+            /<br>
+            ├── index.html<br>
+            ├── server.js<br>
+            ├── package.json<br>
+            └── persistent/<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;├── uploads/<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;└── sales.json
+          </code>
+        </div>
+      </body>
+      </html>
+    `);
+  }
+});
 
 // ===== CONFIGURACIÓN MULTER =====
 const storage = multer.diskStorage({
