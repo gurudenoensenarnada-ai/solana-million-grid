@@ -1,585 +1,280 @@
-/**
- * server.js - PRODUCTION VERSION MEJORADA
- * Mejoras: Validación de transacciones en servidor, locks, mejor manejo de errores
- */
-
-require('dotenv').config();
-
-// Parsear APP_CONFIG si existe
-if (process.env.APP_CONFIG) {
-  try {
-    const config = JSON.parse(process.env.APP_CONFIG);
-    Object.keys(config).forEach(key => {
-      if (!process.env[key]) {
-        process.env[key] = String(config[key]);
-      }
-    });
-    console.log('✅ APP_CONFIG parseado correctamente');
-  } catch (err) {
-    console.error('⚠️ Error parseando APP_CONFIG:', err.message);
-  }
-}
-
 const express = require('express');
+const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const multer = require('multer');
-const solanaWeb3 = require('@solana/web3.js');
-const cors = require('cors');
+const { Connection, PublicKey, clusterApiUrl } = require('@solana/web3.js');
 
 const app = express();
-app.use(express.json({ limit: '10mb' }));
-app.use(cors());
-
-// ==============================
-// CONFIGURACIÓN
-// ==============================
 const PORT = process.env.PORT || 3000;
 
-// Usar disco persistente si está disponible
-const PERSISTENT_DIR = process.env.PERSISTENT_DIR || '/persistent';
-const USE_PERSISTENT = fs.existsSync(PERSISTENT_DIR);
+// ===== CONFIGURACIÓN =====
+const CLUSTER = process.env.SOLANA_CLUSTER || 'devnet';
+const MERCHANT_WALLET = process.env.MERCHANT_WALLET || 'TU_WALLET_AQUI';
 
-const UPLOADS_DIR = USE_PERSISTENT 
-  ? path.join(PERSISTENT_DIR, 'uploads')
-  : path.resolve(__dirname, 'uploads');
-  
-const SALES_FILE = USE_PERSISTENT
-  ? path.join(PERSISTENT_DIR, 'sales.json')
-  : path.resolve(__dirname, 'sales.json');
+// Rutas de almacenamiento persistente
+const PERSISTENT_DIR = process.env.RENDER ? '/persistent' : path.join(__dirname, 'persistent');
+const UPLOADS_DIR = path.join(PERSISTENT_DIR, 'uploads');
+const SALES_FILE = path.join(PERSISTENT_DIR, 'sales.json');
 
-const LOCKS_FILE = USE_PERSISTENT
-  ? path.join(PERSISTENT_DIR, 'locks.json')
-  : path.resolve(__dirname, 'locks.json');
-
-const CLUSTER = process.env.CLUSTER || 'mainnet-beta';
-const RPC_URL = process.env.RPC_URL || solanaWeb3.clusterApiUrl(CLUSTER);
-const MERCHANT_WALLET = process.env.MERCHANT_WALLET;
-
-// Validar configuración
-if (!MERCHANT_WALLET) {
-  console.error('❌ ERROR: MERCHANT_WALLET no configurada');
-  process.exit(1);
-}
-
-if (!RPC_URL.includes('helius') && !RPC_URL.includes('quicknode') && CLUSTER === 'mainnet-beta') {
-  console.warn('⚠️ ADVERTENCIA: Usando RPC público para mainnet, puede ser lento');
-}
-
-console.log('🚀 Configuración:');
-console.log(`   Cluster: ${CLUSTER}`);
-console.log(`   Merchant: ${MERCHANT_WALLET}`);
-console.log(`   Puerto: ${PORT}`);
-console.log('\n💾 Almacenamiento:');
-console.log(`   Persistent disk: ${USE_PERSISTENT ? '✅ Activo' : '⚠️ Local (se borra al redesplegar)'}`);
-console.log(`   Uploads: ${UPLOADS_DIR}`);
-console.log(`   Sales: ${SALES_FILE}`);
-
-// Crear directorios necesarios
-if (!fs.existsSync(UPLOADS_DIR)) {
-  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-  console.log('✅ Directorio uploads creado');
-}
-
-if (!fs.existsSync(SALES_FILE)) {
-  fs.writeFileSync(SALES_FILE, JSON.stringify({ sales: [] }, null, 2));
-  console.log('✅ Archivo sales.json creado');
-}
-
-if (!fs.existsSync(LOCKS_FILE)) {
-  fs.writeFileSync(LOCKS_FILE, JSON.stringify({ locks: {} }, null, 2));
-  console.log('✅ Archivo locks.json creado');
-}
-
-// Conexión a Solana (segura en el servidor)
-const connection = new solanaWeb3.Connection(RPC_URL, 'confirmed');
-
-// ==============================
-// SISTEMA DE LOCKS (previene race conditions)
-// ==============================
-const activeLocks = new Map(); // locks en memoria para mejor rendimiento
-
-function acquireLock(key, timeoutMs = 30000) {
-  const now = Date.now();
-  const existing = activeLocks.get(key);
-  
-  if (existing && existing.expiresAt > now) {
-    return false; // Lock ocupado
-  }
-  
-  activeLocks.set(key, {
-    acquiredAt: now,
-    expiresAt: now + timeoutMs
-  });
-  
-  return true;
-}
-
-function releaseLock(key) {
-  activeLocks.delete(key);
-}
-
-// Limpiar locks expirados cada minuto
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, lock] of activeLocks.entries()) {
-    if (lock.expiresAt < now) {
-      activeLocks.delete(key);
+// ===== INICIALIZACIÓN: CREAR CARPETAS Y ARCHIVOS SI NO EXISTEN =====
+function initializeStorage() {
+  try {
+    // Crear directorio persistent si no existe
+    if (!fs.existsSync(PERSISTENT_DIR)) {
+      fs.mkdirSync(PERSISTENT_DIR, { recursive: true });
+      console.log('✅ Directorio persistent creado');
     }
+    
+    // Crear directorio uploads si no existe
+    if (!fs.existsSync(UPLOADS_DIR)) {
+      fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+      console.log('✅ Directorio uploads creado');
+    }
+    
+    // Crear sales.json si no existe
+    if (!fs.existsSync(SALES_FILE)) {
+      fs.writeFileSync(SALES_FILE, JSON.stringify({ sales: [] }, null, 2));
+      console.log('✅ Archivo sales.json creado');
+    }
+    
+    console.log('✅ Sistema de almacenamiento inicializado correctamente');
+  } catch (err) {
+    console.error('❌ Error inicializando almacenamiento:', err);
+    // No lanzar error, continuar la ejecución
   }
-}, 60000);
+}
 
-// ==============================
-// SERVIR ARCHIVOS ESTÁTICOS
-// ==============================
+// Inicializar al arrancar
+initializeStorage();
+
+// ===== CONEXIÓN SOLANA =====
+const connection = new Connection(clusterApiUrl(CLUSTER), 'confirmed');
+console.log(`🔗 Conectado a Solana ${CLUSTER}`);
+console.log(`💰 Wallet del comerciante: ${MERCHANT_WALLET}`);
+
+// ===== MIDDLEWARE =====
+app.use(express.json());
+app.use(express.static('public'));
+
+// Servir archivos subidos (logos)
 app.use('/uploads', express.static(UPLOADS_DIR));
-app.use(express.static(path.join(__dirname, 'public')));
 
-// ==============================
-// FUNCIONES AUXILIARES
-// ==============================
-function readSales() {
-  try {
-    const data = fs.readFileSync(SALES_FILE, 'utf8');
-    return JSON.parse(data);
-  } catch (err) {
-    console.error('Error leyendo sales.json:', err);
-    return { sales: [] };
-  }
-}
-
-function writeSales(salesData) {
-  try {
-    fs.writeFileSync(SALES_FILE, JSON.stringify(salesData, null, 2));
-  } catch (err) {
-    console.error('Error escribiendo sales.json:', err);
-    throw err;
-  }
-}
-
-// Validar que una transacción existe y fue confirmada
-async function validateTransaction(signature, expectedAmount, expectedRecipient) {
-  try {
-    console.log('🔍 Validando transacción:', signature);
-    
-    // Obtener información de la transacción
-    const tx = await connection.getParsedTransaction(signature, {
-      maxSupportedTransactionVersion: 0,
-      commitment: 'confirmed'
-    });
-    
-    if (!tx) {
-      console.log('❌ Transacción no encontrada');
-      return { valid: false, error: 'Transacción no encontrada' };
-    }
-    
-    if (tx.meta?.err) {
-      console.log('❌ Transacción falló:', tx.meta.err);
-      return { valid: false, error: 'Transacción falló en blockchain' };
-    }
-    
-    // Verificar las instrucciones de la transacción
-    const instructions = tx.transaction.message.instructions;
-    let transferFound = false;
-    let transferAmount = 0;
-    
-    for (const ix of instructions) {
-      if (ix.program === 'system' && ix.parsed?.type === 'transfer') {
-        const info = ix.parsed.info;
-        if (info.destination === expectedRecipient) {
-          transferFound = true;
-          transferAmount = info.lamports;
-          break;
-        }
-      }
-    }
-    
-    if (!transferFound) {
-      console.log('❌ No se encontró transferencia al merchant');
-      return { valid: false, error: 'Transferencia no encontrada' };
-    }
-    
-    // Permitir una pequeña variación por fees (1%)
-    const expectedLamports = expectedAmount * solanaWeb3.LAMPORTS_PER_SOL;
-    const tolerance = expectedLamports * 0.01;
-    
-    if (Math.abs(transferAmount - expectedLamports) > tolerance) {
-      console.log(`❌ Monto incorrecto: esperado ${expectedLamports}, recibido ${transferAmount}`);
-      return { 
-        valid: false, 
-        error: `Monto incorrecto: esperado ${expectedAmount} SOL, recibido ${transferAmount / solanaWeb3.LAMPORTS_PER_SOL} SOL` 
-      };
-    }
-    
-    console.log('✅ Transacción válida');
-    return { 
-      valid: true, 
-      amount: transferAmount / solanaWeb3.LAMPORTS_PER_SOL,
-      blockTime: tx.blockTime
-    };
-    
-  } catch (err) {
-    console.error('Error validando transacción:', err);
-    return { valid: false, error: 'Error al validar transacción: ' + err.message };
-  }
-}
-
-// Verificar que los bloques no estén ocupados
-function checkBlocksAvailable(selection, existingSales) {
-  for (const sale of existingSales) {
-    const existingSel = sale.metadata?.selection;
-    if (!existingSel) continue;
-    
-    // Detectar overlap
-    const overlap = !(
-      selection.minBlockX + selection.blocksX <= existingSel.minBlockX ||
-      selection.minBlockX >= existingSel.minBlockX + existingSel.blocksX ||
-      selection.minBlockY + selection.blocksY <= existingSel.minBlockY ||
-      selection.minBlockY >= existingSel.minBlockY + existingSel.blocksY
-    );
-    
-    if (overlap) {
-      return false;
-    }
-  }
-  return true;
-}
-
-// ==============================
-// MULTER PARA SUBIDA DE ARCHIVOS
-// ==============================
+// ===== CONFIGURACIÓN MULTER =====
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
+    // Asegurarse de que el directorio existe antes de guardar
+    if (!fs.existsSync(UPLOADS_DIR)) {
+      fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+    }
     cb(null, UPLOADS_DIR);
   },
   filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    cb(null, uniqueSuffix + ext);
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E8);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
   }
 });
 
 const upload = multer({
   storage: storage,
-  limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB
-  },
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
   fileFilter: (req, file, cb) => {
-    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'];
-    if (allowedTypes.includes(file.mimetype)) {
-      cb(null, true);
+    const allowedTypes = /jpeg|jpg|png|gif/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    
+    if (mimetype && extname) {
+      return cb(null, true);
     } else {
-      cb(new Error('Solo se permiten imágenes'));
+      cb(new Error('Solo se permiten imágenes (jpg, png, gif)'));
     }
   }
 });
 
-// ==============================
-// API ENDPOINTS
-// ==============================
+// ===== FUNCIONES DE PERSISTENCIA =====
+function readSales() {
+  try {
+    // Verificar si el archivo existe antes de leerlo
+    if (!fs.existsSync(SALES_FILE)) {
+      console.log('⚠️ sales.json no existe, creándolo...');
+      const emptyData = { sales: [] };
+      fs.writeFileSync(SALES_FILE, JSON.stringify(emptyData, null, 2));
+      return emptyData;
+    }
+    
+    const data = fs.readFileSync(SALES_FILE, 'utf8');
+    return JSON.parse(data);
+  } catch (err) {
+    console.error('❌ Error leyendo sales.json:', err);
+    // Si hay error, devolver estructura vacía
+    return { sales: [] };
+  }
+}
 
-// GET /api/config - Configuración pública (SIN secretos)
+function writeSales(data) {
+  try {
+    // Asegurarse de que el directorio existe
+    if (!fs.existsSync(PERSISTENT_DIR)) {
+      fs.mkdirSync(PERSISTENT_DIR, { recursive: true });
+    }
+    
+    fs.writeFileSync(SALES_FILE, JSON.stringify(data, null, 2));
+    console.log('✅ sales.json guardado correctamente');
+    return true;
+  } catch (err) {
+    console.error('❌ Error guardando sales.json:', err);
+    return false;
+  }
+}
+
+// ===== ENDPOINTS =====
+
+// Endpoint de configuración
 app.get('/api/config', (req, res) => {
   res.json({
     ok: true,
-    merchantWallet: MERCHANT_WALLET,
     cluster: CLUSTER,
-    pricePerBlock: 0.0001
+    merchantWallet: MERCHANT_WALLET
   });
 });
 
-// GET /api/sales - Obtener todas las ventas
-app.get('/api/sales', (req, res) => {
-  try {
-    const sales = readSales();
-    res.json(sales);
-  } catch (err) {
-    console.error('Error en /api/sales:', err);
-    res.status(500).json({ ok: false, error: 'Error al obtener ventas' });
-  }
-});
-
-// POST /api/upload-logo - Subir logo
+// Subir logo
 app.post('/api/upload-logo', upload.single('file'), (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ ok: false, error: 'No se recibió archivo' });
+      return res.status(400).json({ ok: false, error: 'No se subió ningún archivo' });
     }
-
+    
     const fileUrl = `/uploads/${req.file.filename}`;
+    console.log('✅ Logo subido:', fileUrl);
     
-    console.log('✅ Logo subido:', req.file.filename);
-    
-    res.json({
-      ok: true,
-      url: fileUrl,
-      filename: req.file.filename
-    });
+    res.json({ ok: true, url: fileUrl });
   } catch (err) {
-    console.error('Error en /api/upload-logo:', err);
+    console.error('❌ Error subiendo logo:', err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
 
-// POST /api/verify-transaction - Verificar transacción
+// Obtener blockhash reciente
+app.post('/api/get-latest-blockhash', async (req, res) => {
+  try {
+    const { blockhash } = await connection.getLatestBlockhash('finalized');
+    console.log('✅ Blockhash obtenido:', blockhash);
+    res.json({ ok: true, blockhash });
+  } catch (err) {
+    console.error('❌ Error obteniendo blockhash:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Verificar transacción
 app.post('/api/verify-transaction', async (req, res) => {
   try {
     const { signature } = req.body;
-
+    
     if (!signature) {
-      return res.status(400).json({ 
-        ok: false, 
-        error: 'Signature requerida' 
-      });
+      return res.status(400).json({ ok: false, error: 'Falta signature' });
     }
-
+    
     console.log('🔍 Verificando transacción:', signature);
-
-    // Obtener estado de la transacción
+    
     const status = await connection.getSignatureStatus(signature);
-
+    
     if (!status || !status.value) {
-      return res.json({
-        ok: true,
-        confirmed: false,
-        status: null
-      });
+      return res.json({ ok: true, confirmed: false });
     }
-
+    
     const confirmed = status.value.confirmationStatus === 'confirmed' || 
-                     status.value.confirmationStatus === 'finalized';
-
-    res.json({
-      ok: true,
-      confirmed,
-      status: status.value,
-      confirmationStatus: status.value.confirmationStatus,
-      err: status.value.err
-    });
-
-  } catch (err) {
-    console.error('Error verificando transacción:', err);
-    res.status(500).json({ 
-      ok: false, 
-      error: 'Error al verificar transacción' 
-    });
-  }
-});
-
-// POST /api/get-latest-blockhash - Obtener blockhash
-app.post('/api/get-latest-blockhash', async (req, res) => {
-  try {
-    const latestBlockhash = await connection.getLatestBlockhash('finalized');
+                      status.value.confirmationStatus === 'finalized';
+    
+    console.log('📊 Status:', status.value.confirmationStatus, '| Confirmado:', confirmed);
     
     res.json({
       ok: true,
-      blockhash: latestBlockhash.blockhash,
-      lastValidBlockHeight: latestBlockhash.lastValidBlockHeight
+      confirmed: confirmed,
+      status: status.value
     });
+    
   } catch (err) {
-    console.error('Error obteniendo blockhash:', err);
-    res.status(500).json({ 
-      ok: false, 
-      error: 'Error al obtener blockhash' 
-    });
+    console.error('❌ Error verificando transacción:', err);
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 
-// POST /api/save-sale - Guardar venta (CON VALIDACIÓN DE TRANSACCIÓN)
-app.post('/api/save-sale', async (req, res) => {
-  const lockKey = 'save-sale';
-  
+// Guardar venta
+app.post('/api/save-sale', (req, res) => {
   try {
-    const { signature, buyer, metadata, amount, timestamp } = req.body;
-
-    // Validación de datos
-    if (!signature || !buyer || !metadata || !amount) {
-      return res.status(400).json({ 
-        ok: false, 
-        error: 'Faltan datos requeridos' 
-      });
+    const saleData = req.body;
+    
+    // Validar datos básicos
+    if (!saleData.signature || !saleData.buyer || !saleData.metadata) {
+      return res.status(400).json({ ok: false, error: 'Datos incompletos' });
     }
-
-    // Adquirir lock
-    if (!acquireLock(lockKey, 30000)) {
-      return res.status(429).json({
-        ok: false,
-        error: 'Otra compra en proceso, intenta de nuevo en unos segundos'
-      });
-    }
-
-    console.log('💾 Guardando venta:', signature);
-
-    // Leer ventas actuales
-    const salesData = readSales();
-
-    // Verificar si ya existe esta transacción
-    const exists = salesData.sales.some(s => s.signature === signature);
+    
+    console.log('💾 Guardando venta:', saleData.signature);
+    
+    const data = readSales();
+    
+    // Verificar si ya existe
+    const exists = data.sales.some(s => s.signature === saleData.signature);
     if (exists) {
-      console.log('⚠️ Venta duplicada, ignorando:', signature);
-      releaseLock(lockKey);
+      console.log('⚠️ Venta duplicada, ignorando');
       return res.json({ ok: true, message: 'Venta ya registrada' });
     }
-
-    // Validar selección
-    const sel = metadata.selection;
-    if (!sel || sel.minBlockX === undefined || sel.minBlockY === undefined || !sel.blocksX || !sel.blocksY) {
-      releaseLock(lockKey);
-      return res.status(400).json({ 
-        ok: false, 
-        error: 'Selección inválida' 
-      });
-    }
-
-    // Verificar que los bloques no estén ocupados
-    if (!checkBlocksAvailable(sel, salesData.sales)) {
-      console.log('❌ Bloques ocupados');
-      releaseLock(lockKey);
-      return res.status(409).json({ 
-        ok: false, 
-        error: 'Los bloques seleccionados ya están ocupados' 
-      });
-    }
-
-    // VALIDAR TRANSACCIÓN EN BLOCKCHAIN
-    console.log('🔍 Validando transacción en blockchain...');
-    const validation = await validateTransaction(signature, amount, MERCHANT_WALLET);
     
-    if (!validation.valid) {
-      console.log('❌ Transacción inválida:', validation.error);
-      releaseLock(lockKey);
-      return res.status(400).json({
-        ok: false,
-        error: validation.error || 'Transacción inválida'
-      });
-    }
-
-    console.log('✅ Transacción validada correctamente');
-
-    // Añadir nueva venta
-    const newSale = {
-      signature,
-      buyer,
-      metadata,
-      amountSOL: validation.amount,
-      timestamp: timestamp || Date.now(),
-      blockTime: validation.blockTime,
-      createdAt: new Date().toISOString(),
-      validated: true
-    };
-
-    salesData.sales.push(newSale);
-
-    // Guardar
-    writeSales(salesData);
-
-    console.log('✅ Venta guardada exitosamente');
-
-    releaseLock(lockKey);
-
-    res.json({ 
-      ok: true, 
-      message: 'Venta registrada exitosamente',
-      sale: newSale
-    });
-
-  } catch (err) {
-    console.error('Error en /api/save-sale:', err);
-    releaseLock(lockKey);
-    res.status(500).json({ 
-      ok: false, 
-      error: err.message || 'Error al guardar la venta' 
-    });
-  }
-});
-
-// GET /api/stats - Estadísticas
-app.get('/api/stats', (req, res) => {
-  try {
-    const sales = readSales();
-    const totalSales = sales.sales.length;
-    const totalSOL = sales.sales.reduce((sum, s) => sum + (s.amountSOL || 0), 0);
-    const totalPixels = sales.sales.reduce((sum, s) => {
-      const sel = s.metadata?.selection;
-      if (!sel) return sum;
-      return sum + (sel.blocksX * sel.blocksY * 100);
-    }, 0);
-
-    res.json({
-      ok: true,
-      stats: {
-        totalSales,
-        totalSOL: totalSOL.toFixed(4),
-        totalPixels,
-        percentageSold: ((totalPixels / 1000000) * 100).toFixed(2)
-      }
-    });
-  } catch (err) {
-    console.error('Error en /api/stats:', err);
-    res.status(500).json({ ok: false, error: 'Error al obtener estadísticas' });
-  }
-});
-
-// GET /api/health - Health check
-app.get('/api/health', async (req, res) => {
-  try {
-    // Verificar conexión con Solana
-    const slot = await connection.getSlot();
+    // Agregar venta
+    data.sales.push(saleData);
     
-    res.json({
-      ok: true,
-      status: 'healthy',
-      cluster: CLUSTER,
-      currentSlot: slot,
-      timestamp: new Date().toISOString()
-    });
+    const saved = writeSales(data);
+    
+    if (!saved) {
+      return res.status(500).json({ ok: false, error: 'Error guardando venta' });
+    }
+    
+    console.log('✅ Venta guardada. Total ventas:', data.sales.length);
+    
+    res.json({ ok: true, message: 'Venta guardada correctamente' });
+    
   } catch (err) {
-    res.status(503).json({
-      ok: false,
-      status: 'unhealthy',
-      error: err.message
-    });
+    console.error('❌ Error guardando venta:', err);
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 
-// ==============================
-// FALLBACK SPA
-// ==============================
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+// Obtener todas las ventas
+app.get('/api/sales', (req, res) => {
+  try {
+    const data = readSales();
+    console.log('📊 Enviando ventas:', data.sales.length);
+    res.json({ ok: true, sales: data.sales });
+  } catch (err) {
+    console.error('❌ Error obteniendo ventas:', err);
+    res.status(500).json({ ok: false, error: err.message, sales: [] });
+  }
 });
 
-// ==============================
-// MANEJO DE ERRORES
-// ==============================
-app.use((err, req, res, next) => {
-  console.error('❌ Error no manejado:', err);
-  res.status(500).json({
-    ok: false,
-    error: 'Error interno del servidor'
+// Health check
+app.get('/health', (req, res) => {
+  res.json({ 
+    ok: true, 
+    status: 'Server running',
+    cluster: CLUSTER,
+    timestamp: new Date().toISOString(),
+    salesCount: readSales().sales.length
   });
 });
 
-// ==============================
-// INICIAR SERVIDOR
-// ==============================
+// ===== MANEJO DE ERRORES =====
+app.use((err, req, res, next) => {
+  console.error('❌ Error no manejado:', err);
+  res.status(500).json({ ok: false, error: err.message });
+});
+
+// ===== INICIAR SERVIDOR =====
 app.listen(PORT, () => {
-  console.log(`\n✅ Servidor iniciado en puerto ${PORT}`);
-  console.log(`🌐 Accede en: http://localhost:${PORT}`);
-  console.log(`📂 Uploads: ${UPLOADS_DIR}`);
-  console.log(`💾 Sales: ${SALES_FILE}`);
-  console.log(`🔒 Persistent storage: ${USE_PERSISTENT ? 'ACTIVADO ✅' : 'DESACTIVADO ⚠️'}\n`);
-  console.log('🔐 Sistema de locks activado');
-  console.log('✅ Validación de transacciones activada\n');
-});
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('🛑 SIGTERM recibido, cerrando servidor...');
-  process.exit(0);
-});
-
-process.on('SIGINT', () => {
-  console.log('\n🛑 SIGINT recibido, cerrando servidor...');
-  process.exit(0);
+  console.log(`\n🚀 Servidor corriendo en puerto ${PORT}`);
+  console.log(`📁 Directorio persistent: ${PERSISTENT_DIR}`);
+  console.log(`🖼️  Directorio uploads: ${UPLOADS_DIR}`);
+  console.log(`📄 Archivo sales: ${SALES_FILE}`);
+  console.log(`🌐 Cluster: ${CLUSTER}`);
+  console.log(`💰 Wallet: ${MERCHANT_WALLET}\n`);
 });
