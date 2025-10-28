@@ -1122,27 +1122,28 @@
       }, 2000);
       
     } catch (err) {
-      console.error('❌ Error en el pago:', err);
-      
-      let errorMsg = 'Error en el pago';
-      
-      if (err.message?.includes('User rejected')) {
-        errorMsg = '❌ Transacción cancelada';
-      } else if (err.message?.includes('insufficient')) {
-        errorMsg = '❌ SOL insuficiente';
-      } else if (err.message?.includes('Timeout') || err.message?.includes('expired')) {
-        errorMsg = '⏳ Timeout - Verifica tu transacción en Phantom';
-      } else if (err.message) {
-        errorMsg = `❌ ${err.message}`;
-      }
-      
-      showStatus(errorMsg, 'error');
-      alert(errorMsg);
-      
-    } finally {
-      payBtn.disabled = false;
-      payBtn.textContent = '💰 Pagar y Registrar';
-    }
+  console.error('❌ Error en el pago:', err);
+  
+  let errorMsg = 'Error en el pago';
+  
+  if (err.message?.includes('User rejected')) {
+    errorMsg = '❌ Transacción cancelada';
+  } else if (err.message?.includes('insufficient')) {
+    errorMsg = '❌ SOL insuficiente';
+  } else if (err.message?.includes('Timeout') || err.message?.includes('expired')) {
+    errorMsg = '⏳ Timeout - Verifica tu transacción en Phantom';
+  } else if (err.message) {
+    errorMsg = `❌ ${err.message}`;
+  }
+  
+  showStatus(errorMsg, 'error');
+  
+  // RESTAURAR EL BOTÓN Y PERMITIR REINTENTAR
+  payBtn.disabled = false;
+  payBtn.textContent = '💰 Pagar y Registrar';
+  
+  alert(errorMsg);
+}
   });
 
   // Click en canvas para abrir URL
