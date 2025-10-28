@@ -312,16 +312,16 @@
   <div id="info">
     <div id="stats">
       <div class="stat-item">
-        <div class="stat-value" id="goldSold">0</div>
-        <div class="stat-label">🥇 Bloques Oro Vendidos</div>
+        <div class="stat-value" id="goldSold">0/2,500</div>
+        <div class="stat-label">🥇 Bloques Oro</div>
       </div>
       <div class="stat-item">
-        <div class="stat-value" id="silverSold">0</div>
-        <div class="stat-label">🥈 Bloques Plata Vendidos</div>
+        <div class="stat-value" id="silverSold">0/3,500</div>
+        <div class="stat-label">🥈 Bloques Plata</div>
       </div>
       <div class="stat-item">
-        <div class="stat-value" id="bronzeSold">0</div>
-        <div class="stat-label">🥉 Bloques Bronce Vendidos</div>
+        <div class="stat-value" id="bronzeSold">0/4,000</div>
+        <div class="stat-label">🥉 Bloques Bronce</div>
       </div>
       <div class="stat-item">
         <div class="stat-value" id="totalSales">0</div>
@@ -601,9 +601,9 @@
         }
       }
       
-      goldSoldSpan.textContent = goldSold.toLocaleString();
-      silverSoldSpan.textContent = silverSold.toLocaleString();
-      bronzeSoldSpan.textContent = bronzeSold.toLocaleString();
+      goldSoldSpan.textContent = `${goldSold.toLocaleString()}/${GOLD_TOTAL.toLocaleString()}`;
+      silverSoldSpan.textContent = `${silverSold.toLocaleString()}/${SILVER_TOTAL.toLocaleString()}`;
+      bronzeSoldSpan.textContent = `${bronzeSold.toLocaleString()}/${BRONZE_TOTAL.toLocaleString()}`;
       
       soldPixels = Object.values(blockData).filter(b => b !== null).length * BLOCK_SIZE * BLOCK_SIZE;
       
@@ -932,6 +932,18 @@
       alert('Error de configuración del servidor');
       return;
     }
+    
+    // GUARDAR COPIA DE LA SELECCIÓN PARA EVITAR QUE SE PIERDA
+    const savedSelection = {
+      minBlockX: selection.minBlockX,
+      minBlockY: selection.minBlockY,
+      maxBlockX: selection.maxBlockX,
+      maxBlockY: selection.maxBlockY,
+      blocksX: selection.blocksX,
+      blocksY: selection.blocksY,
+      zone: selection.zone,
+      soldInSelection: selection.soldInSelection
+    };
     
     try {
       payBtn.disabled = true;
