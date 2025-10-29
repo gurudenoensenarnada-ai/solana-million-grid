@@ -2,37 +2,70 @@
 node_modules/
 package-lock.json
 
-# Environment variables (NUNCA subir)
+# Environment variables (CRITICAL - NEVER COMMIT)
 .env
-.env.local
-.env.production
+.env.*
+!.env.example
 
-# Archivos de datos
+# Archivos de datos sensibles
 sales.json
-uploads/
+uploads/*
+!uploads/.gitkeep
 /persistent/
+*.backup
 
 # Logs
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+logs/
 
 # Sistema operativo
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
-# IDEs
+# IDEs y editores
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+*.sublime-project
+*.sublime-workspace
 
-# Build
+# Build y distribución
 dist/
 build/
+.next/
+out/
+
+# Testing
+coverage/
+.nyc_output/
 
 # Temporal
 tmp/
 temp/
+*.tmp
+
+# Certificados y claves
+*.pem
+*.key
+*.cert
+
+# Cache
+.cache/
+.parcel-cache/
+.eslintcache
+
+# Misc
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
