@@ -693,7 +693,7 @@ const server = app.listen(PORT, HOST, () => {
 });
 
 // Keep server alive
-server.keepAliveTimeout = 120000; // 120 seconds
+server.keepAliveTimeout = 120000;
 server.headersTimeout = 120000;
 
 // Graceful shutdown
@@ -716,30 +716,19 @@ process.on('SIGINT', () => {
 // Handle uncaught exceptions
 process.on('uncaughtException', (error) => {
   console.error('❌ Uncaught Exception:', error);
-  // Don't exit - keep server running
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
-  // Don't exit - keep server running
-});
-
-module.exports = app;IGINT received, shutting down gracefully...');
-  server.close(() => {
-    console.log('✅ Server closed');
-    process.exit(0);
-  });
-});
-
-// Handle uncaught exceptions
-process.on('uncaughtException', (error) => {
-  console.error('❌ Uncaught Exception:', error);
-  // Don't exit - keep server running
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
-  // Don't exit - keep server running
 });
 
 module.exports = app;
+```
+
+---
+
+## 💡 O MEJOR: Verifica la línea 727
+
+El error dice:
+```
+module.exports = app;IGINT received, shutting down gracefully...');
