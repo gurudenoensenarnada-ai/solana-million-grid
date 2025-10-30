@@ -1,148 +1,433 @@
-// ===== FUNCIONES DE TELEGRAM (ENGLISH VERSION) =====
-function escapeMarkdownV2(text) {
-  // Escape ALL special characters for MarkdownV2
-  return String(text).replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, '\\$1');
+/**
+ * Solana Million Grid - Main Server
+ * Complete and functional server implementation
+ */
+
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
+
+// Load configuration
+const config = require('./index.js');
+
+// Initialize Express app
+const app = express();
+
+console.log('🚀 Starting Solana Million Grid Server...\n');
+
+// ==========================================
+// Middleware
+// ==========================================
+app.use(cors());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Logging middleware
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  next();
+});
+
+// ==========================================
+// Create necessary directories
+// ==========================================
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  console.log('✅ Created uploads directory');
 }
 
-async function sendTelegramNotification(saleData) {
-  console.log('\n🔍 === DEBUG TELEGRAM ===');
-  console.log('TELEGRAM_BOT_TOKEN exists?', !!TELEGRAM_BOT_TOKEN);
-  console.log('TELEGRAM_CHAT_ID exists?', !!TELEGRAM_CHAT_ID);
+const persistentDir = config.storage.persistentDir 
+  ? path.resolve(config.storage.persistentDir) 
+  : __dirname;
+
+if (config.storage.persistentDir && !fs.existsSync(persistentDir)) {
+  fs.mkdirSync(persistentDir, { recursive: true });
+  console.log('✅ Created persistent directory:', persistentDir);
+}
+
+// ==========================================
+// Static Files
+// ==========================================
+app.use(express.static(__dirname));
+app.use('/uploads', express.static(uploadsDir));
+
+// Public folder if exists
+const publicDir = path.join(__dirname, 'public');
+if (fs.existsSync(publicDir)) {
+  app.use(express.static(publicDir));
+}
+
+// ==========================================
+// Root Route - Serve index.html
+// ==========================================
+app.get('/', (req, res) => {
+  // Try public/index.html first
+  const publicIndex = path.join(__dirname, 'public', 'index.html');
+  if (fs.existsSync(publicIndex)) {
+    return res.sendFile(publicIndex);
+  }
   
-  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
-    console.log('⚠️ Telegram NOT configured');
-    return { ok: true, skipped: true };
+  // Fallback to root index.html
+  const rootIndex = path.join(__dirname, 'index.html');
+  if (fs.existsSync(rootIndex)) {
+    return res.sendFile(rootIndex);
   }
+  
+  res.status(404).send('index.html not found');
+});
 
-  try {
-    console.log('📱 Preparing notification...');
-    
-    const meta = saleData.metadata;
-    const sel = meta.selection;
-    
-    let zone = '🥉 BRONZE';
-    let zoneEmoji = '🥉';
-    if (sel.minBlockY <= 24) {
-      zone = '🥇 GOLD';
-      zoneEmoji = '🥇';
-    } else if (sel.minBlockY >= 25 && sel.minBlockY <= 59) {
-      zone = '🥈 SILVER';
-      zoneEmoji = '🥈';
-    }
-    
-    const blocksTotal = sel.blocksX * sel.blocksY;
-    const amount = saleData.amount.toFixed(4);
-    const isOwnerWallet = saleData.buyer === OWNER_WALLET;
-    
-    // 🔧 Escape ALL data
-    const safeName = escapeMarkdownV2(meta.name);
-    const safeUrl = escapeMarkdownV2(meta.url);
-    const safeAmount = escapeMarkdownV2(amount);
-    const safeBlocksTotal = escapeMarkdownV2(blocksTotal);
-    const safeBlocksX = escapeMarkdownV2(sel.blocksX);
-    const safeBlocksY = escapeMarkdownV2(sel.blocksY);
-    const safeRow = escapeMarkdownV2(sel.minBlockY + 1);
-    const safeCol = escapeMarkdownV2(sel.minBlockX + 1);
-    const safeBuyerStart = escapeMarkdownV2(saleData.buyer.substring(0, 8));
-    const safeBuyerEnd = escapeMarkdownV2(saleData.buyer.substring(saleData.buyer.length - 8));
-    const safeDate = escapeMarkdownV2(new Date(saleData.timestamp).toLocaleString('en-US', { timeZone: 'Europe/Madrid' }));
-    
-    let message;
-    
-    if (isOwnerWallet) {
-      message = `🎉 *NEW PURCHASE ON SOLANA MILLION GRID\\!*
+// ==========================================
+// Health Check
+// ==========================================
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: config.nodeEnv,
+    cluster: config.solana.cluster,
+    version: '2.0.0'
+  });
+});
 
-${zoneEmoji} *Zone:* ${zone}
-⭐ *OWNER PURCHASE \\- SPECIAL PRICE*
+// ==========================================
+// API Configuration Endpoint
+// ==========================================
+app.get('/api/config', (req, res) => {
+  res.json({
+    ok: true,
+    merchantWallet: config.solana.merchantWallet,
+    ownerWallet: config.solana.ownerWallet,
+    cluster: config.solana.cluster,
+    grid: config.grid,
+    cloudinaryEnabled: config.cloudinary.enabled,
+    cloudinaryCloudName: config.cloudinary.cloudName,
+    cloudinaryUploadPreset: config.cloudinary.uploadPreset,
+    telegramEnabled: config.telegram.enabled
+  });
+});
 
-📊 *Purchase details:*
-• Project: *${safeName}*
-• URL: ${safeUrl}
-• Blocks: *${safeBlocksTotal}* \\(${safeBlocksX}×${safeBlocksY}\\)
-• Position: Row ${safeRow}, Column ${safeCol}
+// ==========================================
+// Sales Management
+// ==========================================
+const SALES_FILE = path.join(persistentDir, 'sales.json');
 
-💰 *Payment:*
-• Amount: *${safeAmount} SOL*
-• Price/block: *0\\.0001 SOL* 🌟
-• Buyer: \`${safeBuyerStart}\\.\\.\\.${safeBuyerEnd}\`
-
-🔗 *Transaction:*
-[View on Solscan](https://solscan\\.io/tx/${saleData.signature})
-
-⏰ ${safeDate}`;
-    } else {
-      message = `🎉 *NEW PURCHASE ON SOLANA MILLION GRID\\!*
-
-${zoneEmoji} *Zone:* ${zone}
-
-📊 *Purchase details:*
-• Project: *${safeName}*
-• URL: ${safeUrl}
-• Blocks: *${safeBlocksTotal}* \\(${safeBlocksX}×${safeBlocksY}\\)
-• Position: Row ${safeRow}, Column ${safeCol}
-
-💰 *Payment:*
-• Amount: *${safeAmount} SOL*
-• Buyer: \`${safeBuyerStart}\\.\\.\\.${safeBuyerEnd}\`
-
-🔗 *Transaction:*
-[View on Solscan](https://solscan\\.io/tx/${saleData.signature})
-
-⏰ ${safeDate}`;
-    }
-
-    console.log('📝 Message prepared (length:', message.length, 'chars)');
-
-    // Build logo URL
-    let logoUrl = meta.logo;
-    if (!logoUrl.startsWith('http')) {
-      const host = process.env.RENDER ? 'https://www.solanamillondollar.com' : 'http://localhost:3000';
-      logoUrl = `${host}${meta.logo}`;
-    }
-
-    console.log('📷 Logo URL:', logoUrl);
-
-    const telegramApiUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`;
-    
-    const formData = new URLSearchParams();
-    formData.append('chat_id', TELEGRAM_CHAT_ID);
-    formData.append('photo', logoUrl);
-    formData.append('caption', message);
-    formData.append('parse_mode', 'MarkdownV2');
-
-    console.log('🚀 Sending request to Telegram API...');
-    console.log('   Chat ID:', TELEGRAM_CHAT_ID);
-    
-    const response = await fetch(telegramApiUrl, {
-      method: 'POST',
-      body: formData,
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
+// Initialize sales file if it doesn't exist
+function initSalesFile() {
+  if (!fs.existsSync(SALES_FILE)) {
+    const initialData = {
+      sales: [],
+      stats: {
+        totalSales: 0,
+        totalBlocks: 0,
+        totalRevenue: 0
       }
-    });
-
-    console.log('📥 Response received - Status:', response.status);
-
-    const result = await response.json();
-    console.log('📦 Result OK:', result.ok);
-    
-    if (result.ok) {
-      console.log('✅ TELEGRAM SENT SUCCESSFULLY!');
-      if (isOwnerWallet) {
-        console.log('⭐ Was OWNER purchase');
-      }
-      return { ok: true, sent: true };
-    } else {
-      console.error('❌ ERROR IN TELEGRAM RESPONSE');
-      console.error('   error_code:', result.error_code);
-      console.error('   description:', result.description);
-      return { ok: false, error: result.description };
-    }
-  } catch (err) {
-    console.error('❌ EXCEPTION IN sendTelegramNotification');
-    console.error('   Error:', err.message);
-    return { ok: false, error: err.message };
-  } finally {
-    console.log('=== END DEBUG TELEGRAM ===\n');
+    };
+    fs.writeFileSync(SALES_FILE, JSON.stringify(initialData, null, 2));
+    console.log('✅ Initialized sales.json file');
   }
 }
+
+initSalesFile();
+
+// Get all sales
+app.get('/api/sales', (req, res) => {
+  try {
+    const data = JSON.parse(fs.readFileSync(SALES_FILE, 'utf8'));
+    res.json({
+      ok: true,
+      ...data
+    });
+  } catch (error) {
+    console.error('❌ Error reading sales:', error.message);
+    res.json({
+      ok: true,
+      sales: [],
+      stats: { totalSales: 0, totalBlocks: 0, totalRevenue: 0 }
+    });
+  }
+});
+
+// Get stats
+app.get('/api/stats', (req, res) => {
+  try {
+    const data = JSON.parse(fs.readFileSync(SALES_FILE, 'utf8'));
+    res.json({
+      ok: true,
+      ...data.stats
+    });
+  } catch (error) {
+    console.error('❌ Error reading stats:', error.message);
+    res.json({
+      ok: true,
+      totalSales: 0,
+      totalBlocks: 0,
+      totalRevenue: 0
+    });
+  }
+});
+
+// ==========================================
+// Purchase Endpoint
+// ==========================================
+app.post('/api/purchase', async (req, res) => {
+  try {
+    const { signature, buyer, metadata } = req.body;
+    
+    console.log('\n📝 New purchase request:');
+    console.log('  Signature:', signature);
+    console.log('  Buyer:', buyer);
+    console.log('  Metadata:', JSON.stringify(metadata, null, 2));
+    
+    if (!signature || !buyer || !metadata) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Missing required fields: signature, buyer, metadata'
+      });
+    }
+
+    // Read current sales
+    let salesData = { sales: [], stats: { totalSales: 0, totalBlocks: 0, totalRevenue: 0 } };
+    if (fs.existsSync(SALES_FILE)) {
+      salesData = JSON.parse(fs.readFileSync(SALES_FILE, 'utf8'));
+    }
+
+    // Calculate blocks and amount
+    let blocks = 1;
+    let amount = 0;
+    
+    if (metadata.selection) {
+      blocks = metadata.selection.blocksX * metadata.selection.blocksY;
+      
+      // Calculate price based on zone
+      const row = metadata.selection.minBlockY;
+      const isOwner = buyer === config.solana.ownerWallet;
+      
+      if (isOwner) {
+        amount = blocks * config.grid.prices.owner;
+      } else if (row <= config.grid.zones.goldEnd) {
+        amount = blocks * config.grid.prices.gold;
+      } else if (row >= config.grid.zones.silverStart && row <= config.grid.zones.silverEnd) {
+        amount = blocks * config.grid.prices.silver;
+      } else {
+        amount = blocks * config.grid.prices.bronze;
+      }
+    }
+
+    // Create sale record
+    const sale = {
+      signature,
+      buyer,
+      metadata,
+      amount,
+      blocks,
+      timestamp: Date.now(),
+      verified: true
+    };
+
+    // Add to sales
+    salesData.sales.push(sale);
+    salesData.stats.totalSales++;
+    salesData.stats.totalBlocks += blocks;
+    salesData.stats.totalRevenue += amount;
+
+    // Save
+    fs.writeFileSync(SALES_FILE, JSON.stringify(salesData, null, 2));
+
+    console.log('✅ Purchase recorded successfully');
+    console.log(`  Blocks: ${blocks}`);
+    console.log(`  Amount: ${amount} SOL`);
+
+    res.status(201).json({
+      ok: true,
+      message: 'Purchase recorded successfully',
+      sale
+    });
+  } catch (error) {
+    console.error('❌ Error processing purchase:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'Failed to process purchase: ' + error.message
+    });
+  }
+});
+
+// ==========================================
+// File Upload
+// ==========================================
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadsDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'logo-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|gif|webp/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+
+    if (mimetype && extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed (JPEG, PNG, GIF, WEBP)'));
+    }
+  }
+});
+
+app.post('/api/upload', upload.single('logo'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        ok: false,
+        error: 'No file uploaded'
+      });
+    }
+
+    const fileUrl = `/uploads/${req.file.filename}`;
+    
+    console.log('✅ File uploaded successfully:', fileUrl);
+
+    res.status(201).json({
+      ok: true,
+      url: fileUrl,
+      filename: req.file.filename,
+      path: req.file.path
+    });
+  } catch (error) {
+    console.error('❌ Error uploading file:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'Failed to upload file: ' + error.message
+    });
+  }
+});
+
+// ==========================================
+// List uploaded files
+// ==========================================
+app.get('/api/uploads', (req, res) => {
+  try {
+    const files = fs.readdirSync(uploadsDir)
+      .filter(file => file !== '.gitkeep')
+      .map(file => ({
+        filename: file,
+        url: `/uploads/${file}`,
+        size: fs.statSync(path.join(uploadsDir, file)).size
+      }));
+    
+    res.json({
+      ok: true,
+      files,
+      count: files.length
+    });
+  } catch (error) {
+    console.error('❌ Error listing uploads:', error);
+    res.json({
+      ok: true,
+      files: [],
+      count: 0
+    });
+  }
+});
+
+// ==========================================
+// Error Handling
+// ==========================================
+app.use((err, req, res, next) => {
+  console.error('❌ Error:', err.message);
+  console.error(err.stack);
+  
+  res.status(err.status || 500).json({
+    ok: false,
+    error: err.message || 'Internal server error'
+  });
+});
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({
+    ok: false,
+    error: 'Not found: ' + req.path
+  });
+});
+
+// ==========================================
+// Start Server
+// ==========================================
+const PORT = config.port;
+const HOST = '0.0.0.0';
+
+const server = app.listen(PORT, HOST, () => {
+  console.log('\n🚀 ================================');
+  console.log('   SOLANA MILLION GRID');
+  console.log('   ================================\n');
+  console.log(`   🌐 Server: http://localhost:${PORT}`);
+  console.log(`   📦 Environment: ${config.nodeEnv}`);
+  console.log(`   🔗 Cluster: ${config.solana.cluster}`);
+  console.log(`   💼 Merchant: ${config.solana.merchantWallet.substring(0, 8)}...`);
+  console.log(`   👤 Owner: ${config.solana.ownerWallet.substring(0, 8)}...`);
+  
+  if (config.cloudinary.enabled) {
+    console.log(`   ☁️  Cloudinary: ✅ (${config.cloudinary.cloudName})`);
+  } else {
+    console.log(`   ☁️  Cloudinary: ❌`);
+  }
+  
+  if (config.telegram.enabled) {
+    console.log(`   📱 Telegram: ✅`);
+  } else {
+    console.log(`   📱 Telegram: ❌`);
+  }
+  
+  console.log('\n   ================================');
+  console.log('   ✅ Server is ready and listening!');
+  console.log('   📝 Logs will appear below');
+  console.log('   ================================\n');
+});
+
+// Keep server alive
+server.keepAliveTimeout = 120000; // 120 seconds
+server.headersTimeout = 120000;
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('\n👋 SIGTERM received, shutting down gracefully...');
+  server.close(() => {
+    console.log('✅ Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('\n👋 SIGINT received, shutting down gracefully...');
+  server.close(() => {
+    console.log('✅ Server closed');
+    process.exit(0);
+  });
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  // Don't exit - keep server running
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  // Don't exit - keep server running
+});
+
+module.exports = app;
