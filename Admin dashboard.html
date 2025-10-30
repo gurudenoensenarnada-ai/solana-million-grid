@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard - Solana Million Grid</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    
+    .header {
+      background: white;
+      padding: 30px;
+      border-radius: 15px;
+      margin-bottom: 30px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    }
+    
+    .header h1 {
+      color: #2d3748;
+      font-size: 32px;
+      margin-bottom: 10px;
+    }
+    
+    .header p {
+      color: #718096;
+    }
+    
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+    
+    .stat-card {
+      background: white;
+      padding: 25px;
+      border-radius: 15px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    
+    .stat-icon {
+      font-size: 40px;
+      margin-bottom: 15px;
+    }
+    
+    .stat-value {
+      font-size: 36px;
+      font-weight: bold;
+      color: #2d3748;
+      margin-bottom: 5px;
+    }
+    
+    .stat-label {
+      color: #718096;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    
+    .stat-change {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #48bb78;
+    }
+    
+    .stat-change.negative {
+      color: #f56565;
+    }
+    
+    .dashboard-section {
+      background: white;
+      padding: 30px;
+      border-radius: 15px;
+      margin-bottom: 30px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    }
+    
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 25px;
+      padding-bottom: 15px;
+      border-bottom: 2px solid #e2e8f0;
+    }
+    
+    .section-title {
+      font-size: 24px;
+      color: #2d3748;
+      font-weight: bold;
+    }
+    
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-weight: 600;
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+    
+    .btn-secondary {
+      background: #e2e8f0;
+      color: #2d3748;
+    }
+    
+    .btn-secondary:hover {
+      background: #cbd5e0;
+    }
+    
+    .btn-danger {
+      background: #f56565;
+      color: white;
+    }
+    
+    .btn-danger:hover {
+      background: #e53e3e;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    
+    th {
+      background: #f7fafc;
+      padding: 15px;
+      text-align: left;
+      font-weight: 600;
+      color: #2d3748;
+      border-bottom: 2px solid #e2e8f0;
+    }
+    
+    td {
+      padding: 15px;
+      border-bottom: 1px solid #e2e8f0;
+      color: #4a5568;
+    }
+    
+    tr:hover {
+      background: #f7fafc;
+    }
+    
+    .badge {
+      display: inline-block;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    
+    .badge-success {
+      background: #c6f6d5;
+      color: #22543d;
+    }
+    
+    .badge-warning {
+      background: #feebc8;
+      color: #7c2d12;
+    }
+    
+    .badge-danger {
+      background: #fed7d7;
+      color: #742a2a;
+    }
+    
+    .badge-info {
+      background: #bee3f8;
+      color: #2c5282;
+    }
+    
+    .chart-container {
+      margin-top: 20px;
+      height: 300px;
+    }
+    
+    .tab-container {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 25px;
+      border-bottom: 2px solid #e2e8f0;
+    }
+    
+    .tab {
+      padding: 15px 25px;
+      cursor: pointer;
+      border: none;
+      background: none;
+      color: #718096;
+      font-size: 16px;
+      font-weight: 600;
+      border-bottom: 3px solid transparent;
+      transition: all 0.3s;
+    }
+    
+    .tab.active {
+      color: #667eea;
+      border-bottom-color: #667eea;
+    }
+    
+    .tab-content {
+      display: none;
+    }
+    
+    .tab-content.active {
+      display: block;
+    }
+    
+    .alert {
+      padding: 15px 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    
+    .alert-info {
+      background: #bee3f8;
+      color: #2c5282;
+      border-left: 4px solid #3182ce;
+    }
+    
+    .alert-warning {
+      background: #feebc8;
+      color: #7c2d12;
+      border-left: 4px solid #dd6b20;
+    }
+    
+    .alert-success {
+      background: #c6f6d5;
+      color: #22543d;
+      border-left: 4px solid #38a169;
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #718096;
+    }
+    
+    .spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #667eea;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .grid-preview {
+      display: grid;
+      grid-template-columns: repeat(20, 1fr);
+      gap: 2px;
+      max-width: 600px;
+      margin: 20px auto;
+      background: #e2e8f0;
+      padding: 10px;
+      border-radius: 10px;
+    }
+    
+    .grid-cell {
+      aspect-ratio: 1;
+      background: white;
+      border-radius: 2px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .grid-cell.sold {
+      background: #667eea;
+    }
+    
+    .grid-cell.preview {
+      background: #fbbf24;
+    }
+    
+    .grid-cell:hover {
+      transform: scale(1.1);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <h1>🎯 Admin Dashboard</h1>
+      <p>Solana Million Grid - Control Center</p>
+    </div>
+    
+    <!-- Stats Grid -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-icon">💰</div>
+        <div class="stat-value" id="totalRevenue">0 SOL</div>
+        <div class="stat-label">Total Revenue</div>
+        <div class="stat-change" id="revenueChange">+0% this week</div>
+      </div>
+      
+      <div class="stat-card">
+        <div class="stat-icon">🎨</div>
+        <div class="stat-value" id="totalSales">0</div>
+        <div class="stat-label">Total Sales</div>
+        <div class="stat-change" id="salesChange">+0 today</div>
+      </div>
+      
+      <div class="stat-card">
+        <div class="stat-icon">📊</div>
+        <div class="stat-value" id="totalBlocks">0</div>
+        <div class="stat-label">Blocks Sold</div>
+        <div class="stat-change" id="blocksChange">0% of grid</div>
+      </div>
+      
+      <div class="stat-card">
+        <div class="stat-icon">👥</div>
+        <div class="stat-value" id="uniqueVisitors">0</div>
+        <div class="stat-label">Unique Visitors</div>
+        <div class="stat-change" id="visitorsChange">+0% vs last week</div>
+      </div>
+      
+      <div class="stat-card">
+        <div class="stat-icon">🔗</div>
+        <div class="stat-value" id="activeReferrals">0</div>
+        <div class="stat-label">Active Referrals</div>
+        <div class="stat-change" id="referralsChange">+0 this month</div>
+      </div>
+      
+      <div class="stat-card">
+        <div class="stat-icon">⚡</div>
+        <div class="stat-value" id="conversionRate">0%</div>
+        <div class="stat-label">Conversion Rate</div>
+        <div class="stat-change" id="conversionChange">+0% this week</div>
+      </div>
+    </div>
+    
+    <!-- Main Dashboard -->
+    <div class="dashboard-section">
+      <div class="tab-container">
+        <button class="tab active" onclick="switchTab('overview')">📈 Overview</button>
+        <button class="tab" onclick="switchTab('sales')">💳 Sales</button>
+        <button class="tab" onclick="switchTab('analytics')">📊 Analytics</button>
+        <button class="tab" onclick="switchTab('referrals')">🔗 Referrals</button>
+        <button class="tab" onclick="switchTab('previews')">👀 Previews</button>
+        <button class="tab" onclick="switchTab('security')">🛡️ Security</button>
+      </div>
+      
+      <!-- Overview Tab -->
+      <div id="overview" class="tab-content active">
+        <div class="section-header">
+          <h2 class="section-title">Recent Activity</h2>
+          <button class="btn btn-primary" onclick="refreshData()">🔄 Refresh</button>
+        </div>
+        
+        <div id="recentSales"></div>
+      </div>
+      
+      <!-- Sales Tab -->
+      <div id="sales" class="tab-content">
+        <div class="section-header">
+          <h2 class="section-title">Sales History</h2>
+          <div>
+            <button class="btn btn-secondary" onclick="exportSales()">📥 Export CSV</button>
+            <button class="btn btn-primary" onclick="loadSales()">🔄 Refresh</button>
+          </div>
+        </div>
+        
+        <div id="salesTable"></div>
+      </div>
+      
+      <!-- Analytics Tab -->
+      <div id="analytics" class="tab-content">
+        <div class="section-header">
+          <h2 class="section-title">Analytics Dashboard</h2>
+          <select class="btn btn-secondary" id="analyticsPeriod" onchange="loadAnalytics()">
+            <option value="24h">Last 24 Hours</option>
+            <option value="7d" selected>Last 7 Days</option>
+            <option value="30d">Last 30 Days</option>
+            <option value="90d">Last 90 Days</option>
+          </select>
+        </div>
+        
+        <div id="analyticsData"></div>
+      </div>
+      
+      <!-- Referrals Tab -->
+      <div id="referrals" class="tab-content">
+        <div class="section-header">
+          <h2 class="section-title">Referral System</h2>
+          <button class="btn btn-primary" onclick="loadReferrals()">🔄 Refresh</button>
+        </div>
+        
+        <div id="referralsData"></div>
+      </div>
+      
+      <!-- Previews Tab -->
+      <div id="previews" class="tab-content">
+        <div class="section-header">
+          <h2 class="section-title">Active Previews</h2>
+          <button class="btn btn-primary" onclick="loadPreviews()">🔄 Refresh</button>
+        </div>
+        
+        <div id="previewsData"></div>
+      </div>
+      
+      <!-- Security Tab -->
+      <div id="security" class="tab-content">
+        <div class="section-header">
+          <h2 class="section-title">Rate Limiter & Security</h2>
+          <button class="btn btn-primary" onclick="loadSecurityStats()">🔄 Refresh</button>
+        </div>
+        
+        <div id="securityData"></div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // Estado global
+    let currentData = {
+      sales: [],
+      analytics: {},
+      referrals: {},
+      previews: [],
+      security: {}
+    };
+    
+    // Inicializar dashboard
+    async function init() {
+      await loadAllData();
+      updateStats();
+      setInterval(() => loadAllData(), 30000); // Refresh cada 30s
+    }
+    
+    // Cargar todos los datos
+    async function loadAllData() {
+      await Promise.all([
+        loadSales(),
+        loadAnalytics(),
+        loadReferrals(),
+        loadPreviews(),
+        loadSecurityStats()
+      ]);
+    }
+    
+    // Cargar ventas
+    async function loadSales() {
+      try {
+        const response = await fetch('/api/sales');
+        const data = await response.json();
+        
+        if (data.ok) {
+          currentData.sales = data.sales || [];
+          updateSalesDisplay();
+        }
+      } catch (error) {
+        console.error('Error loading sales:', error);
+      }
+    }
+    
+    // Cargar analytics
+    async function loadAnalytics() {
+      try {
+        const period = document.getElementById('analyticsPeriod')?.value || '7d';
+        const response = await fetch(`/api/analytics/dashboard?period=${period}`);
+        const data = await response.json();
+        
+        if (data.ok) {
+          currentData.analytics = data.dashboard;
+          updateAnalyticsDisplay();
+        }
+      } catch (error) {
+        console.error('Error loading analytics:', error);
+      }
+    }
+    
+    // Cargar referidos
+    async function loadReferrals() {
+      try {
+        const response = await fetch('/api/referrals/leaderboard');
+        const data = await response.json();
+        
+        if (data.ok) {
+          currentData.referrals = data;
+          updateReferralsDisplay();
+        }
+      } catch (error) {
+        console.error('Error loading referrals:', error);
+      }
+    }
+    
+    // Cargar previews
+    async function loadPreviews() {
+      try {
+        const response = await fetch('/api/preview/active');
+        const data = await response.json();
+        
+        if (data.ok) {
+          currentData.previews = data.previews || [];
+          updatePreviewsDisplay();
+        }
+      } catch (error) {
+        console.error('Error loading previews:', error);
+      }
+    }
+    
+    // Cargar estadísticas de seguridad
+    async function loadSecurityStats() {
+      try {
+        const response = await fetch('/api/security/stats');
+        const data = await response.json();
+        
+        if (data.ok) {
+          currentData.security = data.stats;
+          updateSecurityDisplay();
+        }
+      } catch (error) {
+        console.error('Error loading security stats:', error);
+      }
+    }
+    
+    // Actualizar estadísticas principales
+    function updateStats() {
+      const sales = currentData.sales;
+      const analytics = currentData.analytics.overview || {};
+      
+      // Revenue
+      const totalRevenue = sales.reduce((sum, s) => sum + (s.amount || 0), 0);
+      document.getElementById('totalRevenue').textContent = totalRevenue.toFixed(4) + ' SOL';
+      
+      // Sales
+      document.getElementById('totalSales').textContent = sales.length;
+      const today = new Date().toDateString();
+      const todaySales = sales.filter(s => new Date(s.timestamp).toDateString() === today).length;
+      document.getElementById('salesChange').textContent = `+${todaySales} today`;
+      
+      // Blocks
+      const totalBlocks = sales.reduce((sum, s) => sum + (s.blocks || 0), 0);
+      document.getElementById('totalBlocks').textContent = totalBlocks.toLocaleString();
+      const gridTotal = 100 * 100;
+      const percentage = ((totalBlocks / gridTotal) * 100).toFixed(1);
+      document.getElementById('blocksChange').textContent = `${percentage}% of grid`;
+      
+      // Visitors
+      document.getElementById('uniqueVisitors').textContent = 
+        (analytics.uniqueVisitors || 0).toLocaleString();
+      
+      // Referrals
+      document.getElementById('activeReferrals').textContent = 
+        (currentData.referrals.stats?.totalReferrals || 0);
+      
+      // Conversion
+      document.getElementById('conversionRate').textContent = 
+        (analytics.conversionRate || 0) + '%';
+    }
+    
+    // Actualizar display de ventas
+    function updateSalesDisplay() {
+      const container = document.getElementById('recentSales');
+      const sales = currentData.sales.slice(-10).reverse();
+      
+      if (sales.length === 0) {
+        container.innerHTML = '<p class="loading">No sales yet</p>';
+        return;
+      }
+      
+      container.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Project</th>
+              <th>Blocks</th>
+              <th>Amount</th>
+              <th>Zone</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${sales.map(sale => `
+              <tr>
+                <td>${new Date(sale.timestamp).toLocaleString()}</td>
+                <td><strong>${sale.metadata?.name || 'N/A'}</strong></td>
+                <td>${sale.blocks}</td>
+                <td>${sale.amount.toFixed(4)} SOL</td>
+                <td>${getZoneBadge(sale)}</td>
+                <td><span class="badge badge-success">✓ Verified</span></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+      
+      const salesTable = document.getElementById('salesTable');
+      if (salesTable) {
+        salesTable.innerHTML = container.innerHTML;
+      }
+    }
+    
+    // Actualizar display de analytics
+    function updateAnalyticsDisplay() {
+      const container = document.getElementById('analyticsData');
+      const analytics = currentData.analytics;
+      
+      container.innerHTML = `
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Page Views</div>
+            <div class="stat-value">${(analytics.overview?.totalPageViews || 0).toLocaleString()}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Avg Session</div>
+            <div class="stat-value">${analytics.userBehavior?.averageTimeOnSite || '0s'}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Bounce Rate</div>
+            <div class="stat-value">${analytics.overview?.bounceRate || 0}%</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Conversion</div>
+            <div class="stat-value">${analytics.overview?.conversionRate || 0}%</div>
+          </div>
+        </div>
+        
+        <h3 style="margin-top: 30px;">Traffic Sources</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Source</th>
+              <th>Visitors</th>
+              <th>Percentage</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${Object.entries(analytics.trafficSources || {}).map(([source, data]) => `
+              <tr>
+                <td><strong>${source.charAt(0).toUpperCase() + source.slice(1)}</strong></td>
+                <td>${data.count || 0}</td>
+                <td>${data.percentage || 0}%</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+    
+    // Actualizar display de referidos
+    function updateReferralsDisplay() {
+      const container = document.getElementById('referralsData');
+      const leaderboard = currentData.referrals.leaderboard || [];
+      
+      container.innerHTML = `
+        <div class="alert alert-info">
+          <strong>💡 Referral System Stats:</strong><br>
+          Total Referrals: ${currentData.referrals.stats?.totalReferrals || 0} | 
+          Total Commissions: ${(currentData.referrals.stats?.totalCommissions || 0).toFixed(4)} SOL
+        </div>
+        
+        <table>
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Code</th>
+              <th>Wallet</th>
+              <th>Referrals</th>
+              <th>Commissions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${leaderboard.map((ref, index) => `
+              <tr>
+                <td><strong>#${index + 1}</strong></td>
+                <td><span class="badge badge-info">${ref.code}</span></td>
+                <td>${ref.wallet}</td>
+                <td>${ref.totalReferrals}</td>
+                <td>${ref.totalCommissions.toFixed(4)} SOL</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+    
+    // Actualizar display de previews
+    function updatePreviewsDisplay() {
+      const container = document.getElementById('previewsData');
+      const previews = currentData.previews;
+      
+      if (previews.length === 0) {
+        container.innerHTML = '<p class="loading">No active previews</p>';
+        return;
+      }
+      
+      container.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Project</th>
+              <th>Blocks</th>
+              <th>Views</th>
+              <th>Expires In</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${previews.map(preview => `
+              <tr>
+                <td><code>${preview.id.substring(0, 8)}...</code></td>
+                <td><strong>${preview.metadata?.name || 'N/A'}</strong></td>
+                <td>${preview.selection?.blocksX}×${preview.selection?.blocksY}</td>
+                <td>${preview.viewCount || 0}</td>
+                <td>${formatTimeRemaining(preview.timeRemaining)}</td>
+                <td>
+                  <button class="btn btn-secondary" onclick="viewPreview('${preview.id}')">👁️ View</button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+    
+    // Actualizar display de seguridad
+    function updateSecurityDisplay() {
+      const container = document.getElementById('securityData');
+      const security = currentData.security;
+      
+      container.innerHTML = `
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Active Records</div>
+            <div class="stat-value">${security.activeRecords || 0}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Blocked IPs</div>
+            <div class="stat-value">${security.blockedIPs || 0}</div>
+          </div>
+        </div>
+        
+        ${security.blockedList && security.blockedList.length > 0 ? `
+          <h3 style="margin-top: 30px;">Blocked IPs</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>IP Address</th>
+                <th>Blocked At</th>
+                <th>Expires At</th>
+                <th>Reason</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${security.blockedList.map(block => `
+                <tr>
+                  <td><code>${block.ip}</code></td>
+                  <td>${new Date(block.blockedAt).toLocaleString()}</td>
+                  <td>${new Date(block.expiresAt).toLocaleString()}</td>
+                  <td>${block.reason}</td>
+                  <td>
+                    <button class="btn btn-danger" onclick="unblockIP('${block.ip}')">🔓 Unblock</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        ` : '<p class="alert alert-success">✅ No blocked IPs</p>'}
+      `;
+    }
+    
+    // Utilidades
+    function getZoneBadge(sale) {
+      const row = sale.metadata?.selection?.minBlockY || 0;
+      if (row <= 24) return '<span class="badge badge-warning">🥇 Gold</span>';
+      if (row >= 25 && row <= 59) return '<span class="badge badge-info">🥈 Silver</span>';
+      return '<span class="badge">🥉 Bronze</span>';
+    }
+    
+    function formatTimeRemaining(seconds) {
+      if (!seconds) return 'Expired';
+      const minutes = Math.floor(seconds / 60);
+      if (minutes < 60) return `${minutes}m`;
+      const hours = Math.floor(minutes / 60);
+      return `${hours}h ${minutes % 60}m`;
+    }
+    
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      
+      event.target.classList.add('active');
+      document.getElementById(tabName).classList.add('active');
+    }
+    
+    function refreshData() {
+      loadAllData();
+    }
+    
+    function exportSales() {
+      // Implementar exportación CSV
+      alert('Exportación CSV en desarrollo');
+    }
+    
+    function viewPreview(id) {
+      window.open(`/preview/${id}`, '_blank');
+    }
+    
+    async function unblockIP(ip) {
+      if (!confirm(`¿Desbloquear IP ${ip}?`)) return;
+      
+      try {
+        const response = await fetch('/api/security/unblock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ip })
+        });
+        
+        if (response.ok) {
+          alert('IP desbloqueada');
+          loadSecurityStats();
+        }
+      } catch (error) {
+        alert('Error al desbloquear IP');
+      }
+    }
+    
+    // Iniciar cuando cargue la página
+    window.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
