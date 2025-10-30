@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard - Solana Million Grid</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+      color: #fff;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    header {
+      background: rgba(34, 34, 34, 0.95);
+      padding: 20px 30px;
+      border-radius: 12px;
+      margin-bottom: 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+
+    h1 {
+      font-size: 28px;
+      color: gold;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+
+    .stat-card {
+      background: rgba(34, 34, 34, 0.95);
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      border: 1px solid rgba(255, 215, 0, 0.1);
+      transition: transform 0.2s;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-5px);
+      border-color: rgba(255, 215, 0, 0.3);
+    }
+
+    .stat-label {
+      font-size: 14px;
+      color: #aaa;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: bold;
+      color: gold;
+    }
+
+    .stat-icon {
+      font-size: 40px;
+      float: right;
+      opacity: 0.3;
+    }
+
+    .section {
+      background: rgba(34, 34, 34, 0.95);
+      padding: 25px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    }
+
+    .section-title {
+      font-size: 20px;
+      color: gold;
+      margin-bottom: 20px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid rgba(255, 215, 0, 0.2);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    th {
+      background: rgba(255, 215, 0, 0.1);
+      color: gold;
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 12px;
+      letter-spacing: 1px;
+    }
+
+    tr:hover {
+      background: rgba(255, 215, 0, 0.05);
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .badge-gold {
+      background: linear-gradient(135deg, #FFD700, #FFA500);
+      color: #000;
+    }
+
+    .badge-silver {
+      background: linear-gradient(135deg, #C0C0C0, #808080);
+      color: #000;
+    }
+
+    .badge-bronze {
+      background: linear-gradient(135deg, #CD7F32, #8B4513);
+      color: #fff;
+    }
+
+    .refresh-btn {
+      background: linear-gradient(135deg, #28a745, #20c997);
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+
+    .refresh-btn:hover {
+      transform: scale(1.05);
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #888;
+    }
+
+    .chart-container {
+      height: 300px;
+      margin-top: 20px;
+    }
+
+    .wallet-short {
+      font-family: monospace;
+      background: rgba(255, 255, 255, 0.1);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    .logo-preview {
+      width: 40px;
+      height: 40px;
+      object-fit: cover;
+      border-radius: 4px;
+      border: 2px solid rgba(255, 215, 0, 0.3);
+    }
+
+    .link-btn {
+      color: #4da6ff;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .link-btn:hover {
+      color: #80bfff;
+      text-decoration: underline;
+    }
+
+    @media (max-width: 768px) {
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+
+      table {
+        font-size: 12px;
+      }
+
+      th, td {
+        padding: 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>
+        <span>👑</span>
+        Admin Dashboard
+      </h1>
+      <button class="refresh-btn" onclick="loadData()">🔄 Refresh</button>
+    </header>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-icon">💰</div>
+        <div class="stat-label">Total Revenue</div>
+        <div class="stat-value" id="totalRevenue">0 SOL</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon">🛒</div>
+        <div class="stat-label">Total Sales</div>
+        <div class="stat-value" id="totalSales">0</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon">📦</div>
+        <div class="stat-label">Blocks Sold</div>
+        <div class="stat-value" id="totalBlocks">0</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon">📊</div>
+        <div class="stat-label">Avg Per Sale</div>
+        <div class="stat-value" id="avgSale">0 SOL</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2 class="section-title">Recent Sales</h2>
+      <div id="salesTable" class="loading">Loading sales...</div>
+    </div>
+
+    <div class="section">
+      <h2 class="section-title">Top Buyers</h2>
+      <div id="topBuyers" class="loading">Loading buyers...</div>
+    </div>
+
+    <div class="section">
+      <h2 class="section-title">Zone Statistics</h2>
+      <div id="zoneStats" class="loading">Loading zones...</div>
+    </div>
+  </div>
+
+  <script>
+    async function loadData() {
+      try {
+        // Load sales data
+        const response = await fetch('/api/sales');
+        const data = await response.json();
+
+        if (!data.ok) {
+          throw new Error('Failed to load sales');
+        }
+
+        // Update stats
+        document.getElementById('totalRevenue').textContent = `${data.stats.totalRevenue.toFixed(4)} SOL`;
+        document.getElementById('totalSales').textContent = data.stats.totalSales;
+        document.getElementById('totalBlocks').textContent = data.stats.totalBlocks;
+        
+        const avgSale = data.stats.totalSales > 0 
+          ? (data.stats.totalRevenue / data.stats.totalSales).toFixed(4) 
+          : 0;
+        document.getElementById('avgSale').textContent = `${avgSale} SOL`;
+
+        // Render recent sales
+        renderSales(data.sales);
+
+        // Render top buyers
+        renderTopBuyers(data.sales);
+
+        // Render zone stats
+        renderZoneStats(data.sales);
+
+      } catch (error) {
+        console.error('Error loading data:', error);
+        alert('Failed to load dashboard data');
+      }
+    }
+
+    function renderSales(sales) {
+      const recent = sales.slice(-20).reverse(); // Last 20 sales
+
+      if (recent.length === 0) {
+        document.getElementById('salesTable').innerHTML = '<p style="color: #888; text-align: center;">No sales yet</p>';
+        return;
+      }
+
+      let html = `
+        <table>
+          <thead>
+            <tr>
+              <th>Logo</th>
+              <th>Project</th>
+              <th>Buyer</th>
+              <th>Blocks</th>
+              <th>Amount</th>
+              <th>Zone</th>
+              <th>Date</th>
+              <th>TX</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      recent.forEach(sale => {
+        const zone = getZone(sale.metadata.selection.minBlockY);
+        const date = new Date(sale.timestamp).toLocaleDateString();
+        const buyer = sale.buyer.substring(0, 8) + '...';
+        const txLink = `https://solscan.io/tx/${sale.signature}`;
+
+        html += `
+          <tr>
+            <td><img src="${sale.metadata.logo}" class="logo-preview" alt="Logo"></td>
+            <td><strong>${sale.metadata.name}</strong></td>
+            <td><span class="wallet-short">${buyer}</span></td>
+            <td>${sale.blocks}</td>
+            <td><strong>${sale.amount.toFixed(4)} SOL</strong></td>
+            <td><span class="badge badge-${zone.toLowerCase()}">${zone}</span></td>
+            <td>${date}</td>
+            <td><a href="${txLink}" target="_blank" class="link-btn">View</a></td>
+          </tr>
+        `;
+      });
+
+      html += '</tbody></table>';
+      document.getElementById('salesTable').innerHTML = html;
+    }
+
+    function renderTopBuyers(sales) {
+      const buyerMap = {};
+
+      sales.forEach(sale => {
+        if (!buyerMap[sale.buyer]) {
+          buyerMap[sale.buyer] = {
+            wallet: sale.buyer,
+            totalSpent: 0,
+            totalBlocks: 0,
+            purchases: 0,
+          };
+        }
+        buyerMap[sale.buyer].totalSpent += sale.amount;
+        buyerMap[sale.buyer].totalBlocks += sale.blocks;
+        buyerMap[sale.buyer].purchases++;
+      });
+
+      const topBuyers = Object.values(buyerMap)
+        .sort((a, b) => b.totalSpent - a.totalSpent)
+        .slice(0, 10);
+
+      if (topBuyers.length === 0) {
+        document.getElementById('topBuyers').innerHTML = '<p style="color: #888; text-align: center;">No buyers yet</p>';
+        return;
+      }
+
+      let html = `
+        <table>
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Wallet</th>
+              <th>Purchases</th>
+              <th>Total Blocks</th>
+              <th>Total Spent</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      topBuyers.forEach((buyer, index) => {
+        const wallet = buyer.wallet.substring(0, 12) + '...';
+        html += `
+          <tr>
+            <td><strong>#${index + 1}</strong></td>
+            <td><span class="wallet-short">${wallet}</span></td>
+            <td>${buyer.purchases}</td>
+            <td>${buyer.totalBlocks}</td>
+            <td><strong>${buyer.totalSpent.toFixed(4)} SOL</strong></td>
+          </tr>
+        `;
+      });
+
+      html += '</tbody></table>';
+      document.getElementById('topBuyers').innerHTML = html;
+    }
+
+    function renderZoneStats(sales) {
+      const zones = {
+        GOLD: { sales: 0, blocks: 0, revenue: 0 },
+        SILVER: { sales: 0, blocks: 0, revenue: 0 },
+        BRONZE: { sales: 0, blocks: 0, revenue: 0 },
+      };
+
+      sales.forEach(sale => {
+        const zone = getZone(sale.metadata.selection.minBlockY);
+        zones[zone].sales++;
+        zones[zone].blocks += sale.blocks;
+        zones[zone].revenue += sale.amount;
+      });
+
+      let html = `
+        <table>
+          <thead>
+            <tr>
+              <th>Zone</th>
+              <th>Sales</th>
+              <th>Blocks Sold</th>
+              <th>Revenue</th>
+              <th>Avg Per Sale</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      Object.entries(zones).forEach(([zone, data]) => {
+        const avg = data.sales > 0 ? (data.revenue / data.sales).toFixed(4) : '0.0000';
+        html += `
+          <tr>
+            <td><span class="badge badge-${zone.toLowerCase()}">${zone}</span></td>
+            <td>${data.sales}</td>
+            <td>${data.blocks}</td>
+            <td><strong>${data.revenue.toFixed(4)} SOL</strong></td>
+            <td>${avg} SOL</td>
+          </tr>
+        `;
+      });
+
+      html += '</tbody></table>';
+      document.getElementById('zoneStats').innerHTML = html;
+    }
+
+    function getZone(row) {
+      if (row <= 24) return 'GOLD';
+      if (row >= 25 && row <= 59) return 'SILVER';
+      return 'BRONZE';
+    }
+
+    // Load data on page load
+    loadData();
+
+    // Auto-refresh every 30 seconds
+    setInterval(loadData, 30000);
+  </script>
+</body>
+</html>
