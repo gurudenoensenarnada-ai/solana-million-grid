@@ -49,11 +49,32 @@ if (config.storage.persistentDir && !fs.existsSync(persistentDir)) {
   console.log('✅ Created persistent directory:', persistentDir);
 }
 
+// Create uploads directory in persistent disk if configured
+let persistentUploadsDir = uploadsDir;
+if (config.storage.persistentDir) {
+  persistentUploadsDir = path.join(persistentDir, 'uploads');
+  if (!fs.existsSync(persistentUploadsDir)) {
+    fs.mkdirSync(persistentUploadsDir, { recursive: true });
+    console.log('✅ Created persistent uploads directory:', persistentUploadsDir);
+  }
+}
+
 // ==========================================
 // Static Files
 // ==========================================
 app.use(express.static(__dirname));
+
+// Serve uploads from both local and persistent directory
 app.use('/uploads', express.static(uploadsDir));
+
+// If persistent directory exists, also serve from there
+if (config.storage.persistentDir && fs.existsSync(persistentDir)) {
+  const persistentUploads = path.join(persistentDir, 'uploads');
+  if (fs.existsSync(persistentUploads)) {
+    app.use('/uploads', express.static(persistentUploads));
+    console.log('✅ Serving uploads from persistent directory:', persistentUploads);
+  }
+}
 
 // Public folder if exists
 const publicDir = path.join(__dirname, 'public');
@@ -114,7 +135,11 @@ app.get('/api/config', (req, res) => {
 // ==========================================
 // Sales Management
 // ==========================================
-const SALES_FILE = path.join(persistentDir, 'sales.json');
+const SALES_FILE = config.storage.persistentDir
+  ? path.join(persistentDir, 'sales.json')
+  : path.join(__dirname, 'sales.json');
+
+console.log('📊 Sales file location:', SALES_FILE);
 
 // Initialize sales file if it doesn't exist
 function initSalesFile() {
@@ -261,11 +286,15 @@ app.post('/api/purchase', async (req, res) => {
 // ==========================================
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, uploadsDir);
+    // Use persistent uploads directory if configured, otherwise local
+    const uploadDir = config.storage.persistentDir 
+      ? path.join(persistentDir, 'uploads')
+      : uploadsDir;
+    cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'logo-' + uniqueSuffix + path.extname(file.originalname));
+    cb(null, uniqueSuffix + path.extname(file.originalname));
   }
 });
 
@@ -299,6 +328,37 @@ app.post('/api/upload', upload.single('logo'), (req, res) => {
     const fileUrl = `/uploads/${req.file.filename}`;
     
     console.log('✅ File uploaded successfully:', fileUrl);
+    console.log('   Saved to:', req.file.path);
+
+    res.status(201).json({
+      ok: true,
+      url: fileUrl,
+      filename: req.file.filename,
+      path: req.file.path
+    });
+  } catch (error) {
+    console.error('❌ Error uploading file:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'Failed to upload file: ' + error.message
+    });
+  }
+});
+
+// Alternative route for compatibility
+app.post('/api/upload-logo', upload.single('logo'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        ok: false,
+        error: 'No file uploaded'
+      });
+    }
+
+    const fileUrl = `/uploads/${req.file.filename}`;
+    
+    console.log('✅ File uploaded successfully (via /api/upload-logo):', fileUrl);
+    console.log('   Saved to:', req.file.path);
 
     res.status(201).json({
       ok: true,
