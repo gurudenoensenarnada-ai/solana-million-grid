@@ -23,7 +23,7 @@ const config = require('./index.js');
 const rateLimiter = require('./middleware/rateLimiter');
 const Analytics = require('./services/Analytics');
 const PreviewSystem = require('./services/PreviewSystem');
-const ReferralSystem = require('./Referral system.js');
+const ReferralSystem = require('./ReferralSystem.js');
 
 // Initialize services
 const analytics = new Analytics(__dirname);
