@@ -10,8 +10,15 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 
+// Fetch polyfill for Node.js < 18
+if (!globalThis.fetch) {
+  const fetch = require('node-fetch');
+  globalThis.fetch = fetch;
+}
+
 // Load configuration
 const config = require('./index.js');
+
 // ==========================================
 // Telegram Notification Service
 // ==========================================
@@ -81,14 +88,14 @@ ${zoneEmoji} *Zone:* ${zone}
 ⭐ *OWNER PURCHASE \\- SPECIAL PRICE*
 
 📊 *Purchase Details:*
-- Project: *${safeName}*
-- URL: ${safeUrl}
-- Blocks: *${safeBlocksTotal}* \\(${safeBlocksX}×${safeBlocksY}\\)
-- Position: Row ${safeRow}, Column ${safeCol}
+• Project: *${safeName}*
+• URL: ${safeUrl}
+• Blocks: *${safeBlocksTotal}* \\(${safeBlocksX}×${safeBlocksY}\\)
+• Position: Row ${safeRow}, Column ${safeCol}
 
 💰 *Payment:*
-- Amount: *${safeAmount} SOL*
-- Price/block: *0\\.0001 SOL* 🌟
+• Amount: *${safeAmount} SOL*
+• Price/block: *0\\.0001 SOL* 🌟
 
 🔗 *Transaction:*
 [View on Solscan](https://solscan\\.io/tx/${safeSignature})
@@ -100,13 +107,13 @@ ${zoneEmoji} *Zone:* ${zone}
 ${zoneEmoji} *Zone:* ${zone}
 
 📊 *Purchase Details:*
-- Project: *${safeName}*
-- URL: ${safeUrl}
-- Blocks: *${safeBlocksTotal}* \\(${safeBlocksX}×${safeBlocksY}\\)
-- Position: Row ${safeRow}, Column ${safeCol}
+• Project: *${safeName}*
+• URL: ${safeUrl}
+• Blocks: *${safeBlocksTotal}* \\(${safeBlocksX}×${safeBlocksY}\\)
+• Position: Row ${safeRow}, Column ${safeCol}
 
 💰 *Payment:*
-- Amount: *${safeAmount} SOL*
+• Amount: *${safeAmount} SOL*
 
 🔗 *Transaction:*
 [View on Solscan](https://solscan\\.io/tx/${safeSignature})
@@ -481,7 +488,6 @@ app.post('/api/save-sale', async (req, res) => {
     salesData.stats.totalRevenue += (amount || 0);
 
     // Save with error handling
-    // Save with error handling
     try {
       fs.writeFileSync(SALES_FILE, JSON.stringify(salesData, null, 2));
       console.log('✅ Sale saved successfully');
@@ -499,9 +505,6 @@ app.post('/api/save-sale', async (req, res) => {
       console.error('⚠️ Telegram notification failed:', telegramError.message);
       // Don't fail the sale if Telegram fails
     }
-
-    res.status(201).json({
-    
 
     res.status(201).json({
       ok: true,
@@ -637,12 +640,15 @@ app.post('/api/purchase', async (req, res) => {
 
     // Save
     fs.writeFileSync(SALES_FILE, JSON.stringify(salesData, null, 2));
+
+    // Send Telegram notification
     try {
       await sendTelegramNotification(sale);
     } catch (telegramError) {
       console.error('⚠️ Telegram notification failed:', telegramError.message);
       // Don't fail the sale if Telegram fails
     }
+
     console.log('✅ Purchase recorded successfully');
     console.log(`  Blocks: ${blocks}`);
     console.log(`  Amount: ${amount} SOL`);
@@ -856,28 +862,6 @@ const server = app.listen(PORT, HOST, () => {
   console.log('   ================================\n');
 });
 
-// Keep server alive
-server.keepAliveTimeout = 120000;
-server.headersTimeout = 120000;
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('\n👋 SIGTERM received, shutting down gracefully...');
-  server.close(() => {
-    console.log('✅ Server closed');
-    process.exit(0);
-  });
-});
-
-process.on('SIGINT', () => {
-  console.log('\n👋 SIGINT received, shutting down gracefully...');
-  server.close(() => {
-    console.log('✅ Server closed');
-    process.exit(0);
-  });
-});
-
-// Handle uncaught exceptions
 // Keep server alive
 server.keepAliveTimeout = 120000;
 server.headersTimeout = 120000;
