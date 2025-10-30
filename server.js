@@ -714,6 +714,28 @@ process.on('SIGINT', () => {
 });
 
 // Handle uncaught exceptions
+// Keep server alive
+server.keepAliveTimeout = 120000;
+server.headersTimeout = 120000;
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('\n👋 SIGTERM received, shutting down gracefully...');
+  server.close(() => {
+    console.log('✅ Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('\n👋 SIGINT received, shutting down gracefully...');
+  server.close(() => {
+    console.log('✅ Server closed');
+    process.exit(0);
+  });
+});
+
+// Handle uncaught exceptions
 process.on('uncaughtException', (error) => {
   console.error('❌ Uncaught Exception:', error);
 });
@@ -723,12 +745,3 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 module.exports = app;
-```
-
----
-
-## 💡 O MEJOR: Verifica la línea 727
-
-El error dice:
-```
-module.exports = app;IGINT received, shutting down gracefully...');
