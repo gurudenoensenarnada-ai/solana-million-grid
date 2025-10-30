@@ -19,6 +19,17 @@ if (!globalThis.fetch) {
 // Load configuration
 const config = require('./index.js');
 
+// Load new services
+const rateLimiter = require('./middleware/rateLimiter');
+const Analytics = require('./services/Analytics');
+const PreviewSystem = require('./services/PreviewSystem');
+const ReferralSystem = require('./Referral system.js');
+
+// Initialize services
+const analytics = new Analytics(__dirname);
+const previewSystem = new PreviewSystem(__dirname);
+const referralSystem = new ReferralSystem(__dirname);
+
 // ==========================================
 // Telegram Notification Service
 // ==========================================
@@ -182,6 +193,12 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Logging middleware
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  
+  // Track page views para analytics
+  if (req.method === 'GET' && !req.path.startsWith('/api/') && !req.path.includes('.')) {
+    analytics.trackPageView(req);
+  }
+  
   next();
 });
 
@@ -505,6 +522,32 @@ app.post('/api/save-sale', async (req, res) => {
       console.error('⚠️ Telegram notification failed:', telegramError.message);
       // Don't fail the sale if Telegram fails
     }
+    
+    // Track sale in analytics
+    try {
+      analytics.trackSale(sale);
+      analytics.trackEvent('purchase', { 
+        signature, 
+        amount, 
+        blocks,
+        zone: sale.metadata?.selection?.minBlockY <= 24 ? 'gold' : 
+              sale.metadata?.selection?.minBlockY >= 25 && sale.metadata?.selection?.minBlockY <= 59 ? 'silver' : 'bronze'
+      }, req);
+    } catch (analyticsError) {
+      console.error('⚠️ Analytics tracking failed:', analyticsError.message);
+    }
+    
+    // Process referral if provided
+    if (referralCode) {
+      try {
+        const referralResult = referralSystem.recordReferral(referralCode, sale);
+        if (referralResult.ok) {
+          console.log(`✅ Referral commission recorded: ${referralResult.commission} SOL`);
+        }
+      } catch (referralError) {
+        console.error('⚠️ Referral processing failed:', referralError.message);
+      }
+    }
 
     res.status(201).json({
       ok: true,
@@ -577,9 +620,9 @@ app.get('/api/stats', (req, res) => {
 // ==========================================
 // Purchase Endpoint
 // ==========================================
-app.post('/api/purchase', async (req, res) => {
+app.post('/api/purchase', rateLimiter.middleware('purchase'), async (req, res) => {
   try {
-    const { signature, buyer, metadata } = req.body;
+    const { signature, buyer, metadata, referralCode } = req.body;
     
     console.log('\n📝 New purchase request:');
     console.log('  Signature:', signature);
@@ -702,7 +745,228 @@ const upload = multer({
   }
 });
 
-app.post('/api/upload', upload.single('file'), (req, res) => {
+// ==========================================
+// ANALYTICS ENDPOINTS
+// ==========================================
+
+// Get analytics dashboard
+app.get('/api/analytics/dashboard', (req, res) => {
+  try {
+    const period = req.query.period || '7d';
+    const dashboard = analytics.getDashboard(period);
+    res.json({ ok: true, dashboard });
+  } catch (error) {
+    console.error('❌ Error getting analytics dashboard:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Get sales report
+app.get('/api/analytics/sales-report', (req, res) => {
+  try {
+    const period = req.query.period || '30d';
+    const report = analytics.getSalesReport(period);
+    res.json({ ok: true, report });
+  } catch (error) {
+    console.error('❌ Error getting sales report:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Track custom event
+app.post('/api/analytics/track', (req, res) => {
+  try {
+    const { event, data } = req.body;
+    analytics.trackEvent(event, data, req);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('❌ Error tracking event:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Track block interaction
+app.post('/api/analytics/block-interaction', (req, res) => {
+  try {
+    const { blockX, blockY, action } = req.body;
+    analytics.trackBlockInteraction(blockX, blockY, action);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('❌ Error tracking block interaction:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Track time on site
+app.post('/api/analytics/time-on-site', (req, res) => {
+  try {
+    const { duration } = req.body;
+    analytics.trackTimeOnSite(duration);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('❌ Error tracking time:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ==========================================
+// PREVIEW ENDPOINTS
+// ==========================================
+
+// Create preview
+app.post('/api/preview/create', rateLimiter.middleware('general'), (req, res) => {
+  try {
+    const result = previewSystem.createPreview(req.body);
+    res.json(result);
+  } catch (error) {
+    console.error('❌ Error creating preview:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Get preview
+app.get('/api/preview/:id', (req, res) => {
+  try {
+    const result = previewSystem.getPreview(req.params.id);
+    if (!result.ok) {
+      return res.status(404).json(result);
+    }
+    res.json(result);
+  } catch (error) {
+    console.error('❌ Error getting preview:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Get all active previews
+app.get('/api/preview/active', (req, res) => {
+  try {
+    const previews = previewSystem.getActivePreviews();
+    res.json({ ok: true, previews });
+  } catch (error) {
+    console.error('❌ Error getting active previews:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Convert preview to purchase
+app.post('/api/preview/:id/convert', (req, res) => {
+  try {
+    const { signature } = req.body;
+    const result = previewSystem.convertPreview(req.params.id, signature);
+    res.json(result);
+  } catch (error) {
+    console.error('❌ Error converting preview:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Delete preview
+app.delete('/api/preview/:id', (req, res) => {
+  try {
+    const result = previewSystem.deletePreview(req.params.id);
+    res.json(result);
+  } catch (error) {
+    console.error('❌ Error deleting preview:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Get preview stats
+app.get('/api/preview/stats', (req, res) => {
+  try {
+    const stats = previewSystem.getStats();
+    res.json({ ok: true, stats });
+  } catch (error) {
+    console.error('❌ Error getting preview stats:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ==========================================
+// REFERRAL ENDPOINTS
+// ==========================================
+
+// Create or get referral code
+app.post('/api/referrals/code', (req, res) => {
+  try {
+    const { wallet, name } = req.body;
+    const result = referralSystem.getOrCreateCode(wallet, name);
+    res.json(result);
+  } catch (error) {
+    console.error('❌ Error creating referral code:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Validate referral code
+app.get('/api/referrals/validate/:code', (req, res) => {
+  try {
+    const result = referralSystem.validateCode(req.params.code);
+    res.json(result);
+  } catch (error) {
+    console.error('❌ Error validating code:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Get referrer stats
+app.get('/api/referrals/stats/:wallet', (req, res) => {
+  try {
+    const result = referralSystem.getStats(req.params.wallet);
+    res.json(result);
+  } catch (error) {
+    console.error('❌ Error getting referral stats:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Get leaderboard
+app.get('/api/referrals/leaderboard', (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 10;
+    const result = referralSystem.getLeaderboard(limit);
+    res.json(result);
+  } catch (error) {
+    console.error('❌ Error getting leaderboard:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ==========================================
+// SECURITY & RATE LIMITER ENDPOINTS
+// ==========================================
+
+// Get rate limiter stats
+app.get('/api/security/stats', (req, res) => {
+  try {
+    const stats = rateLimiter.getStats();
+    res.json({ ok: true, stats });
+  } catch (error) {
+    console.error('❌ Error getting security stats:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Unblock IP (admin only - add authentication in production!)
+app.post('/api/security/unblock', (req, res) => {
+  try {
+    const { ip } = req.body;
+    const result = rateLimiter.unblockIP(ip);
+    
+    if (result) {
+      res.json({ ok: true, message: `IP ${ip} unblocked successfully` });
+    } else {
+      res.status(404).json({ ok: false, error: 'IP not found in blocked list' });
+    }
+  } catch (error) {
+    console.error('❌ Error unblocking IP:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Apply rate limiting to upload endpoint
+app.post('/api/upload', rateLimiter.middleware('upload'), upload.single('file'), (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({
