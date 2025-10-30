@@ -481,6 +481,7 @@ app.post('/api/save-sale', async (req, res) => {
     salesData.stats.totalRevenue += (amount || 0);
 
     // Save with error handling
+    // Save with error handling
     try {
       fs.writeFileSync(SALES_FILE, JSON.stringify(salesData, null, 2));
       console.log('✅ Sale saved successfully');
@@ -490,6 +491,17 @@ app.post('/api/save-sale', async (req, res) => {
       console.error('❌ Error writing sales file:', writeError);
       throw new Error('Failed to write sales file: ' + writeError.message);
     }
+
+    // Send Telegram notification
+    try {
+      await sendTelegramNotification(sale);
+    } catch (telegramError) {
+      console.error('⚠️ Telegram notification failed:', telegramError.message);
+      // Don't fail the sale if Telegram fails
+    }
+
+    res.status(201).json({
+    
 
     res.status(201).json({
       ok: true,
