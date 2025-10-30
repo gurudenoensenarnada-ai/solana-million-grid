@@ -131,6 +131,34 @@ app.get('/api/config', (req, res) => {
     telegramEnabled: config.telegram.enabled
   });
 });
+
+// ==========================================
+// Sales Management
+// ==========================================
+const SALES_FILE = config.storage.persistentDir
+  ? path.join(persistentDir, 'sales.json')
+  : path.join(__dirname, 'sales.json');
+
+console.log('📊 Sales file location:', SALES_FILE);
+
+// Initialize sales file if it doesn't exist
+function initSalesFile() {
+  if (!fs.existsSync(SALES_FILE)) {
+    const initialData = {
+      sales: [],
+      stats: {
+        totalSales: 0,
+        totalBlocks: 0,
+        totalRevenue: 0
+      }
+    };
+    fs.writeFileSync(SALES_FILE, JSON.stringify(initialData, null, 2));
+    console.log('✅ Initialized sales.json file');
+  }
+}
+
+initSalesFile();
+
 // ==========================================
 // Solana Blockchain Endpoints
 // ==========================================
@@ -211,7 +239,6 @@ app.post('/api/verify-transaction', async (req, res) => {
   }
 });
 
-// Save sale (alias for /api/purchase)
 // Save sale (alias for /api/purchase)
 app.post('/api/save-sale', async (req, res) => {
   try {
@@ -330,94 +357,7 @@ app.post('/api/save-sale', async (req, res) => {
     });
   }
 });
-    }
 
-    // Read current sales
-    let salesData = { sales: [], stats: { totalSales: 0, totalBlocks: 0, totalRevenue: 0 } };
-    if (fs.existsSync(SALES_FILE)) {
-      salesData = JSON.parse(fs.readFileSync(SALES_FILE, 'utf8'));
-    }
-
-    // Check if sale already exists
-    const existingSale = salesData.sales.find(s => s.signature === signature);
-    if (existingSale) {
-      console.log('⚠️  Sale already exists');
-      return res.json({
-        ok: true,
-        message: 'Sale already registered',
-        sale: existingSale
-      });
-    }
-
-    // Calculate blocks
-    let blocks = 1;
-    if (metadata.selection) {
-      blocks = metadata.selection.blocksX * metadata.selection.blocksY;
-    }
-
-    // Create sale record
-    const sale = {
-      signature,
-      buyer,
-      metadata,
-      amount: amount || 0,
-      blocks,
-      timestamp: timestamp || Date.now(),
-      verified: confirmed || false
-    };
-
-    // Add to sales
-    salesData.sales.push(sale);
-    salesData.stats.totalSales++;
-    salesData.stats.totalBlocks += blocks;
-    salesData.stats.totalRevenue += (amount || 0);
-
-    // Save
-    fs.writeFileSync(SALES_FILE, JSON.stringify(salesData, null, 2));
-
-    console.log('✅ Sale saved successfully');
-
-    res.status(201).json({
-      ok: true,
-      message: 'Sale saved successfully',
-      sale
-    });
-  } catch (error) {
-    console.error('❌ Error saving sale:', error);
-    res.status(500).json({
-      ok: false,
-      error: 'Failed to save sale: ' + error.message
-    });
-  }
-});
-// ==========================================
-// Sales Management
-// ==========================================
-const SALES_FILE = config.storage.persistentDir
-  ? path.join(persistentDir, 'sales.json')
-  : path.join(__dirname, 'sales.json');
-
-console.log('📊 Sales file location:', SALES_FILE);
-
-// Initialize sales file if it doesn't exist
-function initSalesFile() {
-  if (!fs.existsSync(SALES_FILE)) {
-    const initialData = {
-      sales: [],
-      stats: {
-        totalSales: 0,
-        totalBlocks: 0,
-        totalRevenue: 0
-      }
-    };
-    fs.writeFileSync(SALES_FILE, JSON.stringify(initialData, null, 2));
-    console.log('✅ Initialized sales.json file');
-  }
-}
-
-initSalesFile();
-
-// Get all sales
 // Get all sales
 app.get('/api/sales', (req, res) => {
   try {
@@ -592,7 +532,6 @@ const upload = multer({
   }
 });
 
-// 🔧 CAMBIO AQUÍ: 'logo' → 'file'
 app.post('/api/upload', upload.single('file'), (req, res) => {
   try {
     if (!req.file) {
@@ -623,7 +562,6 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
 });
 
 // Alternative route for compatibility
-// 🔧 CAMBIO AQUÍ: 'logo' → 'file'
 app.post('/api/upload-logo', upload.single('file'), (req, res) => {
   try {
     if (!req.file) {
@@ -769,6 +707,24 @@ process.on('SIGTERM', () => {
 
 process.on('SIGINT', () => {
   console.log('\n👋 SIGINT received, shutting down gracefully...');
+  server.close(() => {
+    console.log('✅ Server closed');
+    process.exit(0);
+  });
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  // Don't exit - keep server running
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  // Don't exit - keep server running
+});
+
+module.exports = app;IGINT received, shutting down gracefully...');
   server.close(() => {
     console.log('✅ Server closed');
     process.exit(0);
