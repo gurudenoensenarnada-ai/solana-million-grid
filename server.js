@@ -478,7 +478,12 @@ app.post('/api/purchase', async (req, res) => {
 
     // Save
     fs.writeFileSync(SALES_FILE, JSON.stringify(salesData, null, 2));
-
+    try {
+      await sendTelegramNotification(sale);
+    } catch (telegramError) {
+      console.error('⚠️ Telegram notification failed:', telegramError.message);
+      // Don't fail the sale if Telegram fails
+    }
     console.log('✅ Purchase recorded successfully');
     console.log(`  Blocks: ${blocks}`);
     console.log(`  Amount: ${amount} SOL`);
