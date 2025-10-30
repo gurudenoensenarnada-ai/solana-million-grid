@@ -61,7 +61,7 @@ const config = {
     saveImagesInJson: process.env.SAVE_IMAGES_IN_JSON === 'true',
     removeLocalAfterUpload: process.env.REMOVE_LOCAL_AFTER_UPLOAD === 'true',
     salesPublicId: process.env.SALES_PUBLIC_ID || 'sales_backup',
-    persistentDir: process.env.PERSISTENT_DIR || './persistent',
+    persistentDir: process.env.PERSISTENT_DIR || null,
   },
 
   // Telegram
