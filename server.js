@@ -212,6 +212,7 @@ app.post('/api/verify-transaction', async (req, res) => {
 });
 
 // Save sale (alias for /api/purchase)
+// Save sale (alias for /api/purchase)
 app.post('/api/save-sale', async (req, res) => {
   try {
     const { signature, buyer, metadata, amount, timestamp, confirmed } = req.body;
@@ -226,6 +227,109 @@ app.post('/api/save-sale', async (req, res) => {
         ok: false,
         error: 'Missing required fields: signature, buyer, metadata'
       });
+    }
+
+    // Read current sales with proper initialization
+    let salesData;
+    try {
+      if (fs.existsSync(SALES_FILE)) {
+        const fileContent = fs.readFileSync(SALES_FILE, 'utf8');
+        salesData = JSON.parse(fileContent);
+        
+        // Ensure stats object exists
+        if (!salesData.stats) {
+          salesData.stats = {
+            totalSales: 0,
+            totalBlocks: 0,
+            totalRevenue: 0
+          };
+        }
+        
+        // Ensure sales array exists
+        if (!salesData.sales) {
+          salesData.sales = [];
+        }
+      } else {
+        // File doesn't exist, create initial structure
+        salesData = {
+          sales: [],
+          stats: {
+            totalSales: 0,
+            totalBlocks: 0,
+            totalRevenue: 0
+          }
+        };
+      }
+    } catch (parseError) {
+      console.error('⚠️  Error reading sales file, creating new:', parseError.message);
+      salesData = {
+        sales: [],
+        stats: {
+          totalSales: 0,
+          totalBlocks: 0,
+          totalRevenue: 0
+        }
+      };
+    }
+
+    // Check if sale already exists
+    const existingSale = salesData.sales.find(s => s.signature === signature);
+    if (existingSale) {
+      console.log('⚠️  Sale already exists');
+      return res.json({
+        ok: true,
+        message: 'Sale already registered',
+        sale: existingSale
+      });
+    }
+
+    // Calculate blocks
+    let blocks = 1;
+    if (metadata.selection) {
+      blocks = metadata.selection.blocksX * metadata.selection.blocksY;
+    }
+
+    // Create sale record
+    const sale = {
+      signature,
+      buyer,
+      metadata,
+      amount: amount || 0,
+      blocks,
+      timestamp: timestamp || Date.now(),
+      verified: confirmed || false
+    };
+
+    // Add to sales
+    salesData.sales.push(sale);
+    salesData.stats.totalSales++;
+    salesData.stats.totalBlocks += blocks;
+    salesData.stats.totalRevenue += (amount || 0);
+
+    // Save with error handling
+    try {
+      fs.writeFileSync(SALES_FILE, JSON.stringify(salesData, null, 2));
+      console.log('✅ Sale saved successfully');
+      console.log(`  Total sales: ${salesData.stats.totalSales}`);
+      console.log(`  Total blocks: ${salesData.stats.totalBlocks}`);
+    } catch (writeError) {
+      console.error('❌ Error writing sales file:', writeError);
+      throw new Error('Failed to write sales file: ' + writeError.message);
+    }
+
+    res.status(201).json({
+      ok: true,
+      message: 'Sale saved successfully',
+      sale
+    });
+  } catch (error) {
+    console.error('❌ Error saving sale:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'Failed to save sale: ' + error.message
+    });
+  }
+});
     }
 
     // Read current sales
