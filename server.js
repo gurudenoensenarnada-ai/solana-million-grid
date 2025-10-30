@@ -380,25 +380,43 @@ app.post('/api/upload-logo', upload.single('logo'), (req, res) => {
 // ==========================================
 app.get('/api/uploads', (req, res) => {
   try {
-    const files = fs.readdirSync(uploadsDir)
+    // Check persistent directory first
+    const checkDir = config.storage.persistentDir
+      ? path.join(persistentDir, 'uploads')
+      : uploadsDir;
+    
+    if (!fs.existsSync(checkDir)) {
+      return res.json({
+        ok: true,
+        files: [],
+        count: 0,
+        source: 'none'
+      });
+    }
+    
+    const files = fs.readdirSync(checkDir)
       .filter(file => file !== '.gitkeep')
       .map(file => ({
         filename: file,
         url: `/uploads/${file}`,
-        size: fs.statSync(path.join(uploadsDir, file)).size
-      }));
+        size: fs.statSync(path.join(checkDir, file)).size,
+        created: fs.statSync(path.join(checkDir, file)).birthtime
+      }))
+      .sort((a, b) => b.created - a.created); // Most recent first
     
     res.json({
       ok: true,
       files,
-      count: files.length
+      count: files.length,
+      source: config.storage.persistentDir ? 'persistent' : 'local'
     });
   } catch (error) {
     console.error('❌ Error listing uploads:', error);
     res.json({
       ok: true,
       files: [],
-      count: 0
+      count: 0,
+      error: error.message
     });
   }
 });
