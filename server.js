@@ -131,7 +131,161 @@ app.get('/api/config', (req, res) => {
     telegramEnabled: config.telegram.enabled
   });
 });
+// ==========================================
+// Solana Blockchain Endpoints
+// ==========================================
 
+// Get latest blockhash
+app.post('/api/get-latest-blockhash', async (req, res) => {
+  try {
+    const { Connection, clusterApiUrl } = require('@solana/web3.js');
+    
+    const rpcUrl = config.solana.rpcUrl || clusterApiUrl(config.solana.cluster);
+    const connection = new Connection(rpcUrl, 'confirmed');
+    
+    console.log('🔗 Getting latest blockhash...');
+    
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+    
+    console.log('✅ Blockhash obtained:', blockhash.substring(0, 8) + '...');
+    
+    res.json({
+      ok: true,
+      blockhash,
+      lastValidBlockHeight
+    });
+  } catch (error) {
+    console.error('❌ Error getting blockhash:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'Failed to get blockhash: ' + error.message
+    });
+  }
+});
+
+// Verify transaction
+app.post('/api/verify-transaction', async (req, res) => {
+  try {
+    const { signature } = req.body;
+    
+    if (!signature) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Missing signature'
+      });
+    }
+    
+    const { Connection, clusterApiUrl } = require('@solana/web3.js');
+    
+    const rpcUrl = config.solana.rpcUrl || clusterApiUrl(config.solana.cluster);
+    const connection = new Connection(rpcUrl, 'confirmed');
+    
+    console.log('🔍 Verifying transaction:', signature.substring(0, 8) + '...');
+    
+    const status = await connection.getSignatureStatus(signature);
+    
+    if (!status || !status.value) {
+      return res.json({
+        ok: true,
+        confirmed: false,
+        status: null
+      });
+    }
+    
+    const confirmed = status.value.confirmationStatus === 'confirmed' || 
+                     status.value.confirmationStatus === 'finalized';
+    
+    console.log(confirmed ? '✅ Transaction confirmed' : '⏳ Transaction pending');
+    
+    res.json({
+      ok: true,
+      confirmed,
+      status: status.value
+    });
+  } catch (error) {
+    console.error('❌ Error verifying transaction:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'Failed to verify transaction: ' + error.message
+    });
+  }
+});
+
+// Save sale (alias for /api/purchase)
+app.post('/api/save-sale', async (req, res) => {
+  try {
+    const { signature, buyer, metadata, amount, timestamp, confirmed } = req.body;
+    
+    console.log('\n💾 Saving sale:');
+    console.log('  Signature:', signature);
+    console.log('  Buyer:', buyer);
+    console.log('  Confirmed:', confirmed);
+    
+    if (!signature || !buyer || !metadata) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Missing required fields: signature, buyer, metadata'
+      });
+    }
+
+    // Read current sales
+    let salesData = { sales: [], stats: { totalSales: 0, totalBlocks: 0, totalRevenue: 0 } };
+    if (fs.existsSync(SALES_FILE)) {
+      salesData = JSON.parse(fs.readFileSync(SALES_FILE, 'utf8'));
+    }
+
+    // Check if sale already exists
+    const existingSale = salesData.sales.find(s => s.signature === signature);
+    if (existingSale) {
+      console.log('⚠️  Sale already exists');
+      return res.json({
+        ok: true,
+        message: 'Sale already registered',
+        sale: existingSale
+      });
+    }
+
+    // Calculate blocks
+    let blocks = 1;
+    if (metadata.selection) {
+      blocks = metadata.selection.blocksX * metadata.selection.blocksY;
+    }
+
+    // Create sale record
+    const sale = {
+      signature,
+      buyer,
+      metadata,
+      amount: amount || 0,
+      blocks,
+      timestamp: timestamp || Date.now(),
+      verified: confirmed || false
+    };
+
+    // Add to sales
+    salesData.sales.push(sale);
+    salesData.stats.totalSales++;
+    salesData.stats.totalBlocks += blocks;
+    salesData.stats.totalRevenue += (amount || 0);
+
+    // Save
+    fs.writeFileSync(SALES_FILE, JSON.stringify(salesData, null, 2));
+
+    console.log('✅ Sale saved successfully');
+
+    res.status(201).json({
+      ok: true,
+      message: 'Sale saved successfully',
+      sale
+    });
+  } catch (error) {
+    console.error('❌ Error saving sale:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'Failed to save sale: ' + error.message
+    });
+  }
+});
 // ==========================================
 // Sales Management
 // ==========================================
