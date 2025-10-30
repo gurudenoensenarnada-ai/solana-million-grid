@@ -12,6 +12,153 @@ const multer = require('multer');
 
 // Load configuration
 const config = require('./index.js');
+// ==========================================
+// Telegram Notification Service
+// ==========================================
+
+function escapeMarkdownV2(text) {
+  // Escape special characters for Telegram MarkdownV2
+  return String(text).replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, '\\$1');
+}
+
+async function sendTelegramNotification(saleData) {
+  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+  const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+
+  console.log('\n📱 === TELEGRAM NOTIFICATION ===');
+  console.log('Bot token exists?', !!TELEGRAM_BOT_TOKEN);
+  console.log('Chat ID exists?', !!TELEGRAM_CHAT_ID);
+
+  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
+    console.log('⚠️ Telegram not configured');
+    return { ok: true, skipped: true };
+  }
+
+  try {
+    const meta = saleData.metadata;
+    const sel = meta.selection;
+
+    // Determine zone
+    let zone = '🥉 BRONZE';
+    let zoneEmoji = '🥉';
+    if (sel.minBlockY <= 24) {
+      zone = '🥇 GOLD';
+      zoneEmoji = '🥇';
+    } else if (sel.minBlockY >= 25 && sel.minBlockY <= 59) {
+      zone = '🥈 SILVER';
+      zoneEmoji = '🥈';
+    }
+
+    const blocksTotal = sel.blocksX * sel.blocksY;
+    const amount = saleData.amount.toFixed(4);
+    const isOwner = saleData.buyer === config.solana.ownerWallet;
+
+    // Escape all text for Telegram MarkdownV2
+    const safeName = escapeMarkdownV2(meta.name);
+    const safeUrl = escapeMarkdownV2(meta.url);
+    const safeAmount = escapeMarkdownV2(amount);
+    const safeBlocksTotal = escapeMarkdownV2(blocksTotal);
+    const safeBlocksX = escapeMarkdownV2(sel.blocksX);
+    const safeBlocksY = escapeMarkdownV2(sel.blocksY);
+    const safeRow = escapeMarkdownV2(sel.minBlockY + 1);
+    const safeCol = escapeMarkdownV2(sel.minBlockX + 1);
+    const safeSignature = escapeMarkdownV2(saleData.signature);
+    const safeDate = escapeMarkdownV2(
+      new Date(saleData.timestamp).toLocaleString('en-US', {
+        timeZone: 'Europe/Madrid',
+        dateStyle: 'medium',
+        timeStyle: 'short'
+      })
+    );
+
+    // Build message (English, no wallet shown)
+    let message;
+
+    if (isOwner) {
+      message = `🎉 *NEW PURCHASE ON SOLANA MILLION GRID\\!*
+
+${zoneEmoji} *Zone:* ${zone}
+⭐ *OWNER PURCHASE \\- SPECIAL PRICE*
+
+📊 *Purchase Details:*
+- Project: *${safeName}*
+- URL: ${safeUrl}
+- Blocks: *${safeBlocksTotal}* \\(${safeBlocksX}×${safeBlocksY}\\)
+- Position: Row ${safeRow}, Column ${safeCol}
+
+💰 *Payment:*
+- Amount: *${safeAmount} SOL*
+- Price/block: *0\\.0001 SOL* 🌟
+
+🔗 *Transaction:*
+[View on Solscan](https://solscan\\.io/tx/${safeSignature})
+
+⏰ ${safeDate}`;
+    } else {
+      message = `🎉 *NEW PURCHASE ON SOLANA MILLION GRID\\!*
+
+${zoneEmoji} *Zone:* ${zone}
+
+📊 *Purchase Details:*
+- Project: *${safeName}*
+- URL: ${safeUrl}
+- Blocks: *${safeBlocksTotal}* \\(${safeBlocksX}×${safeBlocksY}\\)
+- Position: Row ${safeRow}, Column ${safeCol}
+
+💰 *Payment:*
+- Amount: *${safeAmount} SOL*
+
+🔗 *Transaction:*
+[View on Solscan](https://solscan\\.io/tx/${safeSignature})
+
+⏰ ${safeDate}`;
+    }
+
+    console.log('📝 Message prepared (length:', message.length, 'chars)');
+
+    // Build logo URL (full URL for Telegram)
+    let logoUrl = meta.logo;
+    if (!logoUrl.startsWith('http')) {
+      const host = process.env.RENDER
+        ? 'https://www.solanamillondollar.com'
+        : 'http://localhost:3000';
+      logoUrl = `${host}${meta.logo}`;
+    }
+
+    console.log('🖼️ Logo URL:', logoUrl);
+
+    // Send to Telegram
+    const telegramApiUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`;
+
+    const response = await fetch(telegramApiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        chat_id: TELEGRAM_CHAT_ID,
+        photo: logoUrl,
+        caption: message,
+        parse_mode: 'MarkdownV2',
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!result.ok) {
+      console.error('❌ Telegram API error:', result);
+      throw new Error(`Telegram API error: ${result.description || 'Unknown'}`);
+    }
+
+    console.log('✅ Telegram notification sent successfully!');
+    console.log('   Message ID:', result.result.message_id);
+
+    return { ok: true, result };
+  } catch (error) {
+    console.error('❌ Telegram notification error:', error.message);
+    throw error;
+  }
+}
 
 // Initialize Express app
 const app = express();
