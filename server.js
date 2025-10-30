@@ -316,7 +316,8 @@ const upload = multer({
   }
 });
 
-app.post('/api/upload', upload.single('logo'), (req, res) => {
+// 🔧 CAMBIO AQUÍ: 'logo' → 'file'
+app.post('/api/upload', upload.single('file'), (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({
@@ -346,7 +347,8 @@ app.post('/api/upload', upload.single('logo'), (req, res) => {
 });
 
 // Alternative route for compatibility
-app.post('/api/upload-logo', upload.single('logo'), (req, res) => {
+// 🔧 CAMBIO AQUÍ: 'logo' → 'file'
+app.post('/api/upload-logo', upload.single('file'), (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({
