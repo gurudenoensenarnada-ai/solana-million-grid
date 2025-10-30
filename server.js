@@ -418,9 +418,27 @@ function initSalesFile() {
 initSalesFile();
 
 // Get all sales
+// Get all sales
 app.get('/api/sales', (req, res) => {
   try {
+    if (!fs.existsSync(SALES_FILE)) {
+      return res.json({
+        ok: true,
+        sales: [],
+        stats: { totalSales: 0, totalBlocks: 0, totalRevenue: 0 }
+      });
+    }
+    
     const data = JSON.parse(fs.readFileSync(SALES_FILE, 'utf8'));
+    
+    // Ensure structure is correct
+    if (!data.stats) {
+      data.stats = { totalSales: 0, totalBlocks: 0, totalRevenue: 0 };
+    }
+    if (!data.sales) {
+      data.sales = [];
+    }
+    
     res.json({
       ok: true,
       ...data
