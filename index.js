@@ -1844,6 +1844,18 @@
     const freeBlocks = blocksTotal - soldInSelection;
     const pricePerBlock = getPriceForBlock(startZone);
     const totalPrice = (freeBlocks * pricePerBlock).toFixed(4);
+    const totalPriceNum = freeBlocks * pricePerBlock;
+    
+    // Check if user has sufficient balance (if wallet connected)
+    let balanceWarning = '';
+    if (userPublicKey && userWalletBalance > 0) {
+      const estimatedFee = 0.000005;
+      const totalNeeded = totalPriceNum + estimatedFee;
+      if (userWalletBalance < totalNeeded) {
+        const shortage = totalNeeded - userWalletBalance;
+        balanceWarning = ` | <span style="color:var(--error); font-weight:700;">⚠️ Saldo insuficiente (faltan ${shortage.toFixed(6)} SOL)</span>`;
+      }
+    }
     
     if (startZone !== endZone) {
       selectionAmountSpan.textContent = '-';
@@ -1851,12 +1863,17 @@
       selectionOverlay.classList.add('selection-invalid');
     } else if (soldInSelection > 0) {
       selectionAmountSpan.textContent = (blocksTotal * pricePerBlock).toFixed(4);
-      selectionInfo.innerHTML = `⚠️ Selection: ${blocksX}×${blocksY} blocks (${getZoneName(startZone)}) | <span style="color:var(--error)">Occupied: ${soldInSelection}</span> | Available: ${freeBlocks} | Price: ${totalPrice} SOL`;
+      selectionInfo.innerHTML = `⚠️ Selection: ${blocksX}×${blocksY} blocks (${getZoneName(startZone)}) | <span style="color:var(--error)">Occupied: ${soldInSelection}</span> | Available: ${freeBlocks} | Price: ${totalPrice} SOL${balanceWarning}`;
       selectionOverlay.classList.add('selection-invalid');
     } else {
       selectionAmountSpan.textContent = (blocksTotal * pricePerBlock).toFixed(4);
-      selectionInfo.innerHTML = `✓ Selection: ${blocksX}×${blocksY} blocks (${getZoneName(startZone)}) | Price: <strong style="color:var(--primary)">${(blocksTotal * pricePerBlock).toFixed(4)} SOL</strong>`;
-      selectionOverlay.classList.remove('selection-invalid');
+      selectionInfo.innerHTML = `✓ Selection: ${blocksX}×${blocksY} blocks (${getZoneName(startZone)}) | Price: <strong style="color:var(--primary)">${(blocksTotal * pricePerBlock).toFixed(4)} SOL</strong>${balanceWarning}`;
+      
+      if (balanceWarning) {
+        selectionOverlay.classList.add('selection-invalid');
+      } else {
+        selectionOverlay.classList.remove('selection-invalid');
+      }
     }
     
     const scale = canvas.getBoundingClientRect().width / CANVAS_SIZE;
@@ -1917,7 +1934,22 @@
       zone: startZone
     };
     
-    confirmBtn.disabled = soldInSelection > 0;
+    // Check balance before enabling confirm button
+    let canConfirm = soldInSelection === 0;
+    
+    if (canConfirm && userPublicKey && userWalletBalance > 0) {
+      const blocksTotal = selection.blocksX * selection.blocksY;
+      const pricePerBlock = getPriceForBlock(startZone);
+      const totalPrice = blocksTotal * pricePerBlock;
+      const estimatedFee = 0.000005;
+      const totalNeeded = totalPrice + estimatedFee;
+      
+      if (userWalletBalance < totalNeeded) {
+        canConfirm = false;
+      }
+    }
+    
+    confirmBtn.disabled = !canConfirm;
   }
 
   function handleHover(e) {
@@ -1969,6 +2001,12 @@
       ownerNote.style.display = 'block';
     } else {
       ownerNote.style.display = 'none';
+    }
+    
+    // Update wallet balance and show balance indicator
+    if (userPublicKey) {
+      await updateWalletBalance();
+      updateBalanceIndicator(parseFloat(totalPrice));
     }
     
     document.getElementById('modal').style.display = 'block';
