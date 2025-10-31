@@ -1707,11 +1707,55 @@
         console.log('⭐ OWNER WALLET DETECTED - Special price: 0.0001 SOL/block');
       }
       
-      // Initialize Solana connection and load balance
-      solanaConnection = new solanaWeb3.Connection(
-        solanaWeb3.clusterApiUrl('mainnet-beta'),
-        'confirmed'
-      );
+      // Initialize Solana connection with multi-RPC fallback
+      console.log('🔄 Inicializando conexión a Solana...');
+      
+      const rpcEndpoints = [
+        'https://api.mainnet-beta.solana.com',
+        'https://solana-api.projectserum.com',
+        'https://rpc.ankr.com/solana',
+        solanaWeb3.clusterApiUrl('mainnet-beta')
+      ];
+      
+      // Probar cada RPC hasta encontrar uno que funcione
+      let connectionEstablished = false;
+      
+      for (const rpcUrl of rpcEndpoints) {
+        try {
+          console.log(`🔄 Probando RPC: ${rpcUrl}`);
+          
+          const testConnection = new solanaWeb3.Connection(rpcUrl, {
+            commitment: 'confirmed',
+            confirmTransactionInitialTimeout: 60000
+          });
+          
+          // Test rápido con timeout
+          const testPromise = testConnection.getLatestBlockhash();
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout')), 5000)
+          );
+          
+          await Promise.race([testPromise, timeoutPromise]);
+          
+          // Si llegamos aquí, el RPC funciona
+          solanaConnection = testConnection;
+          console.log(`✅ RPC funcionando: ${rpcUrl}`);
+          connectionEstablished = true;
+          break;
+          
+        } catch (rpcError) {
+          console.warn(`⚠️ Error con RPC ${rpcUrl}:`, rpcError.message);
+          continue;
+        }
+      }
+      
+      if (!connectionEstablished) {
+        console.warn('⚠️ No se pudo conectar a ningún RPC, usando el último intento');
+        solanaConnection = new solanaWeb3.Connection(
+          solanaWeb3.clusterApiUrl('mainnet-beta'),
+          'confirmed'
+        );
+      }
       
       await updateWalletBalance();
       
@@ -1728,17 +1772,93 @@
 
   // Update wallet balance
   async function updateWalletBalance() {
-    if (!userPublicKey || !solanaConnection) {
+    if (!userPublicKey) {
+      console.warn('⚠️ No hay wallet conectada');
       return;
     }
     
-    try {
-      const balance = await solanaConnection.getBalance(userPublicKey);
-      userWalletBalance = balance / solanaWeb3.LAMPORTS_PER_SOL;
-      console.log('💰 Balance updated:', userWalletBalance.toFixed(6), 'SOL');
-    } catch (error) {
-      console.error('Error fetching balance:', error);
+    const rpcEndpoints = [
+      'https://api.mainnet-beta.solana.com',
+      'https://solana-api.projectserum.com',
+      'https://rpc.ankr.com/solana',
+      solanaWeb3.clusterApiUrl('mainnet-beta')
+    ];
+    
+    let balanceFetched = false;
+    
+    // Intentar con la conexión actual primero
+    if (solanaConnection) {
+      try {
+        const balancePromise = solanaConnection.getBalance(userPublicKey);
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout')), 8000)
+        );
+        
+        const balance = await Promise.race([balancePromise, timeoutPromise]);
+        userWalletBalance = balance / solanaWeb3.LAMPORTS_PER_SOL;
+        
+        console.log('💰 Balance obtenido:', userWalletBalance.toFixed(6), 'SOL');
+        console.log('📍 Wallet:', userPublicKey.toString().slice(0, 8) + '...' + userPublicKey.toString().slice(-8));
+        
+        balanceFetched = true;
+        return;
+        
+      } catch (error) {
+        console.warn('⚠️ Error con conexión actual:', error.message);
+      }
+    }
+    
+    // Si falla, probar con otros RPCs
+    if (!balanceFetched) {
+      console.log('🔄 Probando RPCs alternativos para obtener balance...');
+      
+      for (const rpcUrl of rpcEndpoints) {
+        try {
+          const connection = new solanaWeb3.Connection(rpcUrl, {
+            commitment: 'confirmed',
+            confirmTransactionInitialTimeout: 60000
+          });
+          
+          const balancePromise = connection.getBalance(userPublicKey);
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout')), 8000)
+          );
+          
+          const balance = await Promise.race([balancePromise, timeoutPromise]);
+          userWalletBalance = balance / solanaWeb3.LAMPORTS_PER_SOL;
+          
+          console.log(`✅ Balance obtenido con RPC alternativo: ${userWalletBalance.toFixed(6)} SOL`);
+          console.log('📍 Wallet:', userPublicKey.toString().slice(0, 8) + '...' + userPublicKey.toString().slice(-8));
+          
+          // Actualizar la conexión global si este RPC funciona mejor
+          solanaConnection = connection;
+          balanceFetched = true;
+          break;
+          
+        } catch (error) {
+          console.warn(`⚠️ Error con ${rpcUrl.slice(0, 40)}...`, error.message);
+          continue;
+        }
+      }
+    }
+    
+    // Si ningún RPC funcionó
+    if (!balanceFetched) {
+      console.error('❌ No se pudo obtener el balance desde ningún RPC');
       userWalletBalance = 0;
+      
+      // Mostrar alerta al usuario
+      alert(
+        '⚠️ Error al obtener balance\n\n' +
+        'No se pudo conectar a los servidores de Solana.\n' +
+        'Posibles causas:\n' +
+        '1. Problemas temporales de red\n' +
+        '2. Wallet en red incorrecta (verifica Mainnet)\n\n' +
+        'Sugerencias:\n' +
+        '- Verifica tu balance en Phantom\n' +
+        '- Recarga la página e intenta de nuevo\n' +
+        '- Verifica en https://solscan.io/'
+      );
     }
   }
 
