@@ -1,116 +1,2120 @@
-/**
- * Server Configuration
- * Centralizes all environment variables with validation
- */
-
-require('dotenv').config();
-
-/**
- * Validate required environment variables
- */
-function validateEnv() {
-  const required = [
-    'MERCHANT_WALLET',
-    'CLUSTER',
-    'RPC_URL'
-  ];
-
-  const missing = required.filter(key => !process.env[key]);
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="Solana Million Dollar Grid - Buy pixels and showcase your project on Solana blockchain">
+  <meta property="og:title" content="Solana Million Dollar Grid" />
+  <meta property="og:description" content="Own a piece of blockchain history! Buy pixels on the Solana Million Dollar Grid" />
+  <title>Solana Million Dollar Grid | Own Your Space</title>
   
-  if (missing.length > 0) {
-    throw new Error(
-      `Missing required environment variables: ${missing.join(', ')}\n` +
-      'Please check your .env file against .env.example'
-    );
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  
+  <style>
+    * { 
+      box-sizing: border-box; 
+      margin: 0;
+      padding: 0;
+    }
+    
+    :root {
+      --primary: #14F195;
+      --primary-dark: #0FBF78;
+      --gold: #FFD700;
+      --silver: #C0C0C0;
+      --bronze: #CD7F32;
+      --bg-dark: #0a0a0a;
+      --bg-card: #1a1a2e;
+      --text-primary: #ffffff;
+      --text-secondary: #a0a0a0;
+      --border: #333;
+      --success: #14F195;
+      --error: #FF6B6B;
+      --warning: #FFA726;
+    }
+    
+    body { 
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
+      color: var(--text-primary); 
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      margin: 0;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    
+    /* Animated background */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: 
+        radial-gradient(circle at 20% 50%, rgba(20, 241, 149, 0.05) 0%, transparent 50%),
+        radial-gradient(circle at 80% 80%, rgba(255, 215, 0, 0.05) 0%, transparent 50%);
+      pointer-events: none;
+      z-index: 0;
+    }
+    
+    .container {
+      position: relative;
+      z-index: 1;
+    }
+    
+    /* Header */
+    header { 
+      background: rgba(26, 26, 46, 0.95);
+      padding: 20px 40px;
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(20, 241, 149, 0.1);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    
+    .logo { 
+      font-size: 28px; 
+      font-weight: 900;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--gold) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .logo-icon {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--gold) 100%);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      animation: float 3s ease-in-out infinite;
+    }
+    
+    @keyframes float {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-5px); }
+    }
+    
+    .wallet-section {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+    
+    .social-links {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    
+    .social-btn {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.05);
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      transition: all 0.3s;
+      cursor: pointer;
+      text-decoration: none;
+      font-size: 20px;
+    }
+    
+    .social-btn:hover {
+      transform: translateY(-3px) scale(1.1);
+      border-color: var(--primary);
+      background: rgba(20, 241, 149, 0.1);
+      box-shadow: 0 5px 20px rgba(20, 241, 149, 0.3);
+    }
+    
+    .social-btn.telegram:hover {
+      border-color: #0088cc;
+      background: rgba(0, 136, 204, 0.1);
+      box-shadow: 0 5px 20px rgba(0, 136, 204, 0.3);
+    }
+    
+    .social-btn.twitter:hover {
+      border-color: #1DA1F2;
+      background: rgba(29, 161, 242, 0.1);
+      box-shadow: 0 5px 20px rgba(29, 161, 242, 0.3);
+    }
+    
+    .connectBtn { 
+      padding: 12px 28px;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      border: none; 
+      border-radius: 12px;
+      color: #000;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 14px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 4px 15px rgba(20, 241, 149, 0.3);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .connectBtn:hover { 
+      transform: translateY(-2px);
+      box-shadow: 0 6px 25px rgba(20, 241, 149, 0.5);
+    }
+    
+    .connectBtn:disabled { 
+      background: #666;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+    
+    .wallet-address {
+      padding: 10px 18px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(20, 241, 149, 0.2);
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--primary);
+      font-family: 'Monaco', 'Courier New', monospace;
+    }
+    
+    .owner-badge {
+      background: linear-gradient(135deg, var(--gold) 0%, #FFA500 100%);
+      color: #000;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      animation: glow 2s ease-in-out infinite;
+      box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+    }
+    
+    @keyframes glow {
+      0%, 100% { box-shadow: 0 0 20px rgba(255, 215, 0, 0.5); }
+      50% { box-shadow: 0 0 30px rgba(255, 215, 0, 0.8); }
+    }
+    
+    /* Admin Mode Button */
+    .admin-btn {
+      padding: 10px 20px;
+      background: rgba(255, 0, 0, 0.1);
+      border: 2px solid rgba(255, 0, 0, 0.3);
+      border-radius: 10px;
+      color: #ff4444;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 13px;
+      transition: all 0.3s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .admin-btn:hover {
+      background: rgba(255, 0, 0, 0.2);
+      border-color: rgba(255, 0, 0, 0.5);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(255, 0, 0, 0.3);
+    }
+    
+    .admin-btn.active {
+      background: rgba(255, 0, 0, 0.3);
+      border-color: #ff4444;
+      box-shadow: 0 0 20px rgba(255, 0, 0, 0.5);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 20px rgba(255, 0, 0, 0.5); }
+      50% { box-shadow: 0 0 30px rgba(255, 0, 0, 0.8); }
+    }
+    
+    /* Admin mode indicator */
+    .admin-mode-banner {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: rgba(255, 0, 0, 0.9);
+      color: white;
+      padding: 15px 25px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 14px;
+      z-index: 1000;
+      box-shadow: 0 4px 20px rgba(255, 0, 0, 0.5);
+      animation: slideIn 0.3s ease-out;
+      display: none;
+    }
+    
+    .admin-mode-banner.active {
+      display: block;
+    }
+    
+    @keyframes slideIn {
+      from {
+        transform: translateX(400px);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+    
+    /* Cursor change in admin mode */
+    body.admin-mode canvas {
+      cursor: crosshair !important;
+    }
+    
+    body.admin-mode .block-hover {
+      border: 2px solid red !important;
+    }
+    
+    /* Hero Section */
+    .hero {
+      text-align: center;
+      padding: 60px 20px 40px;
+      background: linear-gradient(180deg, rgba(26, 26, 46, 0.5) 0%, transparent 100%);
+    }
+    
+    .hero h1 {
+      font-size: 56px;
+      font-weight: 900;
+      margin-bottom: 20px;
+      background: linear-gradient(135deg, #fff 0%, var(--primary) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1.2;
+    }
+    
+    .hero p {
+      font-size: 20px;
+      color: var(--text-secondary);
+      max-width: 700px;
+      margin: 0 auto 30px;
+      line-height: 1.6;
+    }
+    
+    .cta-buttons {
+      display: flex;
+      gap: 15px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    
+    .cta-primary, .cta-secondary {
+      padding: 16px 32px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 16px;
+      cursor: pointer;
+      transition: all 0.3s;
+      border: none;
+      text-decoration: none;
+      display: inline-block;
+    }
+    
+    .cta-primary {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: #000;
+      box-shadow: 0 4px 20px rgba(20, 241, 149, 0.3);
+    }
+    
+    .cta-primary:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 30px rgba(20, 241, 149, 0.5);
+    }
+    
+    .cta-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .cta-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: var(--primary);
+    }
+    
+    /* Stats Section */
+    #stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      padding: 40px 20px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    
+    .stat-card {
+      background: rgba(26, 26, 46, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 24px;
+      text-align: center;
+      transition: all 0.3s;
+      backdrop-filter: blur(10px);
+    }
+    
+    .stat-card:hover {
+      transform: translateY(-5px);
+      border-color: var(--primary);
+      box-shadow: 0 10px 30px rgba(20, 241, 149, 0.2);
+    }
+    
+    .stat-icon {
+      font-size: 32px;
+      margin-bottom: 12px;
+      display: block;
+    }
+    
+    .stat-value {
+      font-size: 32px;
+      font-weight: 900;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--gold) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 8px;
+    }
+    
+    .stat-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 600;
+    }
+    
+    /* Selection Info */
+    #selectionInfo { 
+      text-align: center; 
+      padding: 20px;
+      font-weight: 600;
+      font-size: 18px;
+      min-height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(26, 26, 46, 0.4);
+      backdrop-filter: blur(10px);
+    }
+    
+    /* Buttons */
+    #buttons { 
+      text-align: center; 
+      margin: 20px;
+      display: flex;
+      gap: 15px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    
+    button { 
+      padding: 14px 32px;
+      border-radius: 12px;
+      border: none;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 15px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    button:hover { 
+      transform: translateY(-3px);
+    }
+    
+    button:disabled { 
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: #000;
+      box-shadow: 0 4px 20px rgba(20, 241, 149, 0.3);
+    }
+    
+    .btn-primary:hover:not(:disabled) {
+      box-shadow: 0 6px 30px rgba(20, 241, 149, 0.5);
+    }
+    
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: var(--error);
+    }
+    
+    /* Grid Container */
+    #gridWrapper { 
+      display: flex; 
+      justify-content: center;
+      padding: 40px 20px;
+      min-height: 600px;
+    }
+    
+    #gridContainer { 
+      position: relative;
+      display: inline-block;
+      border: 3px solid rgba(20, 241, 149, 0.3);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 
+        0 0 50px rgba(20, 241, 149, 0.2),
+        0 20px 60px rgba(0, 0, 0, 0.5);
+      transition: all 0.3s;
+    }
+    
+    #gridContainer:hover {
+      box-shadow: 
+        0 0 70px rgba(20, 241, 149, 0.3),
+        0 25px 70px rgba(0, 0, 0, 0.6);
+    }
+    
+    #canvas { 
+      display: block;
+      cursor: crosshair;
+      image-rendering: pixelated;
+      background: #2a2a3e;
+    }
+    
+    #selectionOverlay { 
+      position: absolute;
+      pointer-events: none;
+      display: none;
+      z-index: 20;
+      background: rgba(20, 241, 149, 0.15);
+      border: 3px solid var(--primary);
+      box-shadow: 
+        0 0 20px rgba(20, 241, 149, 0.6),
+        inset 0 0 20px rgba(20, 241, 149, 0.2);
+      animation: pulse-border 2s ease-in-out infinite;
+    }
+    
+    @keyframes pulse-border {
+      0%, 100% { border-color: var(--primary); }
+      50% { border-color: var(--gold); }
+    }
+    
+    .selection-invalid {
+      border-color: var(--error) !important;
+      background: rgba(255, 107, 107, 0.15) !important;
+      box-shadow: 0 0 20px rgba(255, 107, 107, 0.6) !important;
+    }
+    
+    #tooltip { 
+      position: absolute;
+      display: none;
+      pointer-events: none;
+      background: rgba(0, 0, 0, 0.95);
+      color: #fff;
+      padding: 12px 18px;
+      border-radius: 10px;
+      border: 2px solid var(--primary);
+      z-index: 60;
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(10px);
+    }
+    
+    /* Modal */
+    #modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.92);
+      z-index: 200;
+      overflow-y: auto;
+      backdrop-filter: blur(8px);
+    }
+    
+    .modal-content {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    
+    #modalInner { 
+      background: linear-gradient(135deg, rgba(26, 26, 46, 0.98) 0%, rgba(20, 20, 30, 0.98) 100%);
+      padding: 40px;
+      border-radius: 20px;
+      border: 2px solid var(--primary);
+      width: 500px;
+      max-width: 95%;
+      margin: auto;
+      box-shadow: 0 20px 80px rgba(0, 0, 0, 0.8);
+      animation: modalSlideIn 0.3s ease-out;
+    }
+    
+    @keyframes modalSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    #modalInner h3 {
+      color: var(--primary);
+      margin: 0 0 30px 0;
+      text-align: center;
+      font-size: 28px;
+      font-weight: 900;
+    }
+    
+    .price-display { 
+      background: rgba(20, 241, 149, 0.1);
+      border: 2px solid var(--primary);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      margin-bottom: 30px;
+      font-size: 20px;
+      font-weight: 700;
+    }
+    
+    .price-display .amount {
+      font-size: 36px;
+      font-weight: 900;
+      color: var(--primary);
+      display: block;
+      margin: 10px 0;
+    }
+    
+    .owner-price-note {
+      background: linear-gradient(135deg, rgba(255, 215, 0, 0.2) 0%, rgba(255, 165, 0, 0.2) 100%);
+      border: 2px solid var(--gold);
+      border-radius: 10px;
+      padding: 12px;
+      margin-top: 15px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--gold);
+      display: none;
+    }
+    
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    input[type="text"], input[type="url"], input[type="file"] { 
+      width: 100%;
+      padding: 14px 16px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      color: #fff;
+      border-radius: 10px;
+      box-sizing: border-box;
+      font-size: 15px;
+      font-family: inherit;
+      transition: all 0.3s;
+    }
+    
+    input:focus {
+      outline: none;
+      border-color: var(--primary);
+      background: rgba(255, 255, 255, 0.08);
+      box-shadow: 0 0 0 3px rgba(20, 241, 149, 0.1);
+    }
+    
+    input[type="file"] {
+      padding: 12px;
+      cursor: pointer;
+    }
+    
+    #paymentStatus { 
+      text-align: center;
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 10px;
+      font-weight: 600;
+      min-height: 24px;
+    }
+    
+    .success { 
+      color: var(--success);
+      background: rgba(20, 241, 149, 0.1);
+      border: 1px solid var(--success);
+    }
+    
+    .error { 
+      color: var(--error);
+      background: rgba(255, 107, 107, 0.1);
+      border: 1px solid var(--error);
+    }
+    
+    .warning { 
+      color: var(--warning);
+      background: rgba(255, 167, 38, 0.1);
+      border: 1px solid var(--warning);
+    }
+    
+    /* Loading */
+    #loading { 
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 10, 10, 0.98);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 300;
+      backdrop-filter: blur(10px);
+    }
+    
+    .spinner-container {
+      text-align: center;
+    }
+    
+    .spinner { 
+      border: 5px solid rgba(255, 255, 255, 0.1);
+      border-top: 5px solid var(--primary);
+      border-radius: 50%;
+      width: 60px;
+      height: 60px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+    
+    @keyframes spin { 
+      0% { transform: rotate(0deg); } 
+      100% { transform: rotate(360deg); } 
+    }
+    
+    .loading-text {
+      color: var(--primary);
+      font-size: 18px;
+      font-weight: 600;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    /* Features Section */
+    .features {
+      padding: 80px 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    
+    .features h2 {
+      text-align: center;
+      font-size: 42px;
+      font-weight: 900;
+      margin-bottom: 60px;
+      background: linear-gradient(135deg, #fff 0%, var(--primary) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 30px;
+    }
+    
+    .feature-card {
+      background: rgba(26, 26, 46, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 32px;
+      text-align: center;
+      transition: all 0.3s;
+    }
+    
+    .feature-card:hover {
+      transform: translateY(-10px);
+      border-color: var(--primary);
+      box-shadow: 0 15px 40px rgba(20, 241, 149, 0.2);
+    }
+    
+    .feature-icon {
+      font-size: 48px;
+      margin-bottom: 20px;
+      display: block;
+    }
+    
+    .feature-card h3 {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: var(--primary);
+    }
+    
+    .feature-card p {
+      color: var(--text-secondary);
+      line-height: 1.6;
+      font-size: 15px;
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+      header {
+        padding: 15px 20px;
+        flex-direction: column;
+        gap: 15px;
+      }
+      
+      .wallet-section {
+        flex-direction: column;
+        width: 100%;
+      }
+      
+      .social-links {
+        order: -1;
+      }
+      
+      .connectBtn {
+        width: 100%;
+      }
+      
+      .logo {
+        font-size: 22px;
+      }
+      
+      .hero h1 {
+        font-size: 36px;
+      }
+      
+      .hero p {
+        font-size: 16px;
+      }
+      
+      #stats {
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+        padding: 20px;
+      }
+      
+      .stat-value {
+        font-size: 24px;
+      }
+      
+      #gridContainer {
+        max-width: 100%;
+      }
+      
+      #canvas {
+        max-width: 100%;
+        height: auto;
+      }
+      
+      #modalInner {
+        padding: 25px;
+      }
+      
+      .features {
+        padding: 40px 20px;
+      }
+      
+      .features h2 {
+        font-size: 32px;
+      }
+      
+      .footer-content {
+        grid-template-columns: 1fr;
+        gap: 30px;
+      }
+    }
+    
+    /* Scroll indicator */
+    .scroll-indicator {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      opacity: 0.6;
+      transition: opacity 0.3s;
+      z-index: 50;
+    }
+    
+    .scroll-indicator:hover {
+      opacity: 1;
+    }
+    
+    .scroll-text {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--text-secondary);
+    }
+    
+    .scroll-arrow {
+      width: 30px;
+      height: 30px;
+      border-right: 2px solid var(--primary);
+      border-bottom: 2px solid var(--primary);
+      transform: rotate(45deg);
+      animation: bounce 2s infinite;
+    }
+    
+    @keyframes bounce {
+      0%, 100% { transform: rotate(45deg) translateY(0); }
+      50% { transform: rotate(45deg) translateY(10px); }
+    }
+    
+    /* Footer */
+    footer {
+      background: rgba(26, 26, 46, 0.95);
+      padding: 60px 20px 30px;
+      margin-top: 80px;
+      border-top: 1px solid rgba(20, 241, 149, 0.1);
+    }
+    
+    .footer-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 40px;
+      margin-bottom: 40px;
+    }
+    
+    .footer-section h3 {
+      color: var(--primary);
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    
+    .footer-section p {
+      color: var(--text-secondary);
+      line-height: 1.8;
+      font-size: 14px;
+    }
+    
+    .footer-links {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    
+    .footer-links li {
+      margin-bottom: 12px;
+    }
+    
+    .footer-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: all 0.3s;
+      font-size: 14px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .footer-links a:hover {
+      color: var(--primary);
+      transform: translateX(5px);
+    }
+    
+    .footer-social {
+      display: flex;
+      gap: 15px;
+      margin-top: 20px;
+    }
+    
+    .footer-social-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.05);
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      transition: all 0.3s;
+      cursor: pointer;
+      text-decoration: none;
+      font-size: 24px;
+    }
+    
+    .footer-social-btn:hover {
+      transform: translateY(-5px);
+      border-color: var(--primary);
+      background: rgba(20, 241, 149, 0.1);
+      box-shadow: 0 8px 25px rgba(20, 241, 149, 0.3);
+    }
+    
+    .footer-social-btn.telegram:hover {
+      border-color: #0088cc;
+      background: rgba(0, 136, 204, 0.1);
+      box-shadow: 0 8px 25px rgba(0, 136, 204, 0.3);
+    }
+    
+    .footer-social-btn.twitter:hover {
+      border-color: #1DA1F2;
+      background: rgba(29, 161, 242, 0.1);
+      box-shadow: 0 8px 25px rgba(29, 161, 242, 0.3);
+    }
+    
+    .footer-bottom {
+      text-align: center;
+      padding-top: 30px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+    
+    .footer-bottom a {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    
+    .footer-bottom a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <!-- Loading Screen -->
+  <div id="loading">
+    <div class="spinner-container">
+      <div class="spinner"></div>
+      <p class="loading-text">Loading the grid...</p>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">🚀</div>
+      <span>SOLANA MILLION GRID</span>
+    </div>
+    <div class="wallet-section">
+      <div class="social-links">
+        <a href="https://t.me/solanamillondollar" target="_blank" rel="noopener noreferrer" class="social-btn telegram" title="Join our Telegram">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.295-.6.295-.002 0-.003 0-.005 0l.213-3.054 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.658-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/>
+          </svg>
+        </a>
+        <a href="https://x.com/solmillondollar" target="_blank" rel="noopener noreferrer" class="social-btn twitter" title="Follow us on X">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+          </svg>
+        </a>
+      </div>
+      <button id="connectWallet" class="connectBtn">Connect Wallet</button>
+      <span id="walletAddr" class="wallet-address" style="display:none;"></span>
+      <span id="ownerBadge" class="owner-badge" style="display:none;">⭐ OWNER</span>
+      <button id="adminModeBtn" class="admin-btn" style="display:none;">
+        🛡️ <span id="adminModeText">Admin Mode</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Admin Mode Banner -->
+  <div id="adminModeBanner" class="admin-mode-banner">
+    🛡️ MODO ADMIN ACTIVO - Haz clic en cualquier logo para eliminarlo
+  </div>
+
+  <div class="container">
+    <!-- Hero Section -->
+    <section class="hero">
+      <h1>Own a Piece of<br/>Blockchain History</h1>
+      <p>Buy pixels on the Solana blockchain and showcase your project to thousands of visitors. Limited to 1 million pixels!</p>
+      <div class="cta-buttons">
+        <button class="cta-primary" onclick="document.getElementById('gridWrapper').scrollIntoView({behavior: 'smooth'})">
+          🎨 Buy Pixels Now
+        </button>
+        <a href="#features" class="cta-secondary">Learn More</a>
+      </div>
+    </section>
+
+    <!-- Stats Dashboard -->
+    <div id="stats">
+      <div class="stat-card">
+        <span class="stat-icon">🥇</span>
+        <div class="stat-value" id="goldSold">0/2,500</div>
+        <div class="stat-label">Gold Zone (1 SOL)</div>
+      </div>
+      <div class="stat-card">
+        <span class="stat-icon">🥈</span>
+        <div class="stat-value" id="silverSold">0/3,500</div>
+        <div class="stat-label">Silver Zone (0.5 SOL)</div>
+      </div>
+      <div class="stat-card">
+        <span class="stat-icon">🥉</span>
+        <div class="stat-value" id="bronzeSold">0/4,000</div>
+        <div class="stat-label">Bronze Zone (0.1 SOL)</div>
+      </div>
+      <div class="stat-card">
+        <span class="stat-icon">💰</span>
+        <div class="stat-value" id="totalSales">0</div>
+        <div class="stat-label">Total Sales</div>
+      </div>
+      <div class="stat-card">
+        <span class="stat-icon">🎯</span>
+        <div class="stat-value" id="selectionAmount">-</div>
+        <div class="stat-label">Current Selection</div>
+      </div>
+    </div>
+
+    <!-- Selection Info -->
+    <div id="selectionInfo">Drag to select pixels on the grid below</div>
+
+    <!-- Action Buttons -->
+    <div id="buttons">
+      <button id="confirmBtn" class="btn-primary" disabled>
+        ✓ Buy Selection
+      </button>
+      <button id="cancelBtn" class="btn-secondary">
+        ✗ Cancel
+      </button>
+    </div>
+
+    <!-- Grid -->
+    <div id="gridWrapper">
+      <div id="gridContainer">
+        <canvas id="canvas" width="1000" height="1000"></canvas>
+        <div id="selectionOverlay"></div>
+        <div id="tooltip"></div>
+      </div>
+    </div>
+
+    <!-- Features Section -->
+    <section class="features" id="features">
+      <h2>Why Choose Solana Million Grid?</h2>
+      <div class="features-grid">
+        <div class="feature-card">
+          <span class="feature-icon">⚡</span>
+          <h3>Lightning Fast</h3>
+          <p>Built on Solana - the fastest blockchain with near-instant transactions and low fees</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">🔒</span>
+          <h3>Secure & Permanent</h3>
+          <p>Your pixels are permanently recorded on the blockchain. No one can remove them</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">🌐</span>
+          <h3>Maximum Exposure</h3>
+          <p>Get your project seen by thousands of crypto enthusiasts and potential investors</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">💎</span>
+          <h3>Premium Zones</h3>
+          <p>Choose from Gold, Silver, or Bronze zones based on your budget and visibility needs</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">🎨</span>
+          <h3>Your Logo, Your Space</h3>
+          <p>Upload your logo and link to your project. Make it stand out!</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">📈</span>
+          <h3>Limited Supply</h3>
+          <p>Only 1 million pixels available. First come, first served!</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section">
+        <h3>Solana Million Grid</h3>
+        <p>The first decentralized advertising space on the Solana blockchain. Own your piece of digital history and showcase your project to the world.</p>
+        <div class="footer-social">
+          <a href="https://t.me/solanamillondollar" target="_blank" rel="noopener noreferrer" class="footer-social-btn telegram" title="Join our Telegram">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.295-.6.295-.002 0-.003 0-.005 0l.213-3.054 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.658-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/>
+            </svg>
+          </a>
+          <a href="https://x.com/solmillondollar" target="_blank" rel="noopener noreferrer" class="footer-social-btn twitter" title="Follow us on X">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+            </svg>
+          </a>
+        </div>
+      </div>
+      
+      <div class="footer-section">
+        <h3>Quick Links</h3>
+        <ul class="footer-links">
+          <li><a href="#gridWrapper" onclick="document.getElementById('gridWrapper').scrollIntoView({behavior: 'smooth'}); return false;">🎨 Buy Pixels</a></li>
+          <li><a href="#features">✨ Features</a></li>
+          <li><a href="#stats" onclick="document.getElementById('stats').scrollIntoView({behavior: 'smooth'}); return false;">📊 Stats</a></li>
+          <li><a href="https://solscan.io" target="_blank" rel="noopener noreferrer">🔍 View on Solscan</a></li>
+        </ul>
+      </div>
+      
+      <div class="footer-section">
+        <h3>Community</h3>
+        <ul class="footer-links">
+          <li><a href="https://t.me/solanamillondollar" target="_blank" rel="noopener noreferrer">💬 Telegram Community</a></li>
+          <li><a href="https://x.com/solmillondollar" target="_blank" rel="noopener noreferrer">🐦 Follow on X</a></li>
+          <li><a href="https://solana.com" target="_blank" rel="noopener noreferrer">⚡ About Solana</a></li>
+          <li><a href="https://phantom.app" target="_blank" rel="noopener noreferrer">👻 Get Phantom Wallet</a></li>
+        </ul>
+      </div>
+      
+      <div class="footer-section">
+        <h3>Zones & Pricing</h3>
+        <ul class="footer-links">
+          <li><a href="#gridWrapper">🥇 Gold Zone - 1 SOL/block</a></li>
+          <li><a href="#gridWrapper">🥈 Silver Zone - 0.5 SOL/block</a></li>
+          <li><a href="#gridWrapper">🥉 Bronze Zone - 0.1 SOL/block</a></li>
+          <li style="color: var(--warning); font-weight: 600;">⚠️ Limited to 10,000 blocks!</li>
+        </ul>
+      </div>
+    </div>
+    
+    <div class="footer-bottom">
+      <p>© 2025 Solana Million Grid. Built on <a href="https://solana.com" target="_blank">Solana Blockchain</a></p>
+      <p style="margin-top: 10px; font-size: 12px; opacity: 0.7;">Own your space. Showcase your project. Join the revolution.</p>
+    </div>
+  </footer>
+
+  <!-- Purchase Modal -->
+  <div id="modal">
+    <div class="modal-content">
+      <div id="modalInner">
+        <h3>🎨 Purchase Pixels</h3>
+        
+        <div class="price-display">
+          Total Price:
+          <span class="amount" id="totalPrice">0.00 SOL</span>
+          <div id="ownerPriceNote" class="owner-price-note">
+            ⭐ Owner Special Price: 0.0001 SOL/block
+          </div>
+        </div>
+        
+        <div id="projectForm">
+          <div class="form-group">
+            <label>Project Name *</label>
+            <input type="text" id="projectName" placeholder="My Amazing Project" maxlength="50">
+          </div>
+          
+          <div class="form-group">
+            <label>Project URL *</label>
+            <input type="url" id="projectURL" placeholder="https://myproject.com">
+          </div>
+          
+          <div class="form-group">
+            <label>Project Logo * (PNG, JPG, GIF - max 5MB)</label>
+            <input type="file" id="projectLogo" accept="image/*">
+          </div>
+        </div>
+        
+        <div id="paymentStatus"></div>
+        
+        <div style="display:flex; gap:15px; margin-top:25px;">
+          <button id="payBtn" class="btn-primary" style="flex:1">💰 Pay & Register</button>
+          <button id="closeModal" class="btn-secondary" style="flex:1">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Solana Web3.js -->
+  <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+  
+  <!-- Main Script -->
+  <script>
+  // Configuration
+  const CANVAS_SIZE = 1000;
+  const BLOCK_SIZE = 10;
+  const BLOCKS_PER_SIDE = CANVAS_SIZE / BLOCK_SIZE;
+  const PRICE_GOLD = 1.0;
+  const PRICE_SILVER = 0.5;
+  const PRICE_BRONZE = 0.1;
+  const PRICE_OWNER = 0.0001;
+  const OWNER_WALLET = 'B7nB9QX1KC4QXp5GMxR8xzh3yzoqp6NjxSwfNBXtgPc1';
+  const API_BASE = window.location.origin;
+  
+  const GOLD_END = 24;
+  const SILVER_START = 25;
+  const SILVER_END = 59;
+  const BRONZE_START = 60;
+  
+  const GOLD_TOTAL = 25 * 100;
+  const SILVER_TOTAL = 35 * 100;
+  const BRONZE_TOTAL = 40 * 100;
+
+  // DOM Elements
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const gridContainer = document.getElementById('gridContainer');
+  const goldSoldSpan = document.getElementById('goldSold');
+  const silverSoldSpan = document.getElementById('silverSold');
+  const bronzeSoldSpan = document.getElementById('bronzeSold');
+  const totalSalesSpan = document.getElementById('totalSales');
+  const selectionAmountSpan = document.getElementById('selectionAmount');
+  const selectionOverlay = document.getElementById('selectionOverlay');
+  const selectionInfo = document.getElementById('selectionInfo');
+  const tooltip = document.getElementById('tooltip');
+  const connectBtn = document.getElementById('connectWallet');
+  const walletAddrSpan = document.getElementById('walletAddr');
+  const ownerBadge = document.getElementById('ownerBadge');
+  const loadingEl = document.getElementById('loading');
+  const confirmBtn = document.getElementById('confirmBtn');
+  const cancelBtn = document.getElementById('cancelBtn');
+  const adminModeBtn = document.getElementById('adminModeBtn');
+  const adminModeBanner = document.getElementById('adminModeBanner');
+  const adminModeText = document.getElementById('adminModeText');
+
+  // State
+  let blockData = new Array(BLOCKS_PER_SIDE * BLOCKS_PER_SIDE).fill(null);
+  let soldPixels = 0;
+  let totalSales = 0;
+  let goldSold = 0;
+  let silverSold = 0;
+  let bronzeSold = 0;
+  let isDragging = false;
+  let startX, startY, endX, endY;
+  let selection = null;
+  let userPublicKey = null;
+  let MERCHANT_WALLET = null;
+  let isOwner = false;
+  let adminMode = false;
+  let salesData = []; // Store sales data for admin mode
+
+  // Load server configuration
+  async function loadConfig() {
+    try {
+      const res = await fetch(`${API_BASE}/api/config`);
+      const config = await res.json();
+      if (config.ok) {
+        MERCHANT_WALLET = config.merchantWallet;
+        console.log('✅ Configuration loaded:', config.cluster);
+      }
+    } catch (err) {
+      console.error('Error loading configuration:', err);
+    }
   }
-}
 
-// Validate on load
-validateEnv();
+  // Check if wallet is owner
+  function checkIfOwner(walletAddress) {
+    return walletAddress === OWNER_WALLET;
+  }
 
-const config = {
-  // Server
-  port: parseInt(process.env.PORT, 10) || 3000,
-  nodeEnv: process.env.NODE_ENV || 'development',
-  isDevelopment: process.env.NODE_ENV !== 'production',
-  isProduction: process.env.NODE_ENV === 'production',
+  // Get price for block based on zone and owner status
+  function getPriceForBlock(zone) {
+    if (isOwner) return PRICE_OWNER;
+    if (zone === 'gold') return PRICE_GOLD;
+    if (zone === 'silver') return PRICE_SILVER;
+    if (zone === 'bronze') return PRICE_BRONZE;
+    return PRICE_BRONZE;
+  }
 
-  // Solana
-  solana: {
-    merchantWallet: process.env.MERCHANT_WALLET,
-    ownerWallet: process.env.OWNER_WALLET || process.env.MERCHANT_WALLET,
-    cluster: process.env.CLUSTER || 'mainnet-beta',
-    rpcUrl: process.env.RPC_URL,
-  },
+  // Draw grid zones
+  function drawGrid() {
+    // Gold zone
+    ctx.fillStyle = '#FFD700';
+    ctx.fillRect(0, 0, CANVAS_SIZE, 25 * BLOCK_SIZE);
+    
+    // Silver zone
+    ctx.fillStyle = '#C0C0C0';
+    ctx.fillRect(0, 25 * BLOCK_SIZE, CANVAS_SIZE, 35 * BLOCK_SIZE);
+    
+    // Bronze zone
+    ctx.fillStyle = '#CD7F32';
+    ctx.fillRect(0, 60 * BLOCK_SIZE, CANVAS_SIZE, 40 * BLOCK_SIZE);
+    
+    // Grid lines
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    
+    for (let x = 0; x <= CANVAS_SIZE; x += BLOCK_SIZE) {
+      ctx.beginPath();
+      ctx.moveTo(x + 0.5, 0);
+      ctx.lineTo(x + 0.5, CANVAS_SIZE);
+      ctx.stroke();
+    }
+    
+    for (let y = 0; y <= CANVAS_SIZE; y += BLOCK_SIZE) {
+      ctx.beginPath();
+      ctx.moveTo(0, y + 0.5);
+      ctx.lineTo(CANVAS_SIZE, y + 0.5);
+      ctx.stroke();
+    }
+  }
 
-  // Cloudinary
-  cloudinary: {
-    cloudName: process.env.CLOUDINARY_CLOUD_NAME || null,
-    uploadPreset: process.env.CLOUDINARY_UPLOAD_PRESET || null,
-    apiKey: process.env.CLOUDINARY_API_KEY || null,
-    apiSecret: process.env.CLOUDINARY_API_SECRET || null,
-    enabled: !!(
-      process.env.CLOUDINARY_CLOUD_NAME &&
-      process.env.CLOUDINARY_API_KEY &&
-      process.env.CLOUDINARY_API_SECRET
-    ),
-  },
+  function getZone(blockY) {
+    if (blockY <= GOLD_END) return 'gold';
+    if (blockY >= SILVER_START && blockY <= SILVER_END) return 'silver';
+    if (blockY >= BRONZE_START) return 'bronze';
+    return null;
+  }
+  
+  function getZoneName(zone) {
+    if (isOwner) return '⭐ OWNER (0.0001 SOL/block)';
+    if (zone === 'gold') return 'GOLD (1 SOL/block)';
+    if (zone === 'silver') return 'SILVER (0.5 SOL/block)';
+    if (zone === 'bronze') return 'BRONZE (0.1 SOL/block)';
+    return '';
+  }
 
-  // Storage
-  storage: {
-    saveImagesInJson: process.env.SAVE_IMAGES_IN_JSON === 'true',
-    removeLocalAfterUpload: process.env.REMOVE_LOCAL_AFTER_UPLOAD === 'true',
-    salesPublicId: process.env.SALES_PUBLIC_ID || 'sales_backup',
-    persistentDir: process.env.PERSISTENT_DIR || null,
-  },
+  function blockIndex(bx, by) {
+    return by * BLOCKS_PER_SIDE + bx;
+  }
 
-  // Telegram
-  telegram: {
-    botToken: process.env.TELEGRAM_BOT_TOKEN || null,
-    chatId: process.env.TELEGRAM_CHAT_ID || null,
-    enabled: !!(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID),
-  },
+  function isBlockSold(bx, by) {
+    if (bx < 0 || by < 0 || bx >= BLOCKS_PER_SIDE || by >= BLOCKS_PER_SIDE) return false;
+    return blockData[blockIndex(bx, by)] !== null;
+  }
 
-  // Security
-  security: {
-    restoreSecret: process.env.RESTORE_SECRET || 'default_secret_change_me',
-    jwtSecret: process.env.JWT_SECRET || 'default_jwt_secret_change_me',
-  },
+  function getMousePosInCanvas(e) {
+    const rect = canvas.getBoundingClientRect();
+    const rawX = Math.floor((e.clientX - rect.left) * (CANVAS_SIZE / rect.width));
+    const rawY = Math.floor((e.clientY - rect.top) * (CANVAS_SIZE / rect.height));
+    return { rawX, rawY, rect };
+  }
 
-  // Rate Limiting
-  rateLimit: {
-    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) || 15 * 60 * 1000, // 15 min
-    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS, 10) || 100,
-  },
+  // Load grid from server
+  async function loadGridFromServer() {
+    console.log('🔄 Loading grid...');
+    
+    try {
+      drawGrid();
+      console.log('✅ Base grid drawn');
+      
+      const res = await fetch(`${API_BASE}/api/sales`);
+      console.log('📡 Response from /api/sales:', res.status);
+      
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      
+      const json = await res.json();
+      console.log('📊 Data received:', json);
+      
+      if (!json || !json.sales) {
+        console.warn('⚠️ No sales in response');
+        return;
+      }
+      
+      const sales = json.sales;
+      totalSales = sales.length;
+      totalSalesSpan.textContent = totalSales;
+      console.log(`✅ ${sales.length} sales found`);
+      
+      // Store sales data for admin mode
+      salesData = sales;
+      
+      blockData = new Array(BLOCKS_PER_SIDE * BLOCKS_PER_SIDE).fill(null);
+      soldPixels = 0;
+      goldSold = 0;
+      silverSold = 0;
+      bronzeSold = 0;
+      
+      const projects = {};
+      sales.forEach(sale => {
+        const meta = sale.metadata;
+        if (!meta || !meta.selection) return;
+        
+        const key = `${meta.name}_${meta.logo}`;
+        if (!projects[key]) {
+          projects[key] = {
+            name: meta.name,
+            url: meta.url,
+            logo: meta.logo,
+            blocks: []
+          };
+        }
+        
+        const sel = meta.selection;
+        for (let by = sel.minBlockY; by < sel.minBlockY + sel.blocksY; by++) {
+          for (let bx = sel.minBlockX; bx < sel.minBlockX + sel.blocksX; bx++) {
+            projects[key].blocks.push({ x: bx, y: by });
+          }
+        }
+      });
+      
+      const projectList = Object.values(projects);
+      console.log(`🎨 Loading ${projectList.length} projects...`);
+      
+      for (const project of projectList) {
+        await loadProjectOnGrid(project);
+      }
+      
+      goldSold = 0;
+      silverSold = 0;
+      bronzeSold = 0;
+      
+      for (let by = 0; by < BLOCKS_PER_SIDE; by++) {
+        for (let bx = 0; bx < BLOCKS_PER_SIDE; bx++) {
+          if (blockData[blockIndex(bx, by)] !== null) {
+            const zone = getZone(by);
+            if (zone === 'gold') goldSold++;
+            else if (zone === 'silver') silverSold++;
+            else if (zone === 'bronze') bronzeSold++;
+          }
+        }
+      }
+      
+      goldSoldSpan.textContent = `${goldSold.toLocaleString()}/${GOLD_TOTAL.toLocaleString()}`;
+      silverSoldSpan.textContent = `${silverSold.toLocaleString()}/${SILVER_TOTAL.toLocaleString()}`;
+      bronzeSoldSpan.textContent = `${bronzeSold.toLocaleString()}/${BRONZE_TOTAL.toLocaleString()}`;
+      
+      soldPixels = Object.values(blockData).filter(b => b !== null).length * BLOCK_SIZE * BLOCK_SIZE;
+      
+      console.log(`✅ Grid loaded completely`);
+      
+    } catch (err) {
+      console.error('❌ Error loading grid:', err);
+      alert('Error loading the grid. Please reload the page.');
+    } finally {
+      console.log('🎯 Hiding loading...');
+      loadingEl.style.display = 'none';
+    }
+  }
 
-  // Grid Configuration
-  grid: {
-    canvasSize: 1000,
-    blockSize: 10,
-    blocksPerSide: 100,
-    prices: {
-      gold: 1.0,
-      silver: 0.5,
-      bronze: 0.1,
-      owner: 0.0001,
-    },
-    zones: {
-      goldEnd: 24,
-      silverStart: 25,
-      silverEnd: 59,
-      bronzeStart: 60,
-    },
-  },
-};
+  function loadProjectOnGrid(project) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      
+      img.onload = function() {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        project.blocks.forEach(b => {
+          if (b.x < minX) minX = b.x;
+          if (b.y < minY) minY = b.y;
+          if (b.x > maxX) maxX = b.x;
+          if (b.y > maxY) maxY = b.y;
+        });
+        
+        const drawX = minX * BLOCK_SIZE;
+        const drawY = minY * BLOCK_SIZE;
+        const drawWidth = (maxX - minX + 1) * BLOCK_SIZE;
+        const drawHeight = (maxY - minY + 1) * BLOCK_SIZE;
+        
+        ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+        
+        project.blocks.forEach(b => {
+          const idx = blockIndex(b.x, b.y);
+          blockData[idx] = {
+            name: project.name,
+            url: project.url,
+            logo: project.logo
+          };
+        });
+        
+        resolve();
+      };
+      
+      img.onerror = function() {
+        console.warn('⚠️ Could not load image:', project.logo);
+        project.blocks.forEach(b => {
+          const idx = blockIndex(b.x, b.y);
+          blockData[idx] = {
+            name: project.name,
+            url: project.url,
+            logo: project.logo
+          };
+        });
+        resolve();
+      };
+      
+      img.src = project.logo;
+    });
+  }
 
-// Log configuration on startup (without sensitive data)
-if (config.isDevelopment) {
-  console.log('🔧 Configuration loaded:');
-  console.log('  - Environment:', config.nodeEnv);
-  console.log('  - Port:', config.port);
-  console.log('  - Cluster:', config.solana.cluster);
-  console.log('  - Cloudinary:', config.cloudinary.enabled ? '✅' : '❌');
-  console.log('  - Telegram:', config.telegram.enabled ? '✅' : '❌');
-}
+  // Wallet connection
+  async function connectWallet() {
+    if (!window.solana) {
+      alert('Please install Phantom Wallet: https://phantom.app');
+      return;
+    }
+    
+    try {
+      connectBtn.disabled = true;
+      connectBtn.textContent = 'Connecting...';
+      
+      const resp = await window.solana.connect({ onlyIfTrusted: false });
+      userPublicKey = resp.publicKey;
+      const walletString = userPublicKey.toString();
+      
+      isOwner = checkIfOwner(walletString);
+      
+      walletAddrSpan.textContent = walletString.slice(0, 4) + '...' + walletString.slice(-4);
+      walletAddrSpan.style.display = 'inline-block';
+      connectBtn.textContent = 'Connected ✓';
+      connectBtn.style.background = 'linear-gradient(135deg, #14F195 0%, #0FBF78 100%)';
+      
+      if (isOwner) {
+        ownerBadge.style.display = 'inline-flex';
+        adminModeBtn.style.display = 'inline-block';
+        console.log('⭐ OWNER WALLET DETECTED - Special price: 0.0001 SOL/block');
+      }
+      
+      console.log('✅ Wallet connected:', walletString);
+      
+    } catch (err) {
+      console.error('Error connecting:', err);
+      alert('Error connecting wallet: ' + err.message);
+      connectBtn.disabled = false;
+      connectBtn.textContent = 'Connect Wallet';
+    }
+  }
 
-module.exports = config;
+  connectBtn.onclick = connectWallet;
+
+  // Selection events
+  canvas.addEventListener('mousedown', (e) => {
+    const { rawX, rawY } = getMousePosInCanvas(e);
+    startX = Math.floor(rawX / BLOCK_SIZE) * BLOCK_SIZE;
+    startY = Math.floor(rawY / BLOCK_SIZE) * BLOCK_SIZE;
+    isDragging = true;
+    selection = null;
+    selectionInfo.innerHTML = 'Drag to select pixels...';
+    selectionAmountSpan.textContent = '-';
+    selectionOverlay.style.display = 'none';
+    confirmBtn.disabled = true;
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    handleMove(e);
+    handleHover(e);
+  });
+
+  canvas.addEventListener('mouseup', handleUp);
+  canvas.addEventListener('mouseleave', () => { isDragging = false; });
+
+  function handleMove(e) {
+    if (!isDragging) return;
+    
+    const { rawX, rawY } = getMousePosInCanvas(e);
+    endX = Math.floor(rawX / BLOCK_SIZE) * BLOCK_SIZE;
+    endY = Math.floor(rawY / BLOCK_SIZE) * BLOCK_SIZE;
+    
+    const minX = Math.min(startX, endX);
+    const maxX = Math.max(startX, endX);
+    const minY = Math.min(startY, endY);
+    const maxY = Math.max(startY, endY);
+    
+    const width = maxX - minX + BLOCK_SIZE;
+    const height = maxY - minY + BLOCK_SIZE;
+    const blocksX = width / BLOCK_SIZE;
+    const blocksY = height / BLOCK_SIZE;
+    const blocksTotal = blocksX * blocksY;
+    
+    const minBlockX = minX / BLOCK_SIZE;
+    const minBlockY = minY / BLOCK_SIZE;
+    const maxBlockX = maxX / BLOCK_SIZE;
+    const maxBlockY = maxY / BLOCK_SIZE;
+    
+    const startZone = getZone(minBlockY);
+    const endZone = getZone(maxBlockY);
+    
+    let soldInSelection = 0;
+    for (let by = minBlockY; by <= maxBlockY; by++) {
+      for (let bx = minBlockX; bx <= maxBlockX; bx++) {
+        if (isBlockSold(bx, by)) soldInSelection++;
+      }
+    }
+    
+    const freeBlocks = blocksTotal - soldInSelection;
+    const pricePerBlock = getPriceForBlock(startZone);
+    const totalPrice = (freeBlocks * pricePerBlock).toFixed(4);
+    
+    if (startZone !== endZone) {
+      selectionAmountSpan.textContent = '-';
+      selectionInfo.innerHTML = `❌ Invalid selection: Cannot mix different zones`;
+      selectionOverlay.classList.add('selection-invalid');
+    } else if (soldInSelection > 0) {
+      selectionAmountSpan.textContent = (blocksTotal * pricePerBlock).toFixed(4);
+      selectionInfo.innerHTML = `⚠️ Selection: ${blocksX}×${blocksY} blocks (${getZoneName(startZone)}) | <span style="color:var(--error)">Occupied: ${soldInSelection}</span> | Available: ${freeBlocks} | Price: ${totalPrice} SOL`;
+      selectionOverlay.classList.add('selection-invalid');
+    } else {
+      selectionAmountSpan.textContent = (blocksTotal * pricePerBlock).toFixed(4);
+      selectionInfo.innerHTML = `✓ Selection: ${blocksX}×${blocksY} blocks (${getZoneName(startZone)}) | Price: <strong style="color:var(--primary)">${(blocksTotal * pricePerBlock).toFixed(4)} SOL</strong>`;
+      selectionOverlay.classList.remove('selection-invalid');
+    }
+    
+    const scale = canvas.getBoundingClientRect().width / CANVAS_SIZE;
+    selectionOverlay.style.display = 'block';
+    selectionOverlay.style.left = (minX * scale) + 'px';
+    selectionOverlay.style.top = (minY * scale) + 'px';
+    selectionOverlay.style.width = (width * scale) + 'px';
+    selectionOverlay.style.height = (height * scale) + 'px';
+  }
+
+  function handleUp(e) {
+    if (!isDragging) return;
+    isDragging = false;
+    
+    if (endX === undefined || endY === undefined) {
+      selection = null;
+      return;
+    }
+    
+    const minX = Math.min(startX, endX);
+    const maxX = Math.max(startX, endX);
+    const minY = Math.min(startY, endY);
+    const maxY = Math.max(startY, endY);
+    
+    const minBlockX = minX / BLOCK_SIZE;
+    const minBlockY = minY / BLOCK_SIZE;
+    const maxBlockX = maxX / BLOCK_SIZE;
+    const maxBlockY = maxY / BLOCK_SIZE;
+    
+    const startZone = getZone(minBlockY);
+    const endZone = getZone(maxBlockY);
+    
+    if (startZone !== endZone) {
+      alert(`❌ You cannot select blocks from different zones.`);
+      selection = null;
+      selectionOverlay.style.display = 'none';
+      selectionInfo.innerHTML = 'Drag to select pixels...';
+      selectionAmountSpan.textContent = '-';
+      confirmBtn.disabled = true;
+      return;
+    }
+    
+    let soldInSelection = 0;
+    for (let by = minBlockY; by <= maxBlockY; by++) {
+      for (let bx = minBlockX; bx <= maxBlockX; bx++) {
+        if (isBlockSold(bx, by)) soldInSelection++;
+      }
+    }
+    
+    selection = {
+      minBlockX,
+      minBlockY,
+      maxBlockX,
+      maxBlockY,
+      blocksX: maxBlockX - minBlockX + 1,
+      blocksY: maxBlockY - minBlockY + 1,
+      soldInSelection,
+      zone: startZone
+    };
+    
+    confirmBtn.disabled = soldInSelection > 0;
+  }
+
+  function handleHover(e) {
+    if (isDragging) {
+      tooltip.style.display = 'none';
+      return;
+    }
+    
+    const { rawX, rawY, rect } = getMousePosInCanvas(e);
+    const bx = Math.floor(rawX / BLOCK_SIZE);
+    const by = Math.floor(rawY / BLOCK_SIZE);
+    
+    if (bx < 0 || by < 0 || bx >= BLOCKS_PER_SIDE || by >= BLOCKS_PER_SIDE) {
+      tooltip.style.display = 'none';
+      return;
+    }
+    
+    const data = blockData[blockIndex(bx, by)];
+    if (data) {
+      tooltip.textContent = `🚀 ${data.name}`;
+      const scale = rect.width / CANVAS_SIZE;
+      tooltip.style.left = (bx * BLOCK_SIZE * scale + 10) + 'px';
+      tooltip.style.top = (by * BLOCK_SIZE * scale - 30) + 'px';
+      tooltip.style.display = 'block';
+    } else {
+      tooltip.style.display = 'none';
+    }
+  }
+
+  // Confirm button
+  confirmBtn.addEventListener('click', () => {
+    if (!selection) {
+      alert('Select an area first');
+      return;
+    }
+    if (selection.soldInSelection > 0) {
+      alert(`${selection.soldInSelection} blocks are already occupied`);
+      return;
+    }
+    
+    const blocksTotal = selection.blocksX * selection.blocksY;
+    const pricePerBlock = getPriceForBlock(selection.zone);
+    const totalPrice = (blocksTotal * pricePerBlock).toFixed(4);
+    
+    document.getElementById('totalPrice').textContent = totalPrice;
+    
+    const ownerNote = document.getElementById('ownerPriceNote');
+    if (isOwner) {
+      ownerNote.style.display = 'block';
+    } else {
+      ownerNote.style.display = 'none';
+    }
+    
+    document.getElementById('modal').style.display = 'block';
+  });
+
+  // Cancel button
+  cancelBtn.addEventListener('click', () => {
+    selection = null;
+    selectionOverlay.style.display = 'none';
+    selectionInfo.innerHTML = 'Drag to select pixels...';
+    selectionAmountSpan.textContent = '-';
+    confirmBtn.disabled = true;
+  });
+
+  document.getElementById('closeModal').addEventListener('click', () => {
+    document.getElementById('modal').style.display = 'none';
+    document.getElementById('paymentStatus').textContent = '';
+  });
+
+  // Payment status
+  function showStatus(message, type = 'info') {
+    const statusEl = document.getElementById('paymentStatus');
+    statusEl.textContent = message;
+    statusEl.className = type;
+  }
+
+  // Pay button
+  document.getElementById('payBtn').addEventListener('click', async () => {
+    const name = document.getElementById('projectName').value.trim();
+    const url = document.getElementById('projectURL').value.trim();
+    const logoFile = document.getElementById('projectLogo').files[0];
+    const payBtn = document.getElementById('payBtn');
+    
+    if (!selection) {
+      alert('No selection');
+      return;
+    }
+    if (selection.soldInSelection > 0) {
+      alert('Occupied blocks');
+      return;
+    }
+    if (!name || !url || !logoFile) {
+      alert('Complete all fields');
+      return;
+    }
+    if (!window.solana || !userPublicKey) {
+      alert('Connect your wallet first');
+      return;
+    }
+    if (!MERCHANT_WALLET) {
+      alert('Server configuration error');
+      return;
+    }
+    
+    const savedSelection = {
+      minBlockX: selection.minBlockX,
+      minBlockY: selection.minBlockY,
+      maxBlockX: selection.maxBlockX,
+      maxBlockY: selection.maxBlockY,
+      blocksX: selection.blocksX,
+      blocksY: selection.blocksY,
+      zone: selection.zone,
+      soldInSelection: selection.soldInSelection
+    };
+    
+    try {
+      payBtn.disabled = true;
+      payBtn.textContent = 'Processing...';
+      showStatus('📤 Uploading logo...', 'warning');
+      
+      // 1. Upload logo
+      const fd = new FormData();
+      fd.append('file', logoFile);
+      
+      const uploadRes = await fetch(`${API_BASE}/api/upload-logo`, {
+        method: 'POST',
+        body: fd
+      });
+      
+      const uploadData = await uploadRes.json();
+      
+      if (!uploadRes.ok || !uploadData.ok) {
+        throw new Error(uploadData.error || 'Error uploading logo');
+      }
+      
+      const logoUrl = uploadData.url;
+      console.log('✅ Logo uploaded:', logoUrl);
+      
+      // 2. Prepare transaction
+      showStatus('💰 Preparing transaction...', 'warning');
+      
+      const blocksTotal = savedSelection.blocksX * savedSelection.blocksY;
+      const pricePerBlock = getPriceForBlock(savedSelection.zone);
+      const totalLamports = Math.floor(blocksTotal * pricePerBlock * solanaWeb3.LAMPORTS_PER_SOL);
+      
+      console.log(`💰 Price per block: ${pricePerBlock} SOL (${isOwner ? 'OWNER' : 'NORMAL'})`);
+      console.log(`💰 Total: ${(totalLamports / solanaWeb3.LAMPORTS_PER_SOL).toFixed(4)} SOL`);
+      
+      // VALIDACIÓN DE BALANCE - Esto evita la advertencia de Phantom
+      showStatus('🔍 Verificando balance...', 'warning');
+      
+      try {
+        const connection = new solanaWeb3.Connection(
+          solanaWeb3.clusterApiUrl('mainnet-beta'),
+          'confirmed'
+        );
+        
+        const balance = await connection.getBalance(userPublicKey);
+        const estimatedFee = 5000; // ~0.000005 SOL (fee típico de transacción)
+        const totalNeeded = totalLamports + estimatedFee;
+        
+        console.log(`💰 Balance actual: ${(balance / solanaWeb3.LAMPORTS_PER_SOL).toFixed(6)} SOL`);
+        console.log(`💰 Necesario (incluye fee): ${(totalNeeded / solanaWeb3.LAMPORTS_PER_SOL).toFixed(6)} SOL`);
+        
+        if (balance < totalNeeded) {
+          const shortfall = (totalNeeded - balance) / solanaWeb3.LAMPORTS_PER_SOL;
+          throw new Error(
+            `Saldo insuficiente. Te faltan ${shortfall.toFixed(6)} SOL.\n\n` +
+            `Necesitas: ${(totalNeeded / solanaWeb3.LAMPORTS_PER_SOL).toFixed(6)} SOL\n` +
+            `Tienes: ${(balance / solanaWeb3.LAMPORTS_PER_SOL).toFixed(6)} SOL`
+          );
+        }
+        
+        // Balance OK - continuar con la transacción
+        console.log('✅ Balance suficiente');
+        
+      } catch (balanceError) {
+        if (balanceError.message.includes('insuficiente') || balanceError.message.includes('faltan')) {
+          throw balanceError; // Re-lanzar el error de balance
+        }
+        // Si hay error al verificar balance, continuar (puede ser problema de red)
+        console.warn('⚠️ No se pudo verificar balance, continuando:', balanceError);
+      }
+      
+      const transaction = new solanaWeb3.Transaction().add(
+        solanaWeb3.SystemProgram.transfer({
+          fromPubkey: userPublicKey,
+          toPubkey: new solanaWeb3.PublicKey(MERCHANT_WALLET),
+          lamports: totalLamports,
+        })
+      );
+      
+      transaction.feePayer = userPublicKey;
+      
+      // 3. Get blockhash
+      showStatus('⏳ Getting blockhash...', 'warning');
+      const blockhashRes = await fetch(`${API_BASE}/api/get-latest-blockhash`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      const blockhashData = await blockhashRes.json();
+      if (!blockhashData.ok) {
+        throw new Error('Error getting blockhash');
+      }
+      
+      transaction.recentBlockhash = blockhashData.blockhash;
+      
+      console.log('📦 Blockhash:', blockhashData.blockhash);
+      
+      // 4. Sign and send
+      showStatus('✍️ Sign transaction in Phantom...', 'warning');
+      
+      const { signature } = await window.solana.signAndSendTransaction(transaction);
+      
+      console.log('✅ Transaction sent. Signature:', signature);
+      
+      // 5. Wait for confirmation
+      showStatus('⏳ Waiting for confirmation (may take up to 60s)...', 'warning');
+      
+      let confirmed = false;
+      let attempts = 0;
+      const maxAttempts = 60;
+      
+      while (!confirmed && attempts < maxAttempts) {
+        try {
+          const verifyRes = await fetch(`${API_BASE}/api/verify-transaction`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ signature })
+          });
+          
+          const verifyData = await verifyRes.json();
+          
+          if (verifyData.ok && verifyData.confirmed) {
+            confirmed = true;
+            
+            if (verifyData.status && verifyData.status.err) {
+              throw new Error('Transaction failed: ' + JSON.stringify(verifyData.status.err));
+            }
+            
+            console.log('✅ Transaction confirmed');
+            break;
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          attempts++;
+          
+          if (attempts % 5 === 0) {
+            console.log(`⏳ Waiting for confirmation... (${attempts}s)`);
+          }
+          
+        } catch (err) {
+          console.warn('Error verifying status:', err);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          attempts++;
+        }
+      }
+      
+      if (!confirmed) {
+        console.warn('⏳ Timeout reached');
+        showStatus('⏳ Timeout - Attempting to save...', 'warning');
+      }
+      
+      // 6. Save sale
+      showStatus('💾 Registering purchase...', 'warning');
+      
+      const saleData = {
+        signature,
+        buyer: userPublicKey.toString(),
+        metadata: {
+          name: name,
+          url: url,
+          logo: logoUrl,
+          selection: {
+            minBlockX: savedSelection.minBlockX,
+            minBlockY: savedSelection.minBlockY,
+            blocksX: savedSelection.blocksX,
+            blocksY: savedSelection.blocksY
+          }
+        },
+        amount: totalLamports / solanaWeb3.LAMPORTS_PER_SOL,
+        timestamp: Date.now(),
+        confirmed: confirmed
+      };
+      
+      const saveRes = await fetch(`${API_BASE}/api/save-sale`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(saleData)
+      });
+      
+      const saveJson = await saveRes.json();
+      
+      if (!saveRes.ok || !saveJson.ok) {
+        console.warn('⚠️ Error saving:', saveJson.error);
+        throw new Error(saveJson.error || 'Error saving sale');
+      }
+      
+      if (confirmed) {
+        showStatus('✅ Purchase confirmed and registered!', 'success');
+      } else {
+        showStatus('✅ Purchase registered! (Check in Phantom)', 'success');
+      }
+      
+      console.log('✅ Sale saved:', saveJson);
+      console.log('🔗 View on Solscan: https://solscan.io/tx/' + signature);
+      
+      // 7. Reload grid
+      setTimeout(async () => {
+        document.getElementById('modal').style.display = 'none';
+        selection = null;
+        selectionOverlay.style.display = 'none';
+        selectionInfo.innerHTML = 'Drag to select pixels...';
+        selectionAmountSpan.textContent = '-';
+        confirmBtn.disabled = true;
+        
+        document.getElementById('projectName').value = '';
+        document.getElementById('projectURL').value = '';
+        document.getElementById('projectLogo').value = '';
+        document.getElementById('paymentStatus').textContent = '';
+        
+        loadingEl.style.display = 'flex';
+        await loadGridFromServer();
+        
+        if (confirmed) {
+          alert('🎉 Successful purchase! Your project is now on the grid.');
+        } else {
+          alert('⏳ Purchase registered. Transaction may take time to confirm.\n\nCheck Phantom or Solscan.');
+        }
+      }, 2000);
+      
+    } catch (err) {
+      console.error('❌ Payment error:', err);
+      
+      let errorMsg = 'Payment error';
+      
+      if (err.message?.includes('User rejected')) {
+        errorMsg = '❌ Transacción cancelada por el usuario';
+      } else if (err.message?.includes('insuficiente') || err.message?.includes('faltan') || err.message?.includes('insufficient')) {
+        errorMsg = err.message.includes('faltan') 
+          ? `❌ ${err.message}` 
+          : '❌ Saldo insuficiente. Por favor, añade más SOL a tu wallet';
+      } else if (err.message?.includes('Timeout') || err.message?.includes('expired')) {
+        errorMsg = '⏳ Tiempo agotado - Verifica tu transacción en Phantom';
+      } else if (err.message) {
+        errorMsg = `❌ ${err.message}`;
+      }
+      
+      showStatus(errorMsg, 'error');
+      
+      payBtn.disabled = false;
+      payBtn.textContent = '💰 Pay & Register';
+      
+      alert(errorMsg);
+    }
+  });
+
+  // Click on canvas to open URL
+  canvas.addEventListener('click', (e) => {
+    if (isDragging) return;
+    
+    const { rawX, rawY } = getMousePosInCanvas(e);
+    const bx = Math.floor(rawX / BLOCK_SIZE);
+    const by = Math.floor(rawY / BLOCK_SIZE);
+    const data = blockData[blockIndex(bx, by)];
+    
+    if (data && confirm(`🚀 Visit ${data.name}?`)) {
+      window.open(data.url, '_blank');
+    }
+  });
+
+  // Initialize
+  console.log('🚀 Starting application...');
+  loadConfig().then(() => {
+    loadGridFromServer();
+  });
+  </script>
+</body>
+</html>
