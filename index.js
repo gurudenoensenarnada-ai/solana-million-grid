@@ -1707,7 +1707,16 @@
         console.log('⭐ OWNER WALLET DETECTED - Special price: 0.0001 SOL/block');
       }
       
+      // Initialize Solana connection and load balance
+      solanaConnection = new solanaWeb3.Connection(
+        solanaWeb3.clusterApiUrl('mainnet-beta'),
+        'confirmed'
+      );
+      
+      await updateWalletBalance();
+      
       console.log('✅ Wallet connected:', walletString);
+      console.log('💰 Balance:', userWalletBalance.toFixed(4), 'SOL');
       
     } catch (err) {
       console.error('Error connecting:', err);
@@ -1715,6 +1724,65 @@
       connectBtn.disabled = false;
       connectBtn.textContent = 'Connect Wallet';
     }
+  }
+
+  // Update wallet balance
+  async function updateWalletBalance() {
+    if (!userPublicKey || !solanaConnection) {
+      return;
+    }
+    
+    try {
+      const balance = await solanaConnection.getBalance(userPublicKey);
+      userWalletBalance = balance / solanaWeb3.LAMPORTS_PER_SOL;
+      console.log('💰 Balance updated:', userWalletBalance.toFixed(6), 'SOL');
+    } catch (error) {
+      console.error('Error fetching balance:', error);
+      userWalletBalance = 0;
+    }
+  }
+
+  // Update balance indicator in modal
+  function updateBalanceIndicator(totalCost) {
+    if (!userPublicKey) {
+      balanceIndicator.classList.remove('visible');
+      return;
+    }
+    
+    const estimatedFee = 0.000005; // 5000 lamports
+    const totalNeeded = totalCost + estimatedFee;
+    const remaining = userWalletBalance - totalNeeded;
+    
+    // Update values
+    userBalanceSpan.textContent = userWalletBalance.toFixed(6) + ' SOL';
+    totalCostSpan.textContent = totalCost.toFixed(6) + ' SOL';
+    estimatedFeeSpan.textContent = estimatedFee.toFixed(6) + ' SOL';
+    remainingBalanceSpan.textContent = remaining.toFixed(6) + ' SOL';
+    
+    // Update colors and states
+    if (remaining >= 0) {
+      // Sufficient balance
+      balanceIndicator.classList.remove('insufficient');
+      balanceIndicator.classList.add('sufficient');
+      remainingBalanceSpan.classList.remove('negative');
+      remainingBalanceSpan.classList.add('positive');
+      insufficientWarning.style.display = 'none';
+      payBtn.disabled = false;
+      payBtn.style.opacity = '1';
+      payBtn.style.cursor = 'pointer';
+    } else {
+      // Insufficient balance
+      balanceIndicator.classList.remove('sufficient');
+      balanceIndicator.classList.add('insufficient');
+      remainingBalanceSpan.classList.remove('positive');
+      remainingBalanceSpan.classList.add('negative');
+      insufficientWarning.style.display = 'flex';
+      payBtn.disabled = true;
+      payBtn.style.opacity = '0.5';
+      payBtn.style.cursor = 'not-allowed';
+    }
+    
+    balanceIndicator.classList.add('visible');
   }
 
   connectBtn.onclick = connectWallet;
