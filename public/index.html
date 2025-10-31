@@ -1980,13 +1980,19 @@
   }
 
   // Confirm button
-  confirmBtn.addEventListener('click', () => {
+  confirmBtn.addEventListener('click', async () => {
     if (!selection) {
       alert('Select an area first');
       return;
     }
     if (selection.soldInSelection > 0) {
       alert(`${selection.soldInSelection} blocks are already occupied`);
+      return;
+    }
+    
+    // Verificar que la wallet esté conectada
+    if (!userPublicKey) {
+      alert('❌ Por favor, conecta tu wallet primero');
       return;
     }
     
@@ -2006,6 +2012,23 @@
     // Update wallet balance and show balance indicator
     if (userPublicKey) {
       await updateWalletBalance();
+      
+      // Verificar balance ANTES de abrir modal
+      const estimatedFee = 0.000005;
+      const totalNeeded = parseFloat(totalPrice) + estimatedFee;
+      
+      if (userWalletBalance < totalNeeded) {
+        const shortage = totalNeeded - userWalletBalance;
+        alert(
+          `❌ Saldo insuficiente\n\n` +
+          `Necesitas: ${totalNeeded.toFixed(6)} SOL\n` +
+          `Tienes: ${userWalletBalance.toFixed(6)} SOL\n` +
+          `Faltan: ${shortage.toFixed(6)} SOL\n\n` +
+          `Por favor, añade más SOL a tu wallet y vuelve a intentar.`
+        );
+        return; // NO abrir el modal
+      }
+      
       updateBalanceIndicator(parseFloat(totalPrice));
     }
     
