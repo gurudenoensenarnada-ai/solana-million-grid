@@ -212,6 +212,82 @@
       50% { box-shadow: 0 0 30px rgba(255, 215, 0, 0.8); }
     }
     
+    /* Admin Mode Button */
+    .admin-btn {
+      padding: 10px 20px;
+      background: rgba(255, 0, 0, 0.1);
+      border: 2px solid rgba(255, 0, 0, 0.3);
+      border-radius: 10px;
+      color: #ff4444;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 13px;
+      transition: all 0.3s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .admin-btn:hover {
+      background: rgba(255, 0, 0, 0.2);
+      border-color: rgba(255, 0, 0, 0.5);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(255, 0, 0, 0.3);
+    }
+    
+    .admin-btn.active {
+      background: rgba(255, 0, 0, 0.3);
+      border-color: #ff4444;
+      box-shadow: 0 0 20px rgba(255, 0, 0, 0.5);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 20px rgba(255, 0, 0, 0.5); }
+      50% { box-shadow: 0 0 30px rgba(255, 0, 0, 0.8); }
+    }
+    
+    /* Admin mode indicator */
+    .admin-mode-banner {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: rgba(255, 0, 0, 0.9);
+      color: white;
+      padding: 15px 25px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 14px;
+      z-index: 1000;
+      box-shadow: 0 4px 20px rgba(255, 0, 0, 0.5);
+      animation: slideIn 0.3s ease-out;
+      display: none;
+    }
+    
+    .admin-mode-banner.active {
+      display: block;
+    }
+    
+    @keyframes slideIn {
+      from {
+        transform: translateX(400px);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+    
+    /* Cursor change in admin mode */
+    body.admin-mode canvas {
+      cursor: crosshair !important;
+    }
+    
+    body.admin-mode .block-hover {
+      border: 2px solid red !important;
+    }
+    
     /* Hero Section */
     .hero {
       text-align: center;
@@ -549,6 +625,87 @@
       font-weight: 600;
       color: var(--gold);
       display: none;
+    }
+    
+    /* Balance indicator */
+    .balance-indicator {
+      background: rgba(255, 255, 255, 0.05);
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 15px;
+      margin-top: 15px;
+      font-size: 14px;
+      display: none;
+      transition: all 0.3s;
+    }
+    
+    .balance-indicator.visible {
+      display: block;
+    }
+    
+    .balance-indicator.sufficient {
+      background: rgba(20, 241, 149, 0.1);
+      border-color: var(--primary);
+    }
+    
+    .balance-indicator.insufficient {
+      background: rgba(255, 107, 107, 0.1);
+      border-color: var(--error);
+      animation: shake 0.5s;
+    }
+    
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      75% { transform: translateX(5px); }
+    }
+    
+    .balance-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    
+    .balance-row:last-child {
+      margin-bottom: 0;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      font-weight: 700;
+      font-size: 15px;
+    }
+    
+    .balance-label {
+      color: var(--text-secondary);
+    }
+    
+    .balance-value {
+      font-weight: 700;
+      font-family: 'Monaco', 'Courier New', monospace;
+    }
+    
+    .balance-value.positive {
+      color: var(--primary);
+    }
+    
+    .balance-value.negative {
+      color: var(--error);
+    }
+    
+    .insufficient-warning {
+      background: rgba(255, 107, 107, 0.2);
+      border: 1px solid var(--error);
+      border-radius: 8px;
+      padding: 12px;
+      margin-top: 10px;
+      color: var(--error);
+      font-size: 13px;
+      font-weight: 600;
+      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
     }
     
     .form-group {
@@ -975,8 +1132,16 @@
       <button id="connectWallet" class="connectBtn">Connect Wallet</button>
       <span id="walletAddr" class="wallet-address" style="display:none;"></span>
       <span id="ownerBadge" class="owner-badge" style="display:none;">⭐ OWNER</span>
+      <button id="adminModeBtn" class="admin-btn" style="display:none;">
+        🛡️ <span id="adminModeText">Admin Mode</span>
+      </button>
     </div>
   </header>
+
+  <!-- Admin Mode Banner -->
+  <div id="adminModeBanner" class="admin-mode-banner">
+    🛡️ MODO ADMIN ACTIVO - Haz clic en cualquier logo para eliminarlo
+  </div>
 
   <div class="container">
     <!-- Hero Section -->
@@ -1149,6 +1314,29 @@
           <div id="ownerPriceNote" class="owner-price-note">
             ⭐ Owner Special Price: 0.0001 SOL/block
           </div>
+          
+          <!-- Balance Indicator -->
+          <div id="balanceIndicator" class="balance-indicator">
+            <div class="balance-row">
+              <span class="balance-label">💰 Tu balance:</span>
+              <span class="balance-value" id="userBalance">0.0000 SOL</span>
+            </div>
+            <div class="balance-row">
+              <span class="balance-label">💸 Precio total:</span>
+              <span class="balance-value" id="totalCost">0.0000 SOL</span>
+            </div>
+            <div class="balance-row">
+              <span class="balance-label">⚡ Fee estimado:</span>
+              <span class="balance-value" id="estimatedFee">0.0000 SOL</span>
+            </div>
+            <div class="balance-row">
+              <span class="balance-label">📊 Después de pagar:</span>
+              <span class="balance-value" id="remainingBalance">0.0000 SOL</span>
+            </div>
+            <div id="insufficientWarning" class="insufficient-warning" style="display:none;">
+              ⚠️ Saldo insuficiente. Añade más SOL a tu wallet.
+            </div>
+          </div>
         </div>
         
         <div id="projectForm">
@@ -1221,6 +1409,16 @@
   const loadingEl = document.getElementById('loading');
   const confirmBtn = document.getElementById('confirmBtn');
   const cancelBtn = document.getElementById('cancelBtn');
+  const adminModeBtn = document.getElementById('adminModeBtn');
+  const adminModeBanner = document.getElementById('adminModeBanner');
+  const adminModeText = document.getElementById('adminModeText');
+  const balanceIndicator = document.getElementById('balanceIndicator');
+  const userBalanceSpan = document.getElementById('userBalance');
+  const totalCostSpan = document.getElementById('totalCost');
+  const estimatedFeeSpan = document.getElementById('estimatedFee');
+  const remainingBalanceSpan = document.getElementById('remainingBalance');
+  const insufficientWarning = document.getElementById('insufficientWarning');
+  const payBtn = document.getElementById('payBtn');
 
   // State
   let blockData = new Array(BLOCKS_PER_SIDE * BLOCKS_PER_SIDE).fill(null);
@@ -1235,6 +1433,10 @@
   let userPublicKey = null;
   let MERCHANT_WALLET = null;
   let isOwner = false;
+  let adminMode = false;
+  let salesData = []; // Store sales data for admin mode
+  let userWalletBalance = 0; // User's current SOL balance
+  let solanaConnection = null; // Solana connection instance
 
   // Load server configuration
   async function loadConfig() {
@@ -1355,6 +1557,9 @@
       totalSales = sales.length;
       totalSalesSpan.textContent = totalSales;
       console.log(`✅ ${sales.length} sales found`);
+      
+      // Store sales data for admin mode
+      salesData = sales;
       
       blockData = new Array(BLOCKS_PER_SIDE * BLOCKS_PER_SIDE).fill(null);
       soldPixels = 0;
@@ -1498,10 +1703,20 @@
       
       if (isOwner) {
         ownerBadge.style.display = 'inline-flex';
+        adminModeBtn.style.display = 'inline-block';
         console.log('⭐ OWNER WALLET DETECTED - Special price: 0.0001 SOL/block');
       }
       
+      // Initialize Solana connection and load balance
+      solanaConnection = new solanaWeb3.Connection(
+        solanaWeb3.clusterApiUrl('mainnet-beta'),
+        'confirmed'
+      );
+      
+      await updateWalletBalance();
+      
       console.log('✅ Wallet connected:', walletString);
+      console.log('💰 Balance:', userWalletBalance.toFixed(4), 'SOL');
       
     } catch (err) {
       console.error('Error connecting:', err);
@@ -1509,6 +1724,65 @@
       connectBtn.disabled = false;
       connectBtn.textContent = 'Connect Wallet';
     }
+  }
+
+  // Update wallet balance
+  async function updateWalletBalance() {
+    if (!userPublicKey || !solanaConnection) {
+      return;
+    }
+    
+    try {
+      const balance = await solanaConnection.getBalance(userPublicKey);
+      userWalletBalance = balance / solanaWeb3.LAMPORTS_PER_SOL;
+      console.log('💰 Balance updated:', userWalletBalance.toFixed(6), 'SOL');
+    } catch (error) {
+      console.error('Error fetching balance:', error);
+      userWalletBalance = 0;
+    }
+  }
+
+  // Update balance indicator in modal
+  function updateBalanceIndicator(totalCost) {
+    if (!userPublicKey) {
+      balanceIndicator.classList.remove('visible');
+      return;
+    }
+    
+    const estimatedFee = 0.000005; // 5000 lamports
+    const totalNeeded = totalCost + estimatedFee;
+    const remaining = userWalletBalance - totalNeeded;
+    
+    // Update values
+    userBalanceSpan.textContent = userWalletBalance.toFixed(6) + ' SOL';
+    totalCostSpan.textContent = totalCost.toFixed(6) + ' SOL';
+    estimatedFeeSpan.textContent = estimatedFee.toFixed(6) + ' SOL';
+    remainingBalanceSpan.textContent = remaining.toFixed(6) + ' SOL';
+    
+    // Update colors and states
+    if (remaining >= 0) {
+      // Sufficient balance
+      balanceIndicator.classList.remove('insufficient');
+      balanceIndicator.classList.add('sufficient');
+      remainingBalanceSpan.classList.remove('negative');
+      remainingBalanceSpan.classList.add('positive');
+      insufficientWarning.style.display = 'none';
+      payBtn.disabled = false;
+      payBtn.style.opacity = '1';
+      payBtn.style.cursor = 'pointer';
+    } else {
+      // Insufficient balance
+      balanceIndicator.classList.remove('sufficient');
+      balanceIndicator.classList.add('insufficient');
+      remainingBalanceSpan.classList.remove('positive');
+      remainingBalanceSpan.classList.add('negative');
+      insufficientWarning.style.display = 'flex';
+      payBtn.disabled = true;
+      payBtn.style.opacity = '0.5';
+      payBtn.style.cursor = 'not-allowed';
+    }
+    
+    balanceIndicator.classList.add('visible');
   }
 
   connectBtn.onclick = connectWallet;
@@ -1570,6 +1844,18 @@
     const freeBlocks = blocksTotal - soldInSelection;
     const pricePerBlock = getPriceForBlock(startZone);
     const totalPrice = (freeBlocks * pricePerBlock).toFixed(4);
+    const totalPriceNum = freeBlocks * pricePerBlock;
+    
+    // Check if user has sufficient balance (if wallet connected)
+    let balanceWarning = '';
+    if (userPublicKey && userWalletBalance > 0) {
+      const estimatedFee = 0.000005;
+      const totalNeeded = totalPriceNum + estimatedFee;
+      if (userWalletBalance < totalNeeded) {
+        const shortage = totalNeeded - userWalletBalance;
+        balanceWarning = ` | <span style="color:var(--error); font-weight:700;">⚠️ Saldo insuficiente (faltan ${shortage.toFixed(6)} SOL)</span>`;
+      }
+    }
     
     if (startZone !== endZone) {
       selectionAmountSpan.textContent = '-';
@@ -1577,12 +1863,17 @@
       selectionOverlay.classList.add('selection-invalid');
     } else if (soldInSelection > 0) {
       selectionAmountSpan.textContent = (blocksTotal * pricePerBlock).toFixed(4);
-      selectionInfo.innerHTML = `⚠️ Selection: ${blocksX}×${blocksY} blocks (${getZoneName(startZone)}) | <span style="color:var(--error)">Occupied: ${soldInSelection}</span> | Available: ${freeBlocks} | Price: ${totalPrice} SOL`;
+      selectionInfo.innerHTML = `⚠️ Selection: ${blocksX}×${blocksY} blocks (${getZoneName(startZone)}) | <span style="color:var(--error)">Occupied: ${soldInSelection}</span> | Available: ${freeBlocks} | Price: ${totalPrice} SOL${balanceWarning}`;
       selectionOverlay.classList.add('selection-invalid');
     } else {
       selectionAmountSpan.textContent = (blocksTotal * pricePerBlock).toFixed(4);
-      selectionInfo.innerHTML = `✓ Selection: ${blocksX}×${blocksY} blocks (${getZoneName(startZone)}) | Price: <strong style="color:var(--primary)">${(blocksTotal * pricePerBlock).toFixed(4)} SOL</strong>`;
-      selectionOverlay.classList.remove('selection-invalid');
+      selectionInfo.innerHTML = `✓ Selection: ${blocksX}×${blocksY} blocks (${getZoneName(startZone)}) | Price: <strong style="color:var(--primary)">${(blocksTotal * pricePerBlock).toFixed(4)} SOL</strong>${balanceWarning}`;
+      
+      if (balanceWarning) {
+        selectionOverlay.classList.add('selection-invalid');
+      } else {
+        selectionOverlay.classList.remove('selection-invalid');
+      }
     }
     
     const scale = canvas.getBoundingClientRect().width / CANVAS_SIZE;
@@ -1643,7 +1934,22 @@
       zone: startZone
     };
     
-    confirmBtn.disabled = soldInSelection > 0;
+    // Check balance before enabling confirm button
+    let canConfirm = soldInSelection === 0;
+    
+    if (canConfirm && userPublicKey && userWalletBalance > 0) {
+      const blocksTotal = selection.blocksX * selection.blocksY;
+      const pricePerBlock = getPriceForBlock(startZone);
+      const totalPrice = blocksTotal * pricePerBlock;
+      const estimatedFee = 0.000005;
+      const totalNeeded = totalPrice + estimatedFee;
+      
+      if (userWalletBalance < totalNeeded) {
+        canConfirm = false;
+      }
+    }
+    
+    confirmBtn.disabled = !canConfirm;
   }
 
   function handleHover(e) {
@@ -1695,6 +2001,12 @@
       ownerNote.style.display = 'block';
     } else {
       ownerNote.style.display = 'none';
+    }
+    
+    // Update wallet balance and show balance indicator
+    if (userPublicKey) {
+      await updateWalletBalance();
+      updateBalanceIndicator(parseFloat(totalPrice));
     }
     
     document.getElementById('modal').style.display = 'block';
@@ -2003,8 +2315,80 @@
     }
   });
 
-  // Click on canvas to open URL
-  canvas.addEventListener('click', (e) => {
+  // Admin Mode Toggle
+  adminModeBtn.addEventListener('click', () => {
+    adminMode = !adminMode;
+    
+    if (adminMode) {
+      adminModeBtn.classList.add('active');
+      adminModeText.textContent = 'Desactivar Admin';
+      adminModeBanner.classList.add('active');
+      document.body.classList.add('admin-mode');
+      console.log('🛡️ Admin Mode ACTIVATED');
+    } else {
+      adminModeBtn.classList.remove('active');
+      adminModeText.textContent = 'Admin Mode';
+      adminModeBanner.classList.remove('active');
+      document.body.classList.remove('admin-mode');
+      console.log('🛡️ Admin Mode DEACTIVATED');
+    }
+  });
+
+  // Function to find sale by block coordinates
+  function findSaleByBlock(bx, by) {
+    for (const sale of salesData) {
+      const sel = sale.metadata?.selection;
+      if (!sel) continue;
+      
+      if (bx >= sel.minBlockX && bx < sel.minBlockX + sel.blocksX &&
+          by >= sel.minBlockY && by < sel.minBlockY + sel.blocksY) {
+        return sale;
+      }
+    }
+    return null;
+  }
+
+  // Delete sale function
+  async function deleteSale(signature, projectName) {
+    if (!confirm(`⚠️ ¿Estás seguro de eliminar "${projectName}"?\n\nEsta acción NO se puede deshacer.`)) {
+      return;
+    }
+    
+    try {
+      console.log('🗑️ Deleting sale:', signature);
+      
+      const response = await fetch(`${API_BASE}/api/delete-sale`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          signature: signature,
+          ownerWallet: userPublicKey.toString()
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || 'Error al eliminar');
+      }
+      
+      console.log('✅ Sale deleted successfully:', result);
+      alert(`✅ "${projectName}" eliminado correctamente.\n\nRecargando grid...`);
+      
+      // Reload grid
+      loadingEl.style.display = 'flex';
+      await loadGridFromServer();
+      
+    } catch (error) {
+      console.error('❌ Error deleting sale:', error);
+      alert(`❌ Error al eliminar: ${error.message}`);
+    }
+  }
+
+  // Click on canvas to open URL or delete (admin mode)
+  canvas.addEventListener('click', async (e) => {
     if (isDragging) return;
     
     const { rawX, rawY } = getMousePosInCanvas(e);
@@ -2012,6 +2396,32 @@
     const by = Math.floor(rawY / BLOCK_SIZE);
     const data = blockData[blockIndex(bx, by)];
     
+    if (!data) return;
+    
+    // ADMIN MODE: Delete logo
+    if (adminMode && isOwner) {
+      const sale = findSaleByBlock(bx, by);
+      
+      if (!sale) {
+        alert('⚠️ No se encontró la venta para este bloque');
+        return;
+      }
+      
+      const confirmMsg = `🗑️ ELIMINAR LOGO\n\n` +
+                        `Proyecto: ${sale.metadata?.name}\n` +
+                        `URL: ${sale.metadata?.url}\n` +
+                        `Bloques: ${sale.metadata?.selection?.blocksX}×${sale.metadata?.selection?.blocksY}\n` +
+                        `Monto: ${sale.amount?.toFixed(4)} SOL\n\n` +
+                        `¿Confirmar eliminación?`;
+      
+      if (confirm(confirmMsg)) {
+        await deleteSale(sale.signature, sale.metadata?.name);
+      }
+      
+      return;
+    }
+    
+    // NORMAL MODE: Open URL
     if (data && confirm(`🚀 Visit ${data.name}?`)) {
       window.open(data.url, '_blank');
     }
