@@ -627,6 +627,87 @@
       display: none;
     }
     
+    /* Balance indicator */
+    .balance-indicator {
+      background: rgba(255, 255, 255, 0.05);
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 15px;
+      margin-top: 15px;
+      font-size: 14px;
+      display: none;
+      transition: all 0.3s;
+    }
+    
+    .balance-indicator.visible {
+      display: block;
+    }
+    
+    .balance-indicator.sufficient {
+      background: rgba(20, 241, 149, 0.1);
+      border-color: var(--primary);
+    }
+    
+    .balance-indicator.insufficient {
+      background: rgba(255, 107, 107, 0.1);
+      border-color: var(--error);
+      animation: shake 0.5s;
+    }
+    
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      75% { transform: translateX(5px); }
+    }
+    
+    .balance-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    
+    .balance-row:last-child {
+      margin-bottom: 0;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      font-weight: 700;
+      font-size: 15px;
+    }
+    
+    .balance-label {
+      color: var(--text-secondary);
+    }
+    
+    .balance-value {
+      font-weight: 700;
+      font-family: 'Monaco', 'Courier New', monospace;
+    }
+    
+    .balance-value.positive {
+      color: var(--primary);
+    }
+    
+    .balance-value.negative {
+      color: var(--error);
+    }
+    
+    .insufficient-warning {
+      background: rgba(255, 107, 107, 0.2);
+      border: 1px solid var(--error);
+      border-radius: 8px;
+      padding: 12px;
+      margin-top: 10px;
+      color: var(--error);
+      font-size: 13px;
+      font-weight: 600;
+      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    
     .form-group {
       margin-bottom: 20px;
     }
@@ -1233,6 +1314,29 @@
           <div id="ownerPriceNote" class="owner-price-note">
             ⭐ Owner Special Price: 0.0001 SOL/block
           </div>
+          
+          <!-- Balance Indicator -->
+          <div id="balanceIndicator" class="balance-indicator">
+            <div class="balance-row">
+              <span class="balance-label">💰 Tu balance:</span>
+              <span class="balance-value" id="userBalance">0.0000 SOL</span>
+            </div>
+            <div class="balance-row">
+              <span class="balance-label">💸 Precio total:</span>
+              <span class="balance-value" id="totalCost">0.0000 SOL</span>
+            </div>
+            <div class="balance-row">
+              <span class="balance-label">⚡ Fee estimado:</span>
+              <span class="balance-value" id="estimatedFee">0.0000 SOL</span>
+            </div>
+            <div class="balance-row">
+              <span class="balance-label">📊 Después de pagar:</span>
+              <span class="balance-value" id="remainingBalance">0.0000 SOL</span>
+            </div>
+            <div id="insufficientWarning" class="insufficient-warning" style="display:none;">
+              ⚠️ Saldo insuficiente. Añade más SOL a tu wallet.
+            </div>
+          </div>
         </div>
         
         <div id="projectForm">
@@ -1308,6 +1412,13 @@
   const adminModeBtn = document.getElementById('adminModeBtn');
   const adminModeBanner = document.getElementById('adminModeBanner');
   const adminModeText = document.getElementById('adminModeText');
+  const balanceIndicator = document.getElementById('balanceIndicator');
+  const userBalanceSpan = document.getElementById('userBalance');
+  const totalCostSpan = document.getElementById('totalCost');
+  const estimatedFeeSpan = document.getElementById('estimatedFee');
+  const remainingBalanceSpan = document.getElementById('remainingBalance');
+  const insufficientWarning = document.getElementById('insufficientWarning');
+  const payBtn = document.getElementById('payBtn');
 
   // State
   let blockData = new Array(BLOCKS_PER_SIDE * BLOCKS_PER_SIDE).fill(null);
@@ -1324,6 +1435,8 @@
   let isOwner = false;
   let adminMode = false;
   let salesData = []; // Store sales data for admin mode
+  let userWalletBalance = 0; // User's current SOL balance
+  let solanaConnection = null; // Solana connection instance
 
   // Load server configuration
   async function loadConfig() {
