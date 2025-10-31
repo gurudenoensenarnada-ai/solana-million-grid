@@ -1026,6 +1026,78 @@ app.post('/api/upload-logo', upload.single('file'), (req, res) => {
 });
 
 // ==========================================
+// DELETE SALE (Owner only)
+// ==========================================
+app.post('/api/delete-sale', async (req, res) => {
+  try {
+    const { signature, ownerWallet } = req.body;
+    
+    if (!signature || !ownerWallet) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Missing signature or ownerWallet'
+      });
+    }
+    
+    // Verify owner wallet
+    if (ownerWallet.toLowerCase() !== config.solana.ownerWallet.toLowerCase()) {
+      return res.status(403).json({
+        ok: false,
+        error: 'Unauthorized: Only owner can delete sales'
+      });
+    }
+    
+    // Load sales
+    const salesPath = path.join(__dirname, 'sales.json');
+    let sales = [];
+    
+    if (fs.existsSync(salesPath)) {
+      const data = fs.readFileSync(salesPath, 'utf8');
+      sales = JSON.parse(data);
+    }
+    
+    // Find sale
+    const saleIndex = sales.findIndex(s => s.signature === signature);
+    
+    if (saleIndex === -1) {
+      return res.status(404).json({
+        ok: false,
+        error: 'Sale not found'
+      });
+    }
+    
+    const deletedSale = sales[saleIndex];
+    
+    // Remove sale
+    sales.splice(saleIndex, 1);
+    
+    // Save
+    fs.writeFileSync(salesPath, JSON.stringify(sales, null, 2));
+    
+    console.log('✅ Sale deleted by owner:', signature);
+    console.log('   Project:', deletedSale.metadata?.name);
+    console.log('   Blocks:', deletedSale.metadata?.selection);
+    
+    res.json({
+      ok: true,
+      message: 'Sale deleted successfully',
+      deletedSale: {
+        signature,
+        name: deletedSale.metadata?.name,
+        blocks: deletedSale.metadata?.selection
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error deleting sale:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'Failed to delete sale: ' + error.message
+    });
+  }
+});
+
+// ==========================================
 // List uploaded files
 // ==========================================
 app.get('/api/uploads', (req, res) => {
