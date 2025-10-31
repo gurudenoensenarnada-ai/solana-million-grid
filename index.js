@@ -2096,8 +2096,80 @@
     }
   });
 
-  // Click on canvas to open URL
-  canvas.addEventListener('click', (e) => {
+  // Admin Mode Toggle
+  adminModeBtn.addEventListener('click', () => {
+    adminMode = !adminMode;
+    
+    if (adminMode) {
+      adminModeBtn.classList.add('active');
+      adminModeText.textContent = 'Desactivar Admin';
+      adminModeBanner.classList.add('active');
+      document.body.classList.add('admin-mode');
+      console.log('🛡️ Admin Mode ACTIVATED');
+    } else {
+      adminModeBtn.classList.remove('active');
+      adminModeText.textContent = 'Admin Mode';
+      adminModeBanner.classList.remove('active');
+      document.body.classList.remove('admin-mode');
+      console.log('🛡️ Admin Mode DEACTIVATED');
+    }
+  });
+
+  // Function to find sale by block coordinates
+  function findSaleByBlock(bx, by) {
+    for (const sale of salesData) {
+      const sel = sale.metadata?.selection;
+      if (!sel) continue;
+      
+      if (bx >= sel.minBlockX && bx < sel.minBlockX + sel.blocksX &&
+          by >= sel.minBlockY && by < sel.minBlockY + sel.blocksY) {
+        return sale;
+      }
+    }
+    return null;
+  }
+
+  // Delete sale function
+  async function deleteSale(signature, projectName) {
+    if (!confirm(`⚠️ ¿Estás seguro de eliminar "${projectName}"?\n\nEsta acción NO se puede deshacer.`)) {
+      return;
+    }
+    
+    try {
+      console.log('🗑️ Deleting sale:', signature);
+      
+      const response = await fetch(`${API_BASE}/api/delete-sale`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          signature: signature,
+          ownerWallet: userPublicKey.toString()
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || 'Error al eliminar');
+      }
+      
+      console.log('✅ Sale deleted successfully:', result);
+      alert(`✅ "${projectName}" eliminado correctamente.\n\nRecargando grid...`);
+      
+      // Reload grid
+      loadingEl.style.display = 'flex';
+      await loadGridFromServer();
+      
+    } catch (error) {
+      console.error('❌ Error deleting sale:', error);
+      alert(`❌ Error al eliminar: ${error.message}`);
+    }
+  }
+
+  // Click on canvas to open URL or delete (admin mode)
+  canvas.addEventListener('click', async (e) => {
     if (isDragging) return;
     
     const { rawX, rawY } = getMousePosInCanvas(e);
@@ -2105,6 +2177,32 @@
     const by = Math.floor(rawY / BLOCK_SIZE);
     const data = blockData[blockIndex(bx, by)];
     
+    if (!data) return;
+    
+    // ADMIN MODE: Delete logo
+    if (adminMode && isOwner) {
+      const sale = findSaleByBlock(bx, by);
+      
+      if (!sale) {
+        alert('⚠️ No se encontró la venta para este bloque');
+        return;
+      }
+      
+      const confirmMsg = `🗑️ ELIMINAR LOGO\n\n` +
+                        `Proyecto: ${sale.metadata?.name}\n` +
+                        `URL: ${sale.metadata?.url}\n` +
+                        `Bloques: ${sale.metadata?.selection?.blocksX}×${sale.metadata?.selection?.blocksY}\n` +
+                        `Monto: ${sale.amount?.toFixed(4)} SOL\n\n` +
+                        `¿Confirmar eliminación?`;
+      
+      if (confirm(confirmMsg)) {
+        await deleteSale(sale.signature, sale.metadata?.name);
+      }
+      
+      return;
+    }
+    
+    // NORMAL MODE: Open URL
     if (data && confirm(`🚀 Visit ${data.name}?`)) {
       window.open(data.url, '_blank');
     }
