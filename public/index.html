@@ -1717,12 +1717,21 @@
       // Initialize Solana connection with multi-RPC fallback
       console.log('🔄 Inicializando conexión a Solana...');
       
-      const rpcEndpoints = [
+      const rpcEndpoints = [];
+      
+      // Si hay RPC personalizado (Helius), usarlo PRIMERO
+      if (CUSTOM_RPC) {
+        rpcEndpoints.push(CUSTOM_RPC);
+        console.log('✅ Usando RPC personalizado (Helius)');
+      }
+      
+      // RPCs públicos como respaldo
+      rpcEndpoints.push(
         'https://api.mainnet-beta.solana.com',
         'https://solana-api.projectserum.com',
         'https://rpc.ankr.com/solana',
         solanaWeb3.clusterApiUrl('mainnet-beta')
-      ];
+      );
       
       // Probar cada RPC hasta encontrar uno que funcione
       let connectionEstablished = false;
