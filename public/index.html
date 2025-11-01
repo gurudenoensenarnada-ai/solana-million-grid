@@ -6,7 +6,7 @@
   <meta name="description" content="Solana Million Dollar Grid - Buy pixels and showcase your project on Solana blockchain">
   <meta property="og:title" content="Solana Million Dollar Grid" />
   <meta property="og:description" content="Own a piece of blockchain history! Buy pixels on the Solana Million Dollar Grid" />
-  <title>Solana Million Dollar Grid | Own Your Space</title>
+  <title>Solana Million Dollar | Own Your Space</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1384,7 +1384,7 @@
   
   // 🔥 CONFIGURACIÓN DE RPC
   // Si tienes un RPC premium (Alchemy, QuickNode, etc.), ponlo aquí:
-  const CUSTOM_RPC = 'https://mainnet.helius-rpc.com/?api-key=c4007b87-8776-4649-9bbf-4ba5db3d9208';
+  const CUSTOM_RPC = null; // Ejemplo: 'https://tu-rpc-premium.com'
   
   // NOTA: Como Alchemy no tiene Solana disponible en tu región,
   // usaremos RPCs públicos optimizados (funcionan sin API key)
@@ -2232,23 +2232,37 @@
       // ESPERAR a que se obtenga el balance
       await updateWalletBalance();
       
-      // Verificar si tiene suficiente balance
+      // Verificar si tiene suficiente balance (dejando siempre 0.001 SOL de reserva)
       const estimatedFee = 0.000005;
+      const minimumReserve = 0.001; // Reserva mínima que debe quedar en la wallet
       const totalNeeded = parseFloat(totalPrice) + estimatedFee;
+      const totalNeededWithReserve = totalNeeded + minimumReserve;
       
-      if (userWalletBalance < totalNeeded) {
-        const shortage = totalNeeded - userWalletBalance;
+      if (userWalletBalance < totalNeededWithReserve) {
+        const shortage = totalNeededWithReserve - userWalletBalance;
+        const willRemain = userWalletBalance - totalNeeded;
+        
         alert(
           `❌ Saldo insuficiente\n\n` +
-          `Necesitas: ${totalNeeded.toFixed(6)} SOL\n` +
+          `Precio: ${parseFloat(totalPrice).toFixed(6)} SOL\n` +
+          `Fee estimado: ${estimatedFee.toFixed(6)} SOL\n` +
+          `Reserva mínima: ${minimumReserve.toFixed(6)} SOL\n` +
+          `────────────────────────\n` +
+          `Total necesario: ${totalNeededWithReserve.toFixed(6)} SOL\n` +
           `Tienes: ${userWalletBalance.toFixed(6)} SOL\n` +
-          `Faltan: ${shortage.toFixed(6)} SOL\n\n` +
-          `Por favor, añade más SOL a tu wallet antes de continuar.`
+          `Te faltan: ${shortage.toFixed(6)} SOL\n\n` +
+          (willRemain >= 0 
+            ? `⚠️ Si pagas, solo quedarían ${willRemain.toFixed(6)} SOL\n(menos de la reserva mínima de ${minimumReserve} SOL)\n\n`
+            : ``) +
+          `Por favor, añade más SOL a tu wallet.\n` +
+          `La app siempre deja ${minimumReserve} SOL de reserva.`
         );
         return; // NO abrir el modal
       }
       
-      console.log(`✅ Balance suficiente: ${userWalletBalance.toFixed(6)} SOL >= ${totalNeeded.toFixed(6)} SOL`);
+      const willRemainAfter = userWalletBalance - totalNeeded;
+      console.log(`✅ Balance suficiente: ${userWalletBalance.toFixed(6)} SOL`);
+      console.log(`💰 Después del pago quedarán: ${willRemainAfter.toFixed(6)} SOL (>= ${minimumReserve} SOL reserva)`);
       updateBalanceIndicator(parseFloat(totalPrice));
     }
     
