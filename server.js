@@ -1050,18 +1050,26 @@ app.post('/api/delete-sale', async (req, res) => {
     // Load sales
     const salesPath = path.join(__dirname, 'sales.json');
     let sales = [];
+    let isWrappedFormat = false; // Bandera para saber el formato
     
     if (fs.existsSync(salesPath)) {
       try {
         const data = fs.readFileSync(salesPath, 'utf8');
         const parsed = JSON.parse(data);
         
-        // Asegurar que es un array
+        // Manejar dos formatos posibles:
+        // Formato 1: [] (array directo)
+        // Formato 2: {"sales": []} (objeto con propiedad sales)
         if (Array.isArray(parsed)) {
           sales = parsed;
+          isWrappedFormat = false;
+        } else if (parsed && Array.isArray(parsed.sales)) {
+          sales = parsed.sales;
+          isWrappedFormat = true;
         } else {
-          console.warn('⚠️ sales.json no es un array, inicializando array vacío');
+          console.warn('⚠️ sales.json tiene formato desconocido, inicializando array vacío');
           sales = [];
+          isWrappedFormat = false;
         }
       } catch (parseError) {
         console.error('❌ Error parsing sales.json:', parseError);
@@ -1070,16 +1078,35 @@ app.post('/api/delete-sale', async (req, res) => {
         fs.copyFileSync(salesPath, backupPath);
         console.log(`💾 Backup creado: ${backupPath}`);
         sales = [];
+        isWrappedFormat = false;
       }
+    }
+    
+    console.log(`📊 Formato de sales.json: ${isWrappedFormat ? '{"sales": [...]}' : '[...]'}`);
+    console.log(`📊 Total de sales cargadas: ${sales.length}`);
+    console.log(`🔍 Buscando signature: ${signature}`);
+    
+    // Log de todas las signatures disponibles
+    if (sales.length > 0) {
+      console.log('📋 Signatures disponibles:');
+      sales.forEach((s, i) => {
+        console.log(`   ${i + 1}. ${s.signature}`);
+      });
     }
     
     // Find sale
     const saleIndex = sales.findIndex(s => s.signature === signature);
     
     if (saleIndex === -1) {
+      console.warn('❌ Sale no encontrada en el array');
       return res.status(404).json({
         ok: false,
-        error: 'Sale not found'
+        error: 'Sale not found',
+        debug: {
+          searchedSignature: signature,
+          totalSales: sales.length,
+          availableSignatures: sales.map(s => s.signature)
+        }
       });
     }
     
@@ -1088,8 +1115,12 @@ app.post('/api/delete-sale', async (req, res) => {
     // Remove sale
     sales.splice(saleIndex, 1);
     
-    // Save
-    fs.writeFileSync(salesPath, JSON.stringify(sales, null, 2));
+    // Save - mantener el mismo formato que se leyó
+    const dataToSave = isWrappedFormat 
+      ? { sales: sales }  // Formato: {"sales": [...]}
+      : sales;            // Formato: [...]
+    
+    fs.writeFileSync(salesPath, JSON.stringify(dataToSave, null, 2));
     
     console.log('✅ Sale deleted by owner:', signature);
     console.log('   Project:', deletedSale.metadata?.name);
