@@ -247,6 +247,30 @@
       50% { box-shadow: 0 0 30px rgba(255, 0, 0, 0.8); }
     }
     
+    /* Whitepaper Button */
+    .whitepaper-btn {
+      padding: 10px 20px;
+      background: linear-gradient(135deg, rgba(20, 241, 149, 0.15) 0%, rgba(255, 215, 0, 0.15) 100%);
+      border: 2px solid rgba(20, 241, 149, 0.4);
+      border-radius: 10px;
+      color: var(--primary);
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 13px;
+      transition: all 0.3s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+    }
+    
+    .whitepaper-btn:hover {
+      background: linear-gradient(135deg, rgba(20, 241, 149, 0.25) 0%, rgba(255, 215, 0, 0.25) 100%);
+      border-color: var(--primary);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px rgba(20, 241, 149, 0.4);
+    }
+    
     /* Admin mode indicator */
     .admin-mode-banner {
       position: fixed;
@@ -1114,7 +1138,7 @@
   <header>
     <div class="logo">
       <div class="logo-icon">🚀</div>
-      <span>SOLANA MILLION DOLLAR</span>
+      <span>SOLANA MILLION GRID</span>
     </div>
     <div class="wallet-section">
       <div class="social-links">
@@ -1129,6 +1153,9 @@
           </svg>
         </a>
       </div>
+      <a href="/whitepaper.html" target="_blank" class="whitepaper-btn" title="Read our Whitepaper">
+        📄 Whitepaper
+      </a>
       <button id="connectWallet" class="connectBtn">Connect Wallet</button>
       <span id="walletAddr" class="wallet-address" style="display:none;"></span>
       <span id="ownerBadge" class="owner-badge" style="display:none;">⭐ OWNER</span>
@@ -1152,7 +1179,7 @@
         <button class="cta-primary" onclick="document.getElementById('gridWrapper').scrollIntoView({behavior: 'smooth'})">
           🎨 Buy Pixels Now
         </button>
-        <a href="#features" class="cta-secondary">Learn More</a>
+        <a href="/whitepaper.html" target="_blank" class="cta-secondary" style="text-decoration: none;">📄 Read Whitepaper</a>
       </div>
     </section>
 
