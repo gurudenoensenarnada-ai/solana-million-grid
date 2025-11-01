@@ -1052,8 +1052,25 @@ app.post('/api/delete-sale', async (req, res) => {
     let sales = [];
     
     if (fs.existsSync(salesPath)) {
-      const data = fs.readFileSync(salesPath, 'utf8');
-      sales = JSON.parse(data);
+      try {
+        const data = fs.readFileSync(salesPath, 'utf8');
+        const parsed = JSON.parse(data);
+        
+        // Asegurar que es un array
+        if (Array.isArray(parsed)) {
+          sales = parsed;
+        } else {
+          console.warn('⚠️ sales.json no es un array, inicializando array vacío');
+          sales = [];
+        }
+      } catch (parseError) {
+        console.error('❌ Error parsing sales.json:', parseError);
+        // Hacer backup del archivo corrupto
+        const backupPath = path.join(__dirname, `sales_backup_${Date.now()}.json`);
+        fs.copyFileSync(salesPath, backupPath);
+        console.log(`💾 Backup creado: ${backupPath}`);
+        sales = [];
+      }
     }
     
     // Find sale
