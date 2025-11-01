@@ -1382,6 +1382,13 @@
   const OWNER_WALLET = 'B7nB9QX1KC4QXp5GMxR8xzh3yzoqp6NjxSwfNBXtgPc1';
   const API_BASE = window.location.origin;
   
+  // 🔥 CONFIGURACIÓN DE RPC
+  // Si tienes un RPC premium (Alchemy, QuickNode, etc.), ponlo aquí:
+  const CUSTOM_RPC = null; // Ejemplo: 'https://tu-rpc-premium.com'
+  
+  // NOTA: Como Alchemy no tiene Solana disponible en tu región,
+  // usaremos RPCs públicos optimizados (funcionan sin API key)
+  
   const GOLD_END = 24;
   const SILVER_START = 25;
   const SILVER_END = 59;
@@ -1787,14 +1794,28 @@
       return;
     }
     
-    const rpcEndpoints = [
-      'https://try-rpc.mainnet.solana.blockdaemon.tech',
-      'https://solana.public-rpc.com',
+    // Construir lista de RPCs priorizando custom RPC si está configurado
+    const rpcEndpoints = [];
+    
+    // Si el usuario configuró un RPC custom, usarlo PRIMERO
+    if (CUSTOM_RPC) {
+      rpcEndpoints.push(CUSTOM_RPC);
+      console.log('✅ Usando RPC personalizado');
+    }
+    
+    // RPCs públicos PREMIUM (sin API key, funcionan bien)
+    rpcEndpoints.push(
+      // RPCs más rápidos y confiables
       'https://api.mainnet-beta.solana.com',
-      'https://solana-api.projectserum.com',
+      'https://solana.public-rpc.com',
       'https://rpc.ankr.com/solana',
+      // RPCs alternativos
+      'https://solana-api.projectserum.com',
+      'https://api.metaplex.solana.com',
+      'https://solana-mainnet.rpc.extrnode.com',
+      // Respaldo oficial
       solanaWeb3.clusterApiUrl('mainnet-beta')
-    ];
+    );
     
     let balanceFetched = false;
     
@@ -1858,31 +1879,42 @@
     if (!balanceFetched) {
       console.error('❌ No se pudo obtener el balance desde ningún RPC');
       
-      // Preguntar si quiere ingresar balance manualmente
-      const wantsManual = confirm(
+      // Mostrar opciones al usuario
+      const userChoice = confirm(
         '⚠️ No se pudo obtener tu balance automáticamente\n\n' +
-        'Esto puede deberse a:\n' +
-        '• Conexión bloqueada por firewall/VPN\n' +
-        '• RPCs públicos saturados\n\n' +
-        'Presiona OK para ingresar tu balance manualmente\n' +
-        '(mira en Phantom cuánto SOL tienes)\n\n' +
-        'Presiona Cancelar para omitir la validación'
+        'Esto significa que tu red está bloqueando el acceso a Solana.\n' +
+        'Causas comunes:\n' +
+        '• ISP bloqueando blockchain\n' +
+        '• Firewall corporativo/escolar\n' +
+        '• Antivirus muy restrictivo\n\n' +
+        '¿Quieres ingresar tu balance manualmente?\n' +
+        '(Abre Phantom y mira cuánto SOL tienes)\n\n' +
+        'OK = Ingresar manualmente\n' +
+        'Cancelar = Omitir validación (Phantom validará después)'
       );
       
-      if (wantsManual) {
-        const manualBalance = prompt(
-          '💰 Ingresa tu balance de SOL\n\n' +
-          'Abre Phantom y mira cuánto SOL tienes.\n' +
-          'Luego escribe solo el número aquí.\n\n' +
-          'Ejemplos:\n' +
-          '• Si tienes 0.5 SOL → escribe: 0.5\n' +
-          '• Si tienes 1.25 SOL → escribe: 1.25\n' +
-          '• Si tienes 0 SOL → escribe: 0\n\n' +
-          'Tu balance en SOL:'
-        );
-        
-        if (manualBalance !== null && manualBalance !== '') {
-          const parsedBalance = parseFloat(manualBalance.replace(',', '.'));
+      if (userChoice) {
+        // Usuario quiere ingresar manualmente
+        let attempts = 0;
+        while (attempts < 3) {
+          const manualBalance = prompt(
+            '💰 Ingresa tu balance de SOL\n\n' +
+            'Abre Phantom y mira cuánto SOL tienes.\n' +
+            'Escribe solo el número (sin "SOL").\n\n' +
+            'Ejemplos:\n' +
+            '• Si tienes 0.5 SOL → escribe: 0.5\n' +
+            '• Si tienes 1.25 SOL → escribe: 1.25\n' +
+            '• Si tienes 0 SOL → escribe: 0\n\n' +
+            'Tu balance:'
+          );
+          
+          if (manualBalance === null) {
+            // Usuario canceló
+            console.warn('⚠️ Usuario canceló ingreso manual');
+            break;
+          }
+          
+          const parsedBalance = parseFloat(manualBalance.replace(',', '.').trim());
           
           if (!isNaN(parsedBalance) && parsedBalance >= 0) {
             userWalletBalance = parsedBalance;
@@ -1891,24 +1923,38 @@
             
             alert(
               `✅ Balance registrado: ${userWalletBalance.toFixed(6)} SOL\n\n` +
-              'La app usará este balance para validar compras.\n\n' +
+              'La app usará este balance para validar.\n\n' +
               'IMPORTANTE:\n' +
               'Phantom validará el balance real al pagar.\n' +
               'Si ingresaste un valor incorrecto, la transacción fallará.'
             );
             
             balanceFetched = true;
+            break;
           } else {
-            alert('❌ Valor inválido. Se usará balance 0.');
-            userWalletBalance = 0;
+            attempts++;
+            if (attempts < 3) {
+              alert(`❌ Valor inválido. Intento ${attempts}/3\n\nPor favor ingresa solo números.\nEjemplo: 0.5`);
+            } else {
+              alert('❌ Demasiados intentos incorrectos.\n\nSe usará balance 0.\nPhantom validará al pagar.');
+              userWalletBalance = 0;
+            }
           }
-        } else {
-          console.warn('⚠️ Usuario canceló ingreso manual');
-          userWalletBalance = 0;
         }
       } else {
-        console.warn('⚠️ Usuario omitió validación de balance');
+        // Usuario omitió validación
+        console.warn('⚠️ Usuario omitió validación - Phantom validará');
         userWalletBalance = 0;
+        
+        alert(
+          '⚠️ Validación omitida\n\n' +
+          'La app no pudo verificar tu balance.\n' +
+          'Phantom lo validará cuando intentes pagar.\n\n' +
+          'RECOMENDACIÓN:\n' +
+          '• Desactiva VPN y recarga la página\n' +
+          '• Desactiva firewall temporalmente\n' +
+          '• Prueba desde otra red (móvil 4G/5G)'
+        );
       }
     }
   }
