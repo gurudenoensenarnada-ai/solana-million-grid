@@ -2648,7 +2648,10 @@
     }
     
     try {
-      console.log('🗑️ Deleting sale:', signature);
+      console.log('🗑️ Deleting sale:');
+      console.log('   Signature:', signature);
+      console.log('   Project:', projectName);
+      console.log('   Owner:', userPublicKey.toString());
       
       const response = await fetch(`${API_BASE}/api/delete-sale`, {
         method: 'POST',
@@ -2663,7 +2666,13 @@
       
       const result = await response.json();
       
+      console.log('📡 Server response:', result);
+      
       if (!response.ok || !result.ok) {
+        // Mostrar información de debug si está disponible
+        if (result.debug) {
+          console.error('🔍 Debug info:', result.debug);
+        }
         throw new Error(result.error || 'Error al eliminar');
       }
       
@@ -2676,7 +2685,7 @@
       
     } catch (error) {
       console.error('❌ Error deleting sale:', error);
-      alert(`❌ Error al eliminar: ${error.message}`);
+      alert(`❌ Error al eliminar: ${error.message}\n\nRevisa la consola para más detalles.`);
     }
   }
 
