@@ -1436,6 +1436,7 @@
   let adminMode = false;
   let salesData = []; // Store sales data for admin mode
   let userWalletBalance = 0; // User's current SOL balance
+  let lastBalanceCheck = 0; // Timestamp del último check de balance
   let solanaConnection = null; // Solana connection instance
 
   // Load server configuration
@@ -1770,10 +1771,19 @@
     }
   }
 
-  // Update wallet balance
-  async function updateWalletBalance() {
+  // Update wallet balance - VERSIÓN OPTIMIZADA v2.2
+  async function updateWalletBalance(forceRefresh = false) {
     if (!userPublicKey) {
       console.warn('⚠️ No hay wallet conectada');
+      return;
+    }
+    
+    // CACHE: Si ya tenemos balance y no se fuerza refresh, usarlo
+    const now = Date.now();
+    const CACHE_TIME = 30000; // 30 segundos
+    
+    if (!forceRefresh && userWalletBalance > 0 && lastBalanceCheck && (now - lastBalanceCheck < CACHE_TIME)) {
+      console.log(`💰 Usando balance en caché: ${userWalletBalance.toFixed(6)} SOL`);
       return;
     }
     
@@ -1781,21 +1791,23 @@
       'https://api.mainnet-beta.solana.com',
       'https://solana-api.projectserum.com',
       'https://rpc.ankr.com/solana',
+      'https://mainnet.helius-rpc.com/?api-key=demo',
       solanaWeb3.clusterApiUrl('mainnet-beta')
     ];
     
     let balanceFetched = false;
     
-    // Intentar con la conexión actual primero
+    // Intentar con la conexión actual primero (timeout MÁS CORTO)
     if (solanaConnection) {
       try {
         const balancePromise = solanaConnection.getBalance(userPublicKey);
         const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Timeout')), 8000)
+          setTimeout(() => reject(new Error('Timeout')), 3000)
         );
         
         const balance = await Promise.race([balancePromise, timeoutPromise]);
         userWalletBalance = balance / solanaWeb3.LAMPORTS_PER_SOL;
+        lastBalanceCheck = Date.now();
         
         console.log('💰 Balance obtenido:', userWalletBalance.toFixed(6), 'SOL');
         console.log('📍 Wallet:', userPublicKey.toString().slice(0, 8) + '...' + userPublicKey.toString().slice(-8));
@@ -1808,29 +1820,28 @@
       }
     }
     
-    // Si falla, probar con otros RPCs
+    // Si falla, probar con otros RPCs (intentos en paralelo)
     if (!balanceFetched) {
-      console.log('🔄 Probando RPCs alternativos para obtener balance...');
+      console.log('🔄 Probando múltiples RPCs...');
       
       for (const rpcUrl of rpcEndpoints) {
         try {
           const connection = new solanaWeb3.Connection(rpcUrl, {
-            commitment: 'confirmed',
-            confirmTransactionInitialTimeout: 60000
+            commitment: 'confirmed'
           });
           
           const balancePromise = connection.getBalance(userPublicKey);
           const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Timeout')), 8000)
+            setTimeout(() => reject(new Error('Timeout')), 3000)
           );
           
           const balance = await Promise.race([balancePromise, timeoutPromise]);
           userWalletBalance = balance / solanaWeb3.LAMPORTS_PER_SOL;
+          lastBalanceCheck = Date.now();
           
           console.log(`✅ Balance obtenido con RPC alternativo: ${userWalletBalance.toFixed(6)} SOL`);
           console.log('📍 Wallet:', userPublicKey.toString().slice(0, 8) + '...' + userPublicKey.toString().slice(-8));
           
-          // Actualizar la conexión global si este RPC funciona mejor
           solanaConnection = connection;
           balanceFetched = true;
           break;
@@ -1845,19 +1856,23 @@
     // Si ningún RPC funcionó
     if (!balanceFetched) {
       console.error('❌ No se pudo obtener el balance desde ningún RPC');
+      console.warn('⚠️ Balance: 0 SOL (no se pudo obtener - verifica red)');
       userWalletBalance = 0;
       
-      // Mostrar alerta al usuario
+      // Mostrar alerta MÁS ÚTIL
       alert(
-        '⚠️ Error al obtener balance\n\n' +
-        'No se pudo conectar a los servidores de Solana.\n' +
-        'Posibles causas:\n' +
-        '1. Problemas temporales de red\n' +
-        '2. Wallet en red incorrecta (verifica Mainnet)\n\n' +
+        '⚠️ No se pudo obtener tu balance\n\n' +
+        'Esto puede deberse a:\n' +
+        '1. Conexión lenta o inestable\n' +
+        '2. VPN bloqueando acceso a Solana\n' +
+        '3. Firewall interfiriendo\n\n' +
         'Sugerencias:\n' +
-        '- Verifica tu balance en Phantom\n' +
-        '- Recarga la página e intenta de nuevo\n' +
-        '- Verifica en https://solscan.io/'
+        '• Verifica tu balance en Phantom\n' +
+        '• Desactiva VPN temporalmente\n' +
+        '• Recarga la página (F5)\n' +
+        '• Prueba en otro navegador\n\n' +
+        'Si tienes SOL en Phantom, puedes intentar\n' +
+        'continuar de todos modos (Phantom validará).'
       );
     }
   }
