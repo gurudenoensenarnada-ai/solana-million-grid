@@ -2144,24 +2144,17 @@
       ownerNote.style.display = 'none';
     }
     
-    // Update wallet balance and show balance indicator
+    // Update wallet balance - INTENTO NO BLOQUEANTE
     if (userPublicKey) {
-      await updateWalletBalance();
+      // Intentar obtener balance pero NO bloquear si falla
+      updateWalletBalance().catch(() => {
+        console.warn('⚠️ No se pudo obtener balance, continuando...');
+      });
       
-      // Verificar balance ANTES de abrir modal
-      const estimatedFee = 0.000005;
-      const totalNeeded = parseFloat(totalPrice) + estimatedFee;
-      
-      if (userWalletBalance < totalNeeded) {
-        const shortage = totalNeeded - userWalletBalance;
-        alert(
-          `❌ Saldo insuficiente\n\n` +
-          `Necesitas: ${totalNeeded.toFixed(6)} SOL\n` +
-          `Tienes: ${userWalletBalance.toFixed(6)} SOL\n` +
-          `Faltan: ${shortage.toFixed(6)} SOL\n\n` +
-          `Por favor, añade más SOL a tu wallet y vuelve a intentar.`
-        );
-        return; // NO abrir el modal
+      // NO ESPERAR - Si falla, Phantom validará al pagar
+      // Mostrar advertencia si balance es 0
+      if (userWalletBalance === 0) {
+        console.warn('⚠️ Balance no disponible - Phantom validará al pagar');
       }
       
       updateBalanceIndicator(parseFloat(totalPrice));
@@ -2263,97 +2256,13 @@
       console.log(`💰 Price per block: ${pricePerBlock} SOL (${isOwner ? 'OWNER' : 'NORMAL'})`);
       console.log(`💰 Total: ${(totalLamports / solanaWeb3.LAMPORTS_PER_SOL).toFixed(4)} SOL`);
       
-      // VALIDACIÓN DE BALANCE - Esto evita la advertencia de Phantom
-      showStatus('🔍 Verificando balance...', 'warning');
+      // NOTA: Validación de balance DESHABILITADA por problemas de red
+      // Phantom validará el balance automáticamente al intentar la transacción
+      console.log('⚠️ Saltando validación de balance - Phantom validará');
+      console.log(`💰 Total necesario: ${(totalLamports / solanaWeb3.LAMPORTS_PER_SOL).toFixed(6)} SOL`);
+      console.log(`💰 Wallet: ${userPublicKey.toString()}`);
       
-      try {
-        // Lista de RPCs para probar en orden
-        const rpcEndpoints = [
-          'https://api.mainnet-beta.solana.com',
-          'https://solana-api.projectserum.com',
-          'https://rpc.ankr.com/solana',
-          solanaWeb3.clusterApiUrl('mainnet-beta')
-        ];
-        
-        let balance = 0;
-        let connectionSuccess = false;
-        
-        // Intentar con diferentes RPCs hasta que uno funcione
-        for (const rpcUrl of rpcEndpoints) {
-          try {
-            console.log(`🔄 Intentando RPC: ${rpcUrl}`);
-            
-            const connection = new solanaWeb3.Connection(rpcUrl, {
-              commitment: 'confirmed',
-              confirmTransactionInitialTimeout: 60000
-            });
-            
-            // Agregar timeout a la petición
-            const balancePromise = connection.getBalance(userPublicKey);
-            const timeoutPromise = new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Timeout')), 10000)
-            );
-            
-            balance = await Promise.race([balancePromise, timeoutPromise]);
-            
-            console.log(`✅ RPC funcionando. Balance: ${(balance / solanaWeb3.LAMPORTS_PER_SOL).toFixed(6)} SOL`);
-            connectionSuccess = true;
-            break;
-            
-          } catch (rpcError) {
-            console.warn(`⚠️ Error con RPC ${rpcUrl}:`, rpcError.message);
-            continue;
-          }
-        }
-        
-        if (!connectionSuccess) {
-          console.warn('⚠️ No se pudo conectar a ningún RPC, intentando continuar...');
-          // No lanzar error aquí, dejar que Phantom maneje la validación
-        } else {
-          const estimatedFee = 5000; // ~0.000005 SOL (fee típico de transacción)
-          const totalNeeded = totalLamports + estimatedFee;
-          
-          console.log(`💰 Balance actual: ${(balance / solanaWeb3.LAMPORTS_PER_SOL).toFixed(6)} SOL`);
-          console.log(`💰 Necesario (incluye fee): ${(totalNeeded / solanaWeb3.LAMPORTS_PER_SOL).toFixed(6)} SOL`);
-          console.log(`💰 Wallet: ${userPublicKey.toString()}`);
-          
-          if (balance === 0) {
-            console.warn('⚠️ Balance detectado como 0 - puede ser error de RPC o wallet vacía');
-            // Mostrar advertencia pero no bloquear
-            const continuar = confirm(
-              '⚠️ ADVERTENCIA: Se detectó balance de 0 SOL\n\n' +
-              'Esto puede significar:\n' +
-              '1. Tu wallet está vacía (más probable)\n' +
-              '2. Error temporal de conexión con Solana\n\n' +
-              '¿Deseas continuar de todos modos?\n' +
-              '(Phantom validará el balance real)'
-            );
-            
-            if (!continuar) {
-              throw new Error('Operación cancelada por el usuario');
-            }
-          } else if (balance < totalNeeded) {
-            const shortfall = (totalNeeded - balance) / solanaWeb3.LAMPORTS_PER_SOL;
-            throw new Error(
-              `Saldo insuficiente. Te faltan ${shortfall.toFixed(6)} SOL.\n\n` +
-              `Necesitas: ${(totalNeeded / solanaWeb3.LAMPORTS_PER_SOL).toFixed(6)} SOL\n` +
-              `Tienes: ${(balance / solanaWeb3.LAMPORTS_PER_SOL).toFixed(6)} SOL`
-            );
-          }
-          
-          // Balance OK - continuar con la transacción
-          console.log('✅ Balance suficiente');
-        }
-        
-      } catch (balanceError) {
-        if (balanceError.message.includes('insuficiente') || 
-            balanceError.message.includes('faltan') ||
-            balanceError.message.includes('cancelada')) {
-          throw balanceError; // Re-lanzar errores críticos
-        }
-        // Si hay error al verificar balance, continuar (puede ser problema de red)
-        console.warn('⚠️ No se pudo verificar balance completamente, Phantom validará:', balanceError);
-      }
+      showStatus('💰 Preparando transacción (Phantom validará el balance)...', 'warning');
       
       const transaction = new solanaWeb3.Transaction().add(
         solanaWeb3.SystemProgram.transfer({
