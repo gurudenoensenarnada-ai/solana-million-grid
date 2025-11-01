@@ -1382,12 +1382,11 @@
   const OWNER_WALLET = 'B7nB9QX1KC4QXp5GMxR8xzh3yzoqp6NjxSwfNBXtgPc1';
   const API_BASE = window.location.origin;
   
-  // 🔥 CONFIGURACIÓN DE RPC
-  // Si tienes un RPC premium (Alchemy, QuickNode, etc.), ponlo aquí:
+  // 🔥 CONFIGURACIÓN DE RPC - HELIUS (CONFIGURADO) ✅
   const CUSTOM_RPC = 'https://mainnet.helius-rpc.com/?api-key=c4007b87-8776-4649-9bbf-4ba5db3d9208';
   
-  // NOTA: Como Alchemy no tiene Solana disponible en tu región,
-  // usaremos RPCs públicos optimizados (funcionan sin API key)
+  // 💰 RESERVA MÍNIMA: Siempre dejará al menos 0.001 SOL en tu wallet
+  const MINIMUM_WALLET_RESERVE = 0.001;
   
   const GOLD_END = 24;
   const SILVER_START = 25;
@@ -1966,40 +1965,62 @@
       return;
     }
     
-    const estimatedFee = 0.000005; // 5000 lamports
+    const estimatedFee = 0.000005;
     const totalNeeded = totalCost + estimatedFee;
+    const totalWithReserve = totalNeeded + MINIMUM_WALLET_RESERVE;
     
-    // SIEMPRE mostrar el costo, pero NO validar balance
-    // Phantom validará al momento de pagar
-    
-    // Update values - mostrar "No disponible" si no se pudo obtener
+    // Update values - mostrar claramente lo que quedará después
     if (userWalletBalance === 0) {
       userBalanceSpan.textContent = 'Verificar en Phantom';
       remainingBalanceSpan.textContent = 'Phantom validará';
     } else {
       const remaining = userWalletBalance - totalNeeded;
       userBalanceSpan.textContent = userWalletBalance.toFixed(6) + ' SOL';
-      remainingBalanceSpan.textContent = remaining.toFixed(6) + ' SOL';
+      
+      // Mostrar lo que quedará con indicador de reserva
+      if (remaining >= MINIMUM_WALLET_RESERVE) {
+        remainingBalanceSpan.textContent = `${remaining.toFixed(6)} SOL ✅`;
+        remainingBalanceSpan.style.color = 'var(--success)';
+      } else if (remaining >= 0) {
+        remainingBalanceSpan.textContent = `${remaining.toFixed(6)} SOL ⚠️`;
+        remainingBalanceSpan.style.color = 'var(--warning)';
+      } else {
+        remainingBalanceSpan.textContent = `${remaining.toFixed(6)} SOL ❌`;
+        remainingBalanceSpan.style.color = 'var(--error)';
+      }
     }
     
     totalCostSpan.textContent = totalCost.toFixed(6) + ' SOL';
     estimatedFeeSpan.textContent = estimatedFee.toFixed(6) + ' SOL';
     
-    // SIEMPRE permitir pagar - Phantom validará
-    balanceIndicator.classList.remove('insufficient');
-    balanceIndicator.classList.add('sufficient');
-    remainingBalanceSpan.classList.remove('negative');
-    remainingBalanceSpan.classList.add('positive');
-    insufficientWarning.style.display = 'none';
-    payBtn.disabled = false;
-    payBtn.style.opacity = '1';
-    payBtn.style.cursor = 'pointer';
+    // Validar si tiene suficiente (incluyendo reserva)
+    const hasSufficientBalance = userWalletBalance >= totalWithReserve;
+    
+    if (hasSufficientBalance || userWalletBalance === 0) {
+      balanceIndicator.classList.remove('insufficient');
+      balanceIndicator.classList.add('sufficient');
+      insufficientWarning.style.display = 'none';
+      payBtn.disabled = false;
+      payBtn.style.opacity = '1';
+      payBtn.style.cursor = 'pointer';
+    } else {
+      balanceIndicator.classList.remove('sufficient');
+      balanceIndicator.classList.add('insufficient');
+      insufficientWarning.style.display = 'flex';
+      payBtn.disabled = true;
+      payBtn.style.opacity = '0.5';
+      payBtn.style.cursor = 'not-allowed';
+    }
     
     balanceIndicator.classList.add('visible');
     
-    // Mostrar advertencia si no se pudo obtener balance
-    if (userWalletBalance === 0) {
-      console.warn('⚠️ No se pudo obtener balance - Phantom validará al pagar');
+    // Log informativo
+    if (userWalletBalance > 0) {
+      const willRemain = userWalletBalance - totalNeeded;
+      console.log(`💰 Balance actual: ${userWalletBalance.toFixed(6)} SOL`);
+      console.log(`💸 Total a pagar: ${totalNeeded.toFixed(6)} SOL (incluye fee)`);
+      console.log(`🔒 Reserva mínima: ${MINIMUM_WALLET_RESERVE.toFixed(3)} SOL`);
+      console.log(`📊 Quedará después: ${willRemain.toFixed(6)} SOL ${willRemain >= MINIMUM_WALLET_RESERVE ? '✅' : '⚠️'}`);
     }
   }
 
@@ -2064,15 +2085,31 @@
     const totalPrice = (freeBlocks * pricePerBlock).toFixed(4);
     const totalPriceNum = freeBlocks * pricePerBlock;
     
-    // Check if user has sufficient balance (if wallet connected)
+    // Check if user has sufficient balance INCLUDING RESERVE (if wallet connected)
     let balanceWarning = '';
+    let hasInsufficientBalance = false;
+    
     if (userPublicKey && userWalletBalance > 0) {
       const estimatedFee = 0.000005;
       const totalNeeded = totalPriceNum + estimatedFee;
-      if (userWalletBalance < totalNeeded) {
-        const shortage = totalNeeded - userWalletBalance;
-        balanceWarning = ` | <span style="color:var(--error); font-weight:700;">⚠️ Saldo insuficiente (faltan ${shortage.toFixed(6)} SOL)</span>`;
+      const totalWithReserve = totalNeeded + MINIMUM_WALLET_RESERVE;
+      
+      if (userWalletBalance < totalWithReserve) {
+        hasInsufficientBalance = true;
+        const shortage = totalWithReserve - userWalletBalance;
+        const willRemain = userWalletBalance - totalNeeded;
+        
+        if (willRemain < 0) {
+          // No tiene ni para el precio
+          balanceWarning = ` | <span style="color:var(--error); font-weight:700;">❌ Saldo insuficiente (faltan ${shortage.toFixed(6)} SOL)</span>`;
+        } else {
+          // Tiene para el precio pero no para mantener la reserva
+          balanceWarning = ` | <span style="color:var(--warning); font-weight:700;">⚠️ Quedarían solo ${willRemain.toFixed(6)} SOL (reserva: ${MINIMUM_WALLET_RESERVE.toFixed(3)} SOL)</span>`;
+        }
       }
+    } else if (userPublicKey && userWalletBalance === 0) {
+      hasInsufficientBalance = true;
+      balanceWarning = ` | <span style="color:var(--warning); font-weight:700;">⚠️ Balance no detectado</span>`;
     }
     
     if (startZone !== endZone) {
@@ -2083,15 +2120,15 @@
       selectionAmountSpan.textContent = (blocksTotal * pricePerBlock).toFixed(4);
       selectionInfo.innerHTML = `⚠️ Selection: ${blocksX}×${blocksY} blocks (${getZoneName(startZone)}) | <span style="color:var(--error)">Occupied: ${soldInSelection}</span> | Available: ${freeBlocks} | Price: ${totalPrice} SOL${balanceWarning}`;
       selectionOverlay.classList.add('selection-invalid');
+    } else if (hasInsufficientBalance) {
+      // NUEVO: Bloquear si no tiene suficiente balance (incluyendo reserva)
+      selectionAmountSpan.textContent = (blocksTotal * pricePerBlock).toFixed(4);
+      selectionInfo.innerHTML = `❌ Selection: ${blocksX}×${blocksY} blocks (${getZoneName(startZone)}) | Price: ${(blocksTotal * pricePerBlock).toFixed(4)} SOL${balanceWarning}`;
+      selectionOverlay.classList.add('selection-invalid');
     } else {
       selectionAmountSpan.textContent = (blocksTotal * pricePerBlock).toFixed(4);
-      selectionInfo.innerHTML = `✓ Selection: ${blocksX}×${blocksY} blocks (${getZoneName(startZone)}) | Price: <strong style="color:var(--primary)">${(blocksTotal * pricePerBlock).toFixed(4)} SOL</strong>${balanceWarning}`;
-      
-      if (balanceWarning) {
-        selectionOverlay.classList.add('selection-invalid');
-      } else {
-        selectionOverlay.classList.remove('selection-invalid');
-      }
+      selectionInfo.innerHTML = `✓ Selection: ${blocksX}×${blocksY} blocks (${getZoneName(startZone)}) | Price: <strong style="color:var(--primary)">${(blocksTotal * pricePerBlock).toFixed(4)} SOL</strong>`;
+      selectionOverlay.classList.remove('selection-invalid');
     }
     
     const scale = canvas.getBoundingClientRect().width / CANVAS_SIZE;
@@ -2152,18 +2189,30 @@
       zone: startZone
     };
     
-    // Check balance before enabling confirm button
+    // Check balance INCLUYENDO RESERVA before enabling confirm button
     let canConfirm = soldInSelection === 0;
     
-    if (canConfirm && userPublicKey && userWalletBalance > 0) {
+    if (canConfirm && userPublicKey) {
       const blocksTotal = selection.blocksX * selection.blocksY;
       const pricePerBlock = getPriceForBlock(startZone);
       const totalPrice = blocksTotal * pricePerBlock;
       const estimatedFee = 0.000005;
       const totalNeeded = totalPrice + estimatedFee;
+      const totalWithReserve = totalNeeded + MINIMUM_WALLET_RESERVE;
       
-      if (userWalletBalance < totalNeeded) {
+      // Bloquear si no tiene suficiente (incluyendo reserva)
+      if (userWalletBalance < totalWithReserve) {
         canConfirm = false;
+        
+        // Mostrar mensaje explicativo
+        const shortage = totalWithReserve - userWalletBalance;
+        const willRemain = userWalletBalance - totalNeeded;
+        
+        if (willRemain < 0) {
+          console.warn(`❌ Saldo insuficiente: Faltan ${shortage.toFixed(6)} SOL`);
+        } else {
+          console.warn(`⚠️ Reserva insuficiente: Quedarían ${willRemain.toFixed(6)} SOL (mínimo: ${MINIMUM_WALLET_RESERVE.toFixed(3)} SOL)`);
+        }
       }
     }
     
@@ -2228,41 +2277,33 @@
     }
     
     // Update wallet balance and validate BEFORE opening modal
+    // NOTA: Esta es una validación de respaldo, ya que el botón se deshabilita en tiempo real
     if (userPublicKey) {
-      // ESPERAR a que se obtenga el balance
+      // ESPERAR a que se obtenga el balance actualizado
       await updateWalletBalance();
       
-      // Verificar si tiene suficiente balance (dejando siempre 0.001 SOL de reserva)
+      // Validación de respaldo (el botón ya debería estar deshabilitado si no tiene suficiente)
       const estimatedFee = 0.000005;
-      const minimumReserve = 0.001; // Reserva mínima que debe quedar en la wallet
       const totalNeeded = parseFloat(totalPrice) + estimatedFee;
-      const totalNeededWithReserve = totalNeeded + minimumReserve;
+      const totalNeededWithReserve = totalNeeded + MINIMUM_WALLET_RESERVE;
       
       if (userWalletBalance < totalNeededWithReserve) {
+        // Esto NO debería suceder porque el botón está deshabilitado
+        console.error('⚠️ Error: Botón de confirm habilitado sin balance suficiente');
         const shortage = totalNeededWithReserve - userWalletBalance;
-        const willRemain = userWalletBalance - totalNeeded;
-        
         alert(
           `❌ Saldo insuficiente\n\n` +
-          `Precio: ${parseFloat(totalPrice).toFixed(6)} SOL\n` +
-          `Fee estimado: ${estimatedFee.toFixed(6)} SOL\n` +
-          `Reserva mínima: ${minimumReserve.toFixed(6)} SOL\n` +
-          `────────────────────────\n` +
           `Total necesario: ${totalNeededWithReserve.toFixed(6)} SOL\n` +
           `Tienes: ${userWalletBalance.toFixed(6)} SOL\n` +
           `Te faltan: ${shortage.toFixed(6)} SOL\n\n` +
-          (willRemain >= 0 
-            ? `⚠️ Si pagas, solo quedarían ${willRemain.toFixed(6)} SOL\n(menos de la reserva mínima de ${minimumReserve} SOL)\n\n`
-            : ``) +
-          `Por favor, añade más SOL a tu wallet.\n` +
-          `La app siempre deja ${minimumReserve} SOL de reserva.`
+          `(Incluye reserva de ${MINIMUM_WALLET_RESERVE.toFixed(3)} SOL)`
         );
         return; // NO abrir el modal
       }
       
       const willRemainAfter = userWalletBalance - totalNeeded;
       console.log(`✅ Balance suficiente: ${userWalletBalance.toFixed(6)} SOL`);
-      console.log(`💰 Después del pago quedarán: ${willRemainAfter.toFixed(6)} SOL (>= ${minimumReserve} SOL reserva)`);
+      console.log(`💰 Después del pago quedarán: ${willRemainAfter.toFixed(6)} SOL (>= ${MINIMUM_WALLET_RESERVE.toFixed(3)} SOL reserva)`);
       updateBalanceIndicator(parseFloat(totalPrice));
     }
     
@@ -2487,6 +2528,12 @@
       
       if (confirmed) {
         showStatus('✅ Purchase confirmed and registered!', 'success');
+        
+        // Actualizar balance después del pago
+        await updateWalletBalance(true);
+        
+        const balanceAfter = userWalletBalance;
+        console.log(`💰 Balance actualizado: ${balanceAfter.toFixed(6)} SOL`);
       } else {
         showStatus('✅ Purchase registered! (Check in Phantom)', 'success');
       }
@@ -2512,9 +2559,17 @@
         await loadGridFromServer();
         
         if (confirmed) {
-          alert('🎉 Successful purchase! Your project is now on the grid.');
+          const blocksCount = savedSelection.blocksX * savedSelection.blocksY;
+          alert(
+            '🎉 ¡Compra exitosa!\n\n' +
+            `✅ ${blocksCount} ${blocksCount === 1 ? 'pixel' : 'pixeles'} registrados\n` +
+            `💰 Balance restante: ${userWalletBalance.toFixed(6)} SOL\n` +
+            `🔒 Reserva mínima: ${MINIMUM_WALLET_RESERVE.toFixed(3)} SOL\n\n` +
+            `Tu proyecto ya está visible en el grid.\n` +
+            `Verifica la transacción en Solscan.`
+          );
         } else {
-          alert('⏳ Purchase registered. Transaction may take time to confirm.\n\nCheck Phantom or Solscan.');
+          alert('⏳ Compra registrada\n\nLa transacción puede tardar en confirmarse.\n\nVerifica en Phantom o Solscan.');
         }
       }, 2000);
       
