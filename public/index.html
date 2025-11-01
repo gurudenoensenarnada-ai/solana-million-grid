@@ -1788,10 +1788,11 @@
     }
     
     const rpcEndpoints = [
+      'https://try-rpc.mainnet.solana.blockdaemon.tech',
+      'https://solana.public-rpc.com',
       'https://api.mainnet-beta.solana.com',
       'https://solana-api.projectserum.com',
       'https://rpc.ankr.com/solana',
-      'https://mainnet.helius-rpc.com/?api-key=demo',
       solanaWeb3.clusterApiUrl('mainnet-beta')
     ];
     
@@ -1856,24 +1857,59 @@
     // Si ningún RPC funcionó
     if (!balanceFetched) {
       console.error('❌ No se pudo obtener el balance desde ningún RPC');
-      console.warn('⚠️ Balance: 0 SOL (no se pudo obtener - verifica red)');
-      userWalletBalance = 0;
       
-      // Mostrar alerta MÁS ÚTIL
-      alert(
-        '⚠️ No se pudo obtener tu balance\n\n' +
+      // Preguntar si quiere ingresar balance manualmente
+      const wantsManual = confirm(
+        '⚠️ No se pudo obtener tu balance automáticamente\n\n' +
         'Esto puede deberse a:\n' +
-        '1. Conexión lenta o inestable\n' +
-        '2. VPN bloqueando acceso a Solana\n' +
-        '3. Firewall interfiriendo\n\n' +
-        'Sugerencias:\n' +
-        '• Verifica tu balance en Phantom\n' +
-        '• Desactiva VPN temporalmente\n' +
-        '• Recarga la página (F5)\n' +
-        '• Prueba en otro navegador\n\n' +
-        'Si tienes SOL en Phantom, puedes intentar\n' +
-        'continuar de todos modos (Phantom validará).'
+        '• Conexión bloqueada por firewall/VPN\n' +
+        '• RPCs públicos saturados\n\n' +
+        'Presiona OK para ingresar tu balance manualmente\n' +
+        '(mira en Phantom cuánto SOL tienes)\n\n' +
+        'Presiona Cancelar para omitir la validación'
       );
+      
+      if (wantsManual) {
+        const manualBalance = prompt(
+          '💰 Ingresa tu balance de SOL\n\n' +
+          'Abre Phantom y mira cuánto SOL tienes.\n' +
+          'Luego escribe solo el número aquí.\n\n' +
+          'Ejemplos:\n' +
+          '• Si tienes 0.5 SOL → escribe: 0.5\n' +
+          '• Si tienes 1.25 SOL → escribe: 1.25\n' +
+          '• Si tienes 0 SOL → escribe: 0\n\n' +
+          'Tu balance en SOL:'
+        );
+        
+        if (manualBalance !== null && manualBalance !== '') {
+          const parsedBalance = parseFloat(manualBalance.replace(',', '.'));
+          
+          if (!isNaN(parsedBalance) && parsedBalance >= 0) {
+            userWalletBalance = parsedBalance;
+            lastBalanceCheck = Date.now();
+            console.log(`💰 Balance manual ingresado: ${userWalletBalance.toFixed(6)} SOL`);
+            
+            alert(
+              `✅ Balance registrado: ${userWalletBalance.toFixed(6)} SOL\n\n` +
+              'La app usará este balance para validar compras.\n\n' +
+              'IMPORTANTE:\n' +
+              'Phantom validará el balance real al pagar.\n' +
+              'Si ingresaste un valor incorrecto, la transacción fallará.'
+            );
+            
+            balanceFetched = true;
+          } else {
+            alert('❌ Valor inválido. Se usará balance 0.');
+            userWalletBalance = 0;
+          }
+        } else {
+          console.warn('⚠️ Usuario canceló ingreso manual');
+          userWalletBalance = 0;
+        }
+      } else {
+        console.warn('⚠️ Usuario omitió validación de balance');
+        userWalletBalance = 0;
+      }
     }
   }
 
@@ -2145,19 +2181,28 @@
       ownerNote.style.display = 'none';
     }
     
-    // Update wallet balance - INTENTO NO BLOQUEANTE
+    // Update wallet balance and validate BEFORE opening modal
     if (userPublicKey) {
-      // Intentar obtener balance pero NO bloquear si falla
-      updateWalletBalance().catch(() => {
-        console.warn('⚠️ No se pudo obtener balance, continuando...');
-      });
+      // ESPERAR a que se obtenga el balance
+      await updateWalletBalance();
       
-      // NO ESPERAR - Si falla, Phantom validará al pagar
-      // Mostrar advertencia si balance es 0
-      if (userWalletBalance === 0) {
-        console.warn('⚠️ Balance no disponible - Phantom validará al pagar');
+      // Verificar si tiene suficiente balance
+      const estimatedFee = 0.000005;
+      const totalNeeded = parseFloat(totalPrice) + estimatedFee;
+      
+      if (userWalletBalance < totalNeeded) {
+        const shortage = totalNeeded - userWalletBalance;
+        alert(
+          `❌ Saldo insuficiente\n\n` +
+          `Necesitas: ${totalNeeded.toFixed(6)} SOL\n` +
+          `Tienes: ${userWalletBalance.toFixed(6)} SOL\n` +
+          `Faltan: ${shortage.toFixed(6)} SOL\n\n` +
+          `Por favor, añade más SOL a tu wallet antes de continuar.`
+        );
+        return; // NO abrir el modal
       }
       
+      console.log(`✅ Balance suficiente: ${userWalletBalance.toFixed(6)} SOL >= ${totalNeeded.toFixed(6)} SOL`);
       updateBalanceIndicator(parseFloat(totalPrice));
     }
     
