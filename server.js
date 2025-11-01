@@ -258,18 +258,43 @@ if (fs.existsSync(publicDir)) {
 // ==========================================
 app.get('/', (req, res) => {
   // Try public/index.html first
-  const publicIndex = path.join(__dirname, 'public', 'index.html');
-  if (fs.existsSync(publicIndex)) {
-    return res.sendFile(publicIndex);
+  const indexPath = path.join(publicDir, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(404).json({ ok: false, error: 'Index not found' });
   }
-  
-  // Fallback to root index.html
-  const rootIndex = path.join(__dirname, 'index.html');
-  if (fs.existsSync(rootIndex)) {
-    return res.sendFile(rootIndex);
+});
+
+// Whitepaper route
+app.get('/whitepaper.html', (req, res) => {
+  const whitepaperPath = path.join(publicDir, 'whitepaper.html');
+  if (fs.existsSync(whitepaperPath)) {
+    res.sendFile(whitepaperPath);
+  } else {
+    res.status(404).json({ ok: false, error: 'Whitepaper not found. Please ensure whitepaper.html is in the public/ directory' });
   }
-  
-  res.status(404).send('index.html not found');
+});
+
+// Also support /whitepaper without .html
+app.get('/whitepaper', (req, res) => {
+  const whitepaperPath = path.join(publicDir, 'whitepaper.html');
+  if (fs.existsSync(whitepaperPath)) {
+    res.sendFile(whitepaperPath);
+  } else {
+    res.status(404).json({ ok: false, error: 'Whitepaper not found. Please ensure whitepaper.html is in the public/ directory' });
+  }
+});
+
+// Serve whitepaper markdown
+app.get('/whitepaper-smd.md', (req, res) => {
+  const mdPath = path.join(publicDir, 'whitepaper-smd.md');
+  if (fs.existsSync(mdPath)) {
+    res.setHeader('Content-Type', 'text/markdown');
+    res.sendFile(mdPath);
+  } else {
+    res.status(404).json({ ok: false, error: 'Whitepaper markdown not found' });
+  }
 });
 
 // ==========================================
