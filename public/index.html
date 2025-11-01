@@ -1886,38 +1886,39 @@
     
     const estimatedFee = 0.000005; // 5000 lamports
     const totalNeeded = totalCost + estimatedFee;
-    const remaining = userWalletBalance - totalNeeded;
     
-    // Update values
-    userBalanceSpan.textContent = userWalletBalance.toFixed(6) + ' SOL';
-    totalCostSpan.textContent = totalCost.toFixed(6) + ' SOL';
-    estimatedFeeSpan.textContent = estimatedFee.toFixed(6) + ' SOL';
-    remainingBalanceSpan.textContent = remaining.toFixed(6) + ' SOL';
+    // SIEMPRE mostrar el costo, pero NO validar balance
+    // Phantom validará al momento de pagar
     
-    // Update colors and states
-    if (remaining >= 0) {
-      // Sufficient balance
-      balanceIndicator.classList.remove('insufficient');
-      balanceIndicator.classList.add('sufficient');
-      remainingBalanceSpan.classList.remove('negative');
-      remainingBalanceSpan.classList.add('positive');
-      insufficientWarning.style.display = 'none';
-      payBtn.disabled = false;
-      payBtn.style.opacity = '1';
-      payBtn.style.cursor = 'pointer';
+    // Update values - mostrar "No disponible" si no se pudo obtener
+    if (userWalletBalance === 0) {
+      userBalanceSpan.textContent = 'Verificar en Phantom';
+      remainingBalanceSpan.textContent = 'Phantom validará';
     } else {
-      // Insufficient balance
-      balanceIndicator.classList.remove('sufficient');
-      balanceIndicator.classList.add('insufficient');
-      remainingBalanceSpan.classList.remove('positive');
-      remainingBalanceSpan.classList.add('negative');
-      insufficientWarning.style.display = 'flex';
-      payBtn.disabled = true;
-      payBtn.style.opacity = '0.5';
-      payBtn.style.cursor = 'not-allowed';
+      const remaining = userWalletBalance - totalNeeded;
+      userBalanceSpan.textContent = userWalletBalance.toFixed(6) + ' SOL';
+      remainingBalanceSpan.textContent = remaining.toFixed(6) + ' SOL';
     }
     
+    totalCostSpan.textContent = totalCost.toFixed(6) + ' SOL';
+    estimatedFeeSpan.textContent = estimatedFee.toFixed(6) + ' SOL';
+    
+    // SIEMPRE permitir pagar - Phantom validará
+    balanceIndicator.classList.remove('insufficient');
+    balanceIndicator.classList.add('sufficient');
+    remainingBalanceSpan.classList.remove('negative');
+    remainingBalanceSpan.classList.add('positive');
+    insufficientWarning.style.display = 'none';
+    payBtn.disabled = false;
+    payBtn.style.opacity = '1';
+    payBtn.style.cursor = 'pointer';
+    
     balanceIndicator.classList.add('visible');
+    
+    // Mostrar advertencia si no se pudo obtener balance
+    if (userWalletBalance === 0) {
+      console.warn('⚠️ No se pudo obtener balance - Phantom validará al pagar');
+    }
   }
 
   connectBtn.onclick = connectWallet;
