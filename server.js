@@ -1047,10 +1047,12 @@ app.post('/api/delete-sale', async (req, res) => {
       });
     }
     
-    // Load sales
-    const salesPath = path.join(__dirname, 'sales.json');
+    // Load sales - USAR SALES_FILE que apunta al disco persistente
+    const salesPath = SALES_FILE;
     let sales = [];
     let isWrappedFormat = false; // Bandera para saber el formato
+    
+    console.log('📂 Loading sales from:', salesPath);
     
     if (fs.existsSync(salesPath)) {
       try {
