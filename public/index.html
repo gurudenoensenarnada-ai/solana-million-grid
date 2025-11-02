@@ -899,283 +899,6 @@
       font-size: 15px;
     }
     
-    /* ====================================
-       ROADMAP 2025 STYLES
-       ==================================== */
-    .roadmap-section {
-      padding: 100px 20px 80px;
-      max-width: 1200px;
-      margin: 0 auto;
-    }
-    
-    .roadmap-section h2 {
-      text-align: center;
-      font-size: 42px;
-      font-weight: 900;
-      margin-bottom: 20px;
-      background: linear-gradient(135deg, #fff 0%, var(--primary) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-    
-    .roadmap-subtitle {
-      text-align: center;
-      font-size: 18px;
-      color: var(--text-secondary);
-      max-width: 700px;
-      margin: 0 auto 50px;
-      line-height: 1.6;
-    }
-    
-    .roadmap-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-      gap: 30px;
-      margin-top: 40px;
-    }
-    
-    .phase-card {
-      background: rgba(26, 26, 46, 0.6);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 16px;
-      padding: 32px 28px;
-      transition: all 0.4s ease;
-      position: relative;
-      overflow: hidden;
-    }
-    
-    .phase-card::before {
-      content: '';
-      position: absolute;
-      top: -50%;
-      left: -50%;
-      width: 200%;
-      height: 200%;
-      background: radial-gradient(circle, rgba(20, 241, 149, 0.05) 0%, transparent 70%);
-      opacity: 0;
-      transition: opacity 0.4s ease;
-    }
-    
-    .phase-card:hover {
-      transform: translateY(-10px);
-      border-color: var(--primary);
-      box-shadow: 0 20px 50px rgba(20, 241, 149, 0.2);
-    }
-    
-    .phase-card:hover::before {
-      opacity: 1;
-    }
-    
-    .phase-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 20px;
-      position: relative;
-      z-index: 1;
-    }
-    
-    .phase-number {
-      font-size: 56px;
-      font-weight: 900;
-      background: linear-gradient(135deg, var(--primary) 0%, var(--gold) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      line-height: 1;
-      opacity: 0.3;
-    }
-    
-    .phase-badge {
-      padding: 6px 14px;
-      border-radius: 20px;
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-    
-    .badge-complete {
-      background: rgba(20, 241, 149, 0.2);
-      color: var(--primary);
-      border: 1px solid var(--primary);
-    }
-    
-    .badge-progress {
-      background: rgba(255, 215, 0, 0.2);
-      color: var(--gold);
-      border: 1px solid var(--gold);
-      animation: pulse-badge 2s ease-in-out infinite;
-    }
-    
-    @keyframes pulse-badge {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.6; }
-    }
-    
-    .badge-upcoming {
-      background: rgba(192, 192, 192, 0.15);
-      color: var(--silver);
-      border: 1px solid rgba(192, 192, 192, 0.4);
-    }
-    
-    .phase-title {
-      font-size: 24px;
-      font-weight: 700;
-      color: var(--primary);
-      margin-bottom: 8px;
-      position: relative;
-      z-index: 1;
-    }
-    
-    .phase-period {
-      font-size: 13px;
-      color: var(--text-secondary);
-      margin-bottom: 20px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      font-weight: 600;
-      position: relative;
-      z-index: 1;
-    }
-    
-    .phase-features {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-      position: relative;
-      z-index: 1;
-    }
-    
-    .phase-feature {
-      display: flex;
-      align-items: flex-start;
-      gap: 12px;
-      padding: 12px 0;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    }
-    
-    .phase-feature:last-child {
-      border-bottom: none;
-    }
-    
-    .feature-bullet {
-      min-width: 24px;
-      height: 24px;
-      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-      color: #000;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 900;
-      font-size: 12px;
-      flex-shrink: 0;
-      box-shadow: 0 2px 8px rgba(20, 241, 149, 0.3);
-    }
-    
-    .feature-text {
-      flex: 1;
-      font-size: 14px;
-      line-height: 1.5;
-      color: var(--text-secondary);
-    }
-    
-    /* Token Section (Special) */
-    .token-highlight {
-      background: linear-gradient(135deg, rgba(20, 241, 149, 0.1) 0%, rgba(255, 215, 0, 0.1) 100%);
-      border: 2px solid var(--primary);
-      border-radius: 20px;
-      padding: 40px 32px;
-      margin-top: 50px;
-      text-align: center;
-      position: relative;
-      overflow: hidden;
-    }
-    
-    .token-highlight::before {
-      content: '';
-      position: absolute;
-      top: -50%;
-      left: -50%;
-      width: 200%;
-      height: 200%;
-      background: linear-gradient(45deg, transparent, rgba(20, 241, 149, 0.05), transparent);
-      animation: rotate-slow 8s linear infinite;
-    }
-    
-    @keyframes rotate-slow {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-    
-    .token-highlight-content {
-      position: relative;
-      z-index: 1;
-    }
-    
-    .token-icon-large {
-      font-size: 64px;
-      margin-bottom: 20px;
-      animation: float 3s ease-in-out infinite;
-    }
-    
-    .token-title {
-      font-size: 36px;
-      font-weight: 900;
-      background: linear-gradient(135deg, var(--primary) 0%, var(--gold) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      margin-bottom: 15px;
-    }
-    
-    .token-subtitle {
-      font-size: 16px;
-      color: var(--text-secondary);
-      margin-bottom: 30px;
-    }
-    
-    .token-features-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 20px;
-      margin-top: 30px;
-    }
-    
-    .token-feature {
-      background: rgba(26, 26, 46, 0.6);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 12px;
-      padding: 20px;
-      transition: all 0.3s;
-    }
-    
-    .token-feature:hover {
-      transform: translateY(-5px);
-      border-color: var(--primary);
-      box-shadow: 0 10px 25px rgba(20, 241, 149, 0.2);
-    }
-    
-    .token-feature-icon {
-      font-size: 32px;
-      margin-bottom: 10px;
-    }
-    
-    .token-feature-title {
-      font-size: 15px;
-      font-weight: 700;
-      color: var(--primary);
-      margin-bottom: 6px;
-    }
-    
-    .token-feature-desc {
-      font-size: 13px;
-      color: var(--text-secondary);
-      line-height: 1.4;
-    }
-    
     /* Responsive */
     @media (max-width: 768px) {
       header {
@@ -1238,26 +961,6 @@
       
       .features h2 {
         font-size: 32px;
-      }
-      
-      .roadmap-section {
-        padding: 60px 20px 40px;
-      }
-      
-      .roadmap-section h2 {
-        font-size: 32px;
-      }
-      
-      .roadmap-grid {
-        grid-template-columns: 1fr;
-      }
-      
-      .token-title {
-        font-size: 28px;
-      }
-      
-      .token-features-grid {
-        grid-template-columns: 1fr;
       }
       
       .footer-content {
@@ -1567,237 +1270,6 @@
         </div>
       </div>
     </section>
-
-    <!-- ================================
-         ROADMAP 2025 SECTION
-         ================================ -->
-    <section class="roadmap-section" id="roadmap">
-      <h2>🗺️ Roadmap 2025</h2>
-      <p class="roadmap-subtitle">
-        From MVP to global ecosystem: Our vision for the world's most valuable blockchain advertising platform
-      </p>
-
-      <div class="roadmap-grid">
-        
-        <!-- PHASE 2: UX Enhancements -->
-        <div class="phase-card">
-          <div class="phase-header">
-            <div class="phase-number">02</div>
-            <span class="phase-badge badge-progress">In Progress</span>
-          </div>
-          <h3 class="phase-title">UX Enhancements</h3>
-          <p class="phase-period">Q4 2024 - Q1 2025</p>
-          <ul class="phase-features">
-            <li class="phase-feature">
-              <div class="feature-bullet">🔍</div>
-              <div class="feature-text">Search & filters system with zone filtering</div>
-            </li>
-            <li class="phase-feature">
-              <div class="feature-bullet">📤</div>
-              <div class="feature-text">Social share buttons (Twitter, Telegram, Discord)</div>
-            </li>
-            <li class="phase-feature">
-              <div class="feature-bullet">🏆</div>
-              <div class="feature-text">Leaderboards (top spenders, most viewed)</div>
-            </li>
-            <li class="phase-feature">
-              <div class="feature-bullet">🎁</div>
-              <div class="feature-text">Referral dashboard with automatic commissions</div>
-            </li>
-          </ul>
-        </div>
-
-        <!-- PHASE 3: Gamification -->
-        <div class="phase-card">
-          <div class="phase-header">
-            <div class="phase-number">03</div>
-            <span class="phase-badge badge-upcoming">Upcoming</span>
-          </div>
-          <h3 class="phase-title">Gamification</h3>
-          <p class="phase-period">Q1 2025</p>
-          <ul class="phase-features">
-            <li class="phase-feature">
-              <div class="feature-bullet">🏅</div>
-              <div class="feature-text">Achievement system with NFT badges</div>
-            </li>
-            <li class="phase-feature">
-              <div class="feature-bullet">🗺️</div>
-              <div class="feature-text">Heatmap visualization of popular zones</div>
-            </li>
-            <li class="phase-feature">
-              <div class="feature-bullet">✅</div>
-              <div class="feature-text">Project verification (blue check badges)</div>
-            </li>
-            <li class="phase-feature">
-              <div class="feature-bullet">📊</div>
-              <div class="feature-text">Enhanced analytics dashboard</div>
-            </li>
-          </ul>
-        </div>
-
-        <!-- PHASE 4: Token Launch -->
-        <div class="phase-card">
-          <div class="phase-header">
-            <div class="phase-number">04</div>
-            <span class="phase-badge badge-upcoming">Upcoming</span>
-          </div>
-          <h3 class="phase-title">$SMD Token Launch</h3>
-          <p class="phase-period">Q1 2025</p>
-          <ul class="phase-features">
-            <li class="phase-feature">
-              <div class="feature-bullet">💎</div>
-              <div class="feature-text">SPL token creation with liquidity pools</div>
-            </li>
-            <li class="phase-feature">
-              <div class="feature-bullet">💰</div>
-              <div class="feature-text">Pay with $SMD (20% discount)</div>
-            </li>
-            <li class="phase-feature">
-              <div class="feature-bullet">🔒</div>
-              <div class="feature-text">Staking dashboard (15-25% APY)</div>
-            </li>
-            <li class="phase-feature">
-              <div class="feature-bullet">🗳️</div>
-              <div class="feature-text">Governance voting system</div>
-            </li>
-          </ul>
-        </div>
-
-        <!-- PHASE 5: Advanced Features -->
-        <div class="phase-card">
-          <div class="phase-header">
-            <div class="phase-number">05</div>
-            <span class="phase-badge badge-upcoming">Upcoming</span>
-          </div>
-          <h3 class="phase-title">Advanced Features</h3>
-          <p class="phase-period">Q2 2025</p>
-          <ul class="phase-features">
-            <li class="phase-feature">
-              <div class="feature-bullet">🖼️</div>
-              <div class="feature-text">NFT marketplace for pixel reselling</div>
-            </li>
-            <li class="phase-feature">
-              <div class="feature-bullet">🤖</div>
-              <div class="feature-text">AI logo generator (DALL-E integration)</div>
-            </li>
-            <li class="phase-feature">
-              <div class="feature-bullet">💬</div>
-              <div class="feature-text">24/7 AI chatbot support</div>
-            </li>
-            <li class="phase-feature">
-              <div class="feature-bullet">✨</div>
-              <div class="feature-text">Premium features (animated logos, glow effects)</div>
-            </li>
-          </ul>
-        </div>
-
-        <!-- PHASE 6: Mobile & Global -->
-        <div class="phase-card">
-          <div class="phase-header">
-            <div class="phase-number">06</div>
-            <span class="phase-badge badge-upcoming">Upcoming</span>
-          </div>
-          <h3 class="phase-title">Mobile & Global</h3>
-          <p class="phase-period">Q2-Q3 2025</p>
-          <ul class="phase-features">
-            <li class="phase-feature">
-              <div class="feature-bullet">📱</div>
-              <div class="feature-text">iOS & Android native apps</div>
-            </li>
-            <li class="phase-feature">
-              <div class="feature-bullet">💳</div>
-              <div class="feature-text">Fiat payments (credit cards, Apple/Google Pay)</div>
-            </li>
-            <li class="phase-feature">
-              <div class="feature-bullet">🌍</div>
-              <div class="feature-text">Multi-language support (10+ languages)</div>
-            </li>
-            <li class="phase-feature">
-              <div class="feature-bullet">🔗</div>
-              <div class="feature-text">Cross-chain bridge (ETH, BSC, Polygon)</div>
-            </li>
-          </ul>
-        </div>
-
-        <!-- PHASE 7: Ecosystem -->
-        <div class="phase-card">
-          <div class="phase-header">
-            <div class="phase-number">07</div>
-            <span class="phase-badge badge-upcoming">Upcoming</span>
-          </div>
-          <h3 class="phase-title">Ecosystem Expansion</h3>
-          <p class="phase-period">Q3-Q4 2025</p>
-          <ul class="phase-features">
-            <li class="phase-feature">
-              <div class="feature-bullet">🎰</div>
-              <div class="feature-text">Weekly pixel lottery with prize pool</div>
-            </li>
-            <li class="phase-feature">
-              <div class="feature-bullet">👤</div>
-              <div class="feature-text">User profiles & portfolio showcase</div>
-            </li>
-            <li class="phase-feature">
-              <div class="feature-bullet">🔌</div>
-              <div class="feature-text">Public API for developers</div>
-            </li>
-            <li class="phase-feature">
-              <div class="feature-bullet">🌟</div>
-              <div class="feature-text">Metaverse integration (Decentraland, Sandbox)</div>
-            </li>
-          </ul>
-        </div>
-
-      </div>
-
-      <!-- TOKEN HIGHLIGHT -->
-      <div class="token-highlight">
-        <div class="token-highlight-content">
-          <div class="token-icon-large">💎</div>
-          <h3 class="token-title">$SMD TOKEN</h3>
-          <p class="token-subtitle">The Native Utility & Governance Token</p>
-          
-          <div class="token-features-grid">
-            <div class="token-feature">
-              <div class="token-feature-icon">💰</div>
-              <div class="token-feature-title">Payment Discounts</div>
-              <div class="token-feature-desc">20% off with $SMD payments</div>
-            </div>
-            <div class="token-feature">
-              <div class="token-feature-icon">🔒</div>
-              <div class="token-feature-title">Staking Rewards</div>
-              <div class="token-feature-desc">15-25% APY based on lock period</div>
-            </div>
-            <div class="token-feature">
-              <div class="token-feature-icon">🗳️</div>
-              <div class="token-feature-title">Governance</div>
-              <div class="token-feature-desc">Vote on platform decisions</div>
-            </div>
-            <div class="token-feature">
-              <div class="token-feature-icon">🎁</div>
-              <div class="token-feature-title">Referral Bonuses</div>
-              <div class="token-feature-desc">Earn $SMD for referrals</div>
-            </div>
-            <div class="token-feature">
-              <div class="token-feature-icon">⭐</div>
-              <div class="token-feature-title">Priority Access</div>
-              <div class="token-feature-desc">Early access to new features</div>
-            </div>
-            <div class="token-feature">
-              <div class="token-feature-icon">📊</div>
-              <div class="token-feature-title">Revenue Sharing</div>
-              <div class="token-feature-desc">Share in platform profits</div>
-            </div>
-          </div>
-
-          <p style="color: var(--text-secondary); font-size: 14px; margin-top: 30px; max-width: 700px; margin-left: auto; margin-right: auto;">
-            💡 <strong style="color: var(--gold);">10M $SMD Total Supply</strong> | 30% Public Sale | 20% Liquidity | 20% Staking | 15% Team (3yr vest) | 10% Marketing | 5% Treasury
-          </p>
-        </div>
-      </div>
-
-    </section>
-    <!-- ============ END ROADMAP ============ -->
-
   </div>
 
   <!-- Footer -->
@@ -1825,7 +1297,6 @@
         <ul class="footer-links">
           <li><a href="#gridWrapper" onclick="document.getElementById('gridWrapper').scrollIntoView({behavior: 'smooth'}); return false;">🎨 Buy Pixels</a></li>
           <li><a href="#features">✨ Features</a></li>
-          <li><a href="#roadmap">🗺️ Roadmap</a></li>
           <li><a href="#stats" onclick="document.getElementById('stats').scrollIntoView({behavior: 'smooth'}); return false;">📊 Stats</a></li>
           <li><a href="https://solscan.io" target="_blank" rel="noopener noreferrer">🔍 View on Solscan</a></li>
         </ul>
@@ -1927,7 +1398,6 @@
   
   <!-- Main Script -->
   <script>
-  // [EL JAVASCRIPT COMPLETO SE MANTIENE IGUAL - NO LO COPIO AQUÍ POR ESPACIO]
   // Configuration
   const CANVAS_SIZE = 1000;
   const BLOCK_SIZE = 10;
@@ -1939,8 +1409,1358 @@
   const OWNER_WALLET = 'B7nB9QX1KC4QXp5GMxR8xzh3yzoqp6NjxSwfNBXtgPc1';
   const API_BASE = window.location.origin;
   
-  // ... (TODO EL JAVASCRIPT EXISTENTE) ...
-  // NOTA: Por espacio, no copié todo el JavaScript, pero debe mantenerse exactamente igual
+  // 🔥 CONFIGURACIÓN DE RPC - HELIUS (CONFIGURADO) ✅
+  const CUSTOM_RPC = 'https://mainnet.helius-rpc.com/?api-key=c4007b87-8776-4649-9bbf-4ba5db3d9208';
+  
+  // 💰 RESERVA MÍNIMA: Siempre dejará al menos 0.001 SOL en tu wallet
+  const MINIMUM_WALLET_RESERVE = 0.001;
+  
+  const GOLD_END = 24;
+  const SILVER_START = 25;
+  const SILVER_END = 59;
+  const BRONZE_START = 60;
+  
+  const GOLD_TOTAL = 25 * 100;
+  const SILVER_TOTAL = 35 * 100;
+  const BRONZE_TOTAL = 40 * 100;
+
+  // DOM Elements
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const gridContainer = document.getElementById('gridContainer');
+  const goldSoldSpan = document.getElementById('goldSold');
+  const silverSoldSpan = document.getElementById('silverSold');
+  const bronzeSoldSpan = document.getElementById('bronzeSold');
+  const totalSalesSpan = document.getElementById('totalSales');
+  const selectionAmountSpan = document.getElementById('selectionAmount');
+  const selectionOverlay = document.getElementById('selectionOverlay');
+  const selectionInfo = document.getElementById('selectionInfo');
+  const tooltip = document.getElementById('tooltip');
+  const connectBtn = document.getElementById('connectWallet');
+  const walletAddrSpan = document.getElementById('walletAddr');
+  const ownerBadge = document.getElementById('ownerBadge');
+  const loadingEl = document.getElementById('loading');
+  const confirmBtn = document.getElementById('confirmBtn');
+  const cancelBtn = document.getElementById('cancelBtn');
+  const adminModeBtn = document.getElementById('adminModeBtn');
+  const adminModeBanner = document.getElementById('adminModeBanner');
+  const adminModeText = document.getElementById('adminModeText');
+  const balanceIndicator = document.getElementById('balanceIndicator');
+  const userBalanceSpan = document.getElementById('userBalance');
+  const totalCostSpan = document.getElementById('totalCost');
+  const estimatedFeeSpan = document.getElementById('estimatedFee');
+  const remainingBalanceSpan = document.getElementById('remainingBalance');
+  const insufficientWarning = document.getElementById('insufficientWarning');
+  const payBtn = document.getElementById('payBtn');
+
+  // State
+  let blockData = new Array(BLOCKS_PER_SIDE * BLOCKS_PER_SIDE).fill(null);
+  let soldPixels = 0;
+  let totalSales = 0;
+  let goldSold = 0;
+  let silverSold = 0;
+  let bronzeSold = 0;
+  let isDragging = false;
+  let startX, startY, endX, endY;
+  let selection = null;
+  let userPublicKey = null;
+  let MERCHANT_WALLET = null;
+  let isOwner = false;
+  let adminMode = false;
+  let salesData = []; // Store sales data for admin mode
+  let userWalletBalance = 0; // User's current SOL balance
+  let lastBalanceCheck = 0; // Timestamp del último check de balance
+  let solanaConnection = null; // Solana connection instance
+
+  // Load server configuration
+  async function loadConfig() {
+    try {
+      const res = await fetch(`${API_BASE}/api/config`);
+      const config = await res.json();
+      if (config.ok) {
+        MERCHANT_WALLET = config.merchantWallet;
+        console.log('✅ Configuration loaded:', config.cluster);
+      }
+    } catch (err) {
+      console.error('Error loading configuration:', err);
+    }
+  }
+
+  // Check if wallet is owner
+  function checkIfOwner(walletAddress) {
+    return walletAddress === OWNER_WALLET;
+  }
+
+  // Get price for block based on zone and owner status
+  function getPriceForBlock(zone) {
+    if (isOwner) return PRICE_OWNER;
+    if (zone === 'gold') return PRICE_GOLD;
+    if (zone === 'silver') return PRICE_SILVER;
+    if (zone === 'bronze') return PRICE_BRONZE;
+    return PRICE_BRONZE;
+  }
+
+  // Draw grid zones
+  function drawGrid() {
+    // Gold zone
+    ctx.fillStyle = '#FFD700';
+    ctx.fillRect(0, 0, CANVAS_SIZE, 25 * BLOCK_SIZE);
+    
+    // Silver zone
+    ctx.fillStyle = '#C0C0C0';
+    ctx.fillRect(0, 25 * BLOCK_SIZE, CANVAS_SIZE, 35 * BLOCK_SIZE);
+    
+    // Bronze zone
+    ctx.fillStyle = '#CD7F32';
+    ctx.fillRect(0, 60 * BLOCK_SIZE, CANVAS_SIZE, 40 * BLOCK_SIZE);
+    
+    // Grid lines
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    
+    for (let x = 0; x <= CANVAS_SIZE; x += BLOCK_SIZE) {
+      ctx.beginPath();
+      ctx.moveTo(x + 0.5, 0);
+      ctx.lineTo(x + 0.5, CANVAS_SIZE);
+      ctx.stroke();
+    }
+    
+    for (let y = 0; y <= CANVAS_SIZE; y += BLOCK_SIZE) {
+      ctx.beginPath();
+      ctx.moveTo(0, y + 0.5);
+      ctx.lineTo(CANVAS_SIZE, y + 0.5);
+      ctx.stroke();
+    }
+  }
+
+  function getZone(blockY) {
+    if (blockY <= GOLD_END) return 'gold';
+    if (blockY >= SILVER_START && blockY <= SILVER_END) return 'silver';
+    if (blockY >= BRONZE_START) return 'bronze';
+    return null;
+  }
+  
+  function getZoneName(zone) {
+    if (isOwner) return '⭐ OWNER (0.0001 SOL/block)';
+    if (zone === 'gold') return 'GOLD (1 SOL/block)';
+    if (zone === 'silver') return 'SILVER (0.5 SOL/block)';
+    if (zone === 'bronze') return 'BRONZE (0.1 SOL/block)';
+    return '';
+  }
+
+  function blockIndex(bx, by) {
+    return by * BLOCKS_PER_SIDE + bx;
+  }
+
+  function isBlockSold(bx, by) {
+    if (bx < 0 || by < 0 || bx >= BLOCKS_PER_SIDE || by >= BLOCKS_PER_SIDE) return false;
+    return blockData[blockIndex(bx, by)] !== null;
+  }
+
+  function getMousePosInCanvas(e) {
+    const rect = canvas.getBoundingClientRect();
+    const rawX = Math.floor((e.clientX - rect.left) * (CANVAS_SIZE / rect.width));
+    const rawY = Math.floor((e.clientY - rect.top) * (CANVAS_SIZE / rect.height));
+    return { rawX, rawY, rect };
+  }
+
+  // Load grid from server
+  async function loadGridFromServer() {
+    console.log('🔄 Loading grid...');
+    
+    try {
+      drawGrid();
+      console.log('✅ Base grid drawn');
+      
+      const res = await fetch(`${API_BASE}/api/sales`);
+      console.log('📡 Response from /api/sales:', res.status);
+      
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      
+      const json = await res.json();
+      console.log('📊 Data received:', json);
+      
+      if (!json || !json.sales) {
+        console.warn('⚠️ No sales in response');
+        return;
+      }
+      
+      const sales = json.sales;
+      totalSales = sales.length;
+      totalSalesSpan.textContent = totalSales;
+      console.log(`✅ ${sales.length} sales found`);
+      
+      // Store sales data for admin mode
+      salesData = sales;
+      
+      blockData = new Array(BLOCKS_PER_SIDE * BLOCKS_PER_SIDE).fill(null);
+      soldPixels = 0;
+      goldSold = 0;
+      silverSold = 0;
+      bronzeSold = 0;
+      
+      const projects = {};
+      sales.forEach(sale => {
+        const meta = sale.metadata;
+        if (!meta || !meta.selection) return;
+        
+        const key = `${meta.name}_${meta.logo}`;
+        if (!projects[key]) {
+          projects[key] = {
+            name: meta.name,
+            url: meta.url,
+            logo: meta.logo,
+            blocks: []
+          };
+        }
+        
+        const sel = meta.selection;
+        for (let by = sel.minBlockY; by < sel.minBlockY + sel.blocksY; by++) {
+          for (let bx = sel.minBlockX; bx < sel.minBlockX + sel.blocksX; bx++) {
+            projects[key].blocks.push({ x: bx, y: by });
+          }
+        }
+      });
+      
+      const projectList = Object.values(projects);
+      console.log(`🎨 Loading ${projectList.length} projects...`);
+      
+      for (const project of projectList) {
+        await loadProjectOnGrid(project);
+      }
+      
+      goldSold = 0;
+      silverSold = 0;
+      bronzeSold = 0;
+      
+      for (let by = 0; by < BLOCKS_PER_SIDE; by++) {
+        for (let bx = 0; bx < BLOCKS_PER_SIDE; bx++) {
+          if (blockData[blockIndex(bx, by)] !== null) {
+            const zone = getZone(by);
+            if (zone === 'gold') goldSold++;
+            else if (zone === 'silver') silverSold++;
+            else if (zone === 'bronze') bronzeSold++;
+          }
+        }
+      }
+      
+      goldSoldSpan.textContent = `${goldSold.toLocaleString()}/${GOLD_TOTAL.toLocaleString()}`;
+      silverSoldSpan.textContent = `${silverSold.toLocaleString()}/${SILVER_TOTAL.toLocaleString()}`;
+      bronzeSoldSpan.textContent = `${bronzeSold.toLocaleString()}/${BRONZE_TOTAL.toLocaleString()}`;
+      
+      soldPixels = Object.values(blockData).filter(b => b !== null).length * BLOCK_SIZE * BLOCK_SIZE;
+      
+      console.log(`✅ Grid loaded completely`);
+      
+    } catch (err) {
+      console.error('❌ Error loading grid:', err);
+      alert('Error loading the grid. Please reload the page.');
+    } finally {
+      console.log('🎯 Hiding loading...');
+      loadingEl.style.display = 'none';
+    }
+  }
+
+  function loadProjectOnGrid(project) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      
+      img.onload = function() {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        project.blocks.forEach(b => {
+          if (b.x < minX) minX = b.x;
+          if (b.y < minY) minY = b.y;
+          if (b.x > maxX) maxX = b.x;
+          if (b.y > maxY) maxY = b.y;
+        });
+        
+        const drawX = minX * BLOCK_SIZE;
+        const drawY = minY * BLOCK_SIZE;
+        const drawWidth = (maxX - minX + 1) * BLOCK_SIZE;
+        const drawHeight = (maxY - minY + 1) * BLOCK_SIZE;
+        
+        ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+        
+        project.blocks.forEach(b => {
+          const idx = blockIndex(b.x, b.y);
+          blockData[idx] = {
+            name: project.name,
+            url: project.url,
+            logo: project.logo
+          };
+        });
+        
+        resolve();
+      };
+      
+      img.onerror = function() {
+        console.warn('⚠️ Could not load image:', project.logo);
+        project.blocks.forEach(b => {
+          const idx = blockIndex(b.x, b.y);
+          blockData[idx] = {
+            name: project.name,
+            url: project.url,
+            logo: project.logo
+          };
+        });
+        resolve();
+      };
+      
+      img.src = project.logo;
+    });
+  }
+
+  // Wallet connection
+  async function connectWallet() {
+    if (!window.solana) {
+      alert('Please install Phantom Wallet: https://phantom.app');
+      return;
+    }
+    
+    try {
+      connectBtn.disabled = true;
+      connectBtn.textContent = 'Connecting...';
+      
+      const resp = await window.solana.connect({ onlyIfTrusted: false });
+      userPublicKey = resp.publicKey;
+      const walletString = userPublicKey.toString();
+      
+      isOwner = checkIfOwner(walletString);
+      
+      walletAddrSpan.textContent = walletString.slice(0, 4) + '...' + walletString.slice(-4);
+      walletAddrSpan.style.display = 'inline-block';
+      connectBtn.textContent = 'Connected ✓';
+      connectBtn.style.background = 'linear-gradient(135deg, #14F195 0%, #0FBF78 100%)';
+      
+      if (isOwner) {
+        ownerBadge.style.display = 'inline-flex';
+        adminModeBtn.style.display = 'inline-block';
+        console.log('⭐ OWNER WALLET DETECTED - Special price: 0.0001 SOL/block');
+      }
+      
+      // Initialize Solana connection with multi-RPC fallback
+      console.log('🔄 Inicializando conexión a Solana...');
+      
+      const rpcEndpoints = [];
+      
+      // Si hay RPC personalizado (Helius), usarlo PRIMERO
+      if (CUSTOM_RPC) {
+        rpcEndpoints.push(CUSTOM_RPC);
+        console.log('✅ Usando RPC personalizado (Helius)');
+      }
+      
+      // RPCs públicos como respaldo
+      rpcEndpoints.push(
+        'https://api.mainnet-beta.solana.com',
+        'https://solana-api.projectserum.com',
+        'https://rpc.ankr.com/solana',
+        solanaWeb3.clusterApiUrl('mainnet-beta')
+      );
+      
+      // Probar cada RPC hasta encontrar uno que funcione
+      let connectionEstablished = false;
+      
+      for (const rpcUrl of rpcEndpoints) {
+        try {
+          console.log(`🔄 Probando RPC: ${rpcUrl}`);
+          
+          const testConnection = new solanaWeb3.Connection(rpcUrl, {
+            commitment: 'confirmed',
+            confirmTransactionInitialTimeout: 60000
+          });
+          
+          // Test rápido con timeout
+          const testPromise = testConnection.getLatestBlockhash();
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout')), 5000)
+          );
+          
+          await Promise.race([testPromise, timeoutPromise]);
+          
+          // Si llegamos aquí, el RPC funciona
+          solanaConnection = testConnection;
+          console.log(`✅ RPC funcionando: ${rpcUrl}`);
+          connectionEstablished = true;
+          break;
+          
+        } catch (rpcError) {
+          console.warn(`⚠️ Error con RPC ${rpcUrl}:`, rpcError.message);
+          continue;
+        }
+      }
+      
+      if (!connectionEstablished) {
+        console.warn('⚠️ No se pudo conectar a ningún RPC, usando el último intento');
+        solanaConnection = new solanaWeb3.Connection(
+          solanaWeb3.clusterApiUrl('mainnet-beta'),
+          'confirmed'
+        );
+      }
+      
+      await updateWalletBalance();
+      
+      console.log('✅ Wallet connected:', walletString);
+      console.log('💰 Balance:', userWalletBalance.toFixed(4), 'SOL');
+      
+    } catch (err) {
+      console.error('Error connecting:', err);
+      alert('Error connecting wallet: ' + err.message);
+      connectBtn.disabled = false;
+      connectBtn.textContent = 'Connect Wallet';
+    }
+  }
+
+  // Update wallet balance - VERSIÓN OPTIMIZADA v2.2
+  async function updateWalletBalance(forceRefresh = false) {
+    if (!userPublicKey) {
+      console.warn('⚠️ No hay wallet conectada');
+      return;
+    }
+    
+    // CACHE: Si ya tenemos balance y no se fuerza refresh, usarlo
+    const now = Date.now();
+    const CACHE_TIME = 30000; // 30 segundos
+    
+    if (!forceRefresh && userWalletBalance > 0 && lastBalanceCheck && (now - lastBalanceCheck < CACHE_TIME)) {
+      console.log(`💰 Usando balance en caché: ${userWalletBalance.toFixed(6)} SOL`);
+      return;
+    }
+    
+    // Construir lista de RPCs priorizando custom RPC si está configurado
+    const rpcEndpoints = [];
+    
+    // Si el usuario configuró un RPC custom, usarlo PRIMERO
+    if (CUSTOM_RPC) {
+      rpcEndpoints.push(CUSTOM_RPC);
+      console.log('✅ Usando RPC personalizado');
+    }
+    
+    // RPCs públicos PREMIUM (sin API key, funcionan bien)
+    rpcEndpoints.push(
+      // RPCs más rápidos y confiables
+      'https://api.mainnet-beta.solana.com',
+      'https://solana.public-rpc.com',
+      'https://rpc.ankr.com/solana',
+      // RPCs alternativos
+      'https://solana-api.projectserum.com',
+      'https://api.metaplex.solana.com',
+      'https://solana-mainnet.rpc.extrnode.com',
+      // Respaldo oficial
+      solanaWeb3.clusterApiUrl('mainnet-beta')
+    );
+    
+    let balanceFetched = false;
+    
+    // Intentar con la conexión actual primero (timeout MÁS CORTO)
+    if (solanaConnection) {
+      try {
+        const balancePromise = solanaConnection.getBalance(userPublicKey);
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout')), 3000)
+        );
+        
+        const balance = await Promise.race([balancePromise, timeoutPromise]);
+        userWalletBalance = balance / solanaWeb3.LAMPORTS_PER_SOL;
+        lastBalanceCheck = Date.now();
+        
+        console.log('💰 Balance obtenido:', userWalletBalance.toFixed(6), 'SOL');
+        console.log('📍 Wallet:', userPublicKey.toString().slice(0, 8) + '...' + userPublicKey.toString().slice(-8));
+        
+        balanceFetched = true;
+        return;
+        
+      } catch (error) {
+        console.warn('⚠️ Error con conexión actual:', error.message);
+      }
+    }
+    
+    // Si falla, probar con otros RPCs (intentos en paralelo)
+    if (!balanceFetched) {
+      console.log('🔄 Probando múltiples RPCs...');
+      
+      for (const rpcUrl of rpcEndpoints) {
+        try {
+          const connection = new solanaWeb3.Connection(rpcUrl, {
+            commitment: 'confirmed'
+          });
+          
+          const balancePromise = connection.getBalance(userPublicKey);
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout')), 3000)
+          );
+          
+          const balance = await Promise.race([balancePromise, timeoutPromise]);
+          userWalletBalance = balance / solanaWeb3.LAMPORTS_PER_SOL;
+          lastBalanceCheck = Date.now();
+          
+          console.log(`✅ Balance obtenido con RPC alternativo: ${userWalletBalance.toFixed(6)} SOL`);
+          console.log('📍 Wallet:', userPublicKey.toString().slice(0, 8) + '...' + userPublicKey.toString().slice(-8));
+          
+          solanaConnection = connection;
+          balanceFetched = true;
+          break;
+          
+        } catch (error) {
+          console.warn(`⚠️ Error con ${rpcUrl.slice(0, 40)}...`, error.message);
+          continue;
+        }
+      }
+    }
+    
+    // Si ningún RPC funcionó
+    if (!balanceFetched) {
+      console.error('❌ No se pudo obtener el balance desde ningún RPC');
+      
+      // Mostrar opciones al usuario
+      const userChoice = confirm(
+        '⚠️ No se pudo obtener tu balance automáticamente\n\n' +
+        'Esto significa que tu red está bloqueando el acceso a Solana.\n' +
+        'Causas comunes:\n' +
+        '• ISP bloqueando blockchain\n' +
+        '• Firewall corporativo/escolar\n' +
+        '• Antivirus muy restrictivo\n\n' +
+        '¿Quieres ingresar tu balance manualmente?\n' +
+        '(Abre Phantom y mira cuánto SOL tienes)\n\n' +
+        'OK = Ingresar manualmente\n' +
+        'Cancelar = Omitir validación (Phantom validará después)'
+      );
+      
+      if (userChoice) {
+        // Usuario quiere ingresar manualmente
+        let attempts = 0;
+        while (attempts < 3) {
+          const manualBalance = prompt(
+            '💰 Ingresa tu balance de SOL\n\n' +
+            'Abre Phantom y mira cuánto SOL tienes.\n' +
+            'Escribe solo el número (sin "SOL").\n\n' +
+            'Ejemplos:\n' +
+            '• Si tienes 0.5 SOL → escribe: 0.5\n' +
+            '• Si tienes 1.25 SOL → escribe: 1.25\n' +
+            '• Si tienes 0 SOL → escribe: 0\n\n' +
+            'Tu balance:'
+          );
+          
+          if (manualBalance === null) {
+            // Usuario canceló
+            console.warn('⚠️ Usuario canceló ingreso manual');
+            break;
+          }
+          
+          const parsedBalance = parseFloat(manualBalance.replace(',', '.').trim());
+          
+          if (!isNaN(parsedBalance) && parsedBalance >= 0) {
+            userWalletBalance = parsedBalance;
+            lastBalanceCheck = Date.now();
+            console.log(`💰 Balance manual ingresado: ${userWalletBalance.toFixed(6)} SOL`);
+            
+            alert(
+              `✅ Balance registrado: ${userWalletBalance.toFixed(6)} SOL\n\n` +
+              'La app usará este balance para validar.\n\n' +
+              'IMPORTANTE:\n' +
+              'Phantom validará el balance real al pagar.\n' +
+              'Si ingresaste un valor incorrecto, la transacción fallará.'
+            );
+            
+            balanceFetched = true;
+            break;
+          } else {
+            attempts++;
+            if (attempts < 3) {
+              alert(`❌ Valor inválido. Intento ${attempts}/3\n\nPor favor ingresa solo números.\nEjemplo: 0.5`);
+            } else {
+              alert('❌ Demasiados intentos incorrectos.\n\nSe usará balance 0.\nPhantom validará al pagar.');
+              userWalletBalance = 0;
+            }
+          }
+        }
+      } else {
+        // Usuario omitió validación
+        console.warn('⚠️ Usuario omitió validación - Phantom validará');
+        userWalletBalance = 0;
+        
+        alert(
+          '⚠️ Validación omitida\n\n' +
+          'La app no pudo verificar tu balance.\n' +
+          'Phantom lo validará cuando intentes pagar.\n\n' +
+          'RECOMENDACIÓN:\n' +
+          '• Desactiva VPN y recarga la página\n' +
+          '• Desactiva firewall temporalmente\n' +
+          '• Prueba desde otra red (móvil 4G/5G)'
+        );
+      }
+    }
+  }
+
+  // Update balance indicator in modal
+  function updateBalanceIndicator(totalCost) {
+    if (!userPublicKey) {
+      balanceIndicator.classList.remove('visible');
+      return;
+    }
+    
+    const estimatedFee = 0.000005;
+    const totalNeeded = totalCost + estimatedFee;
+    const totalWithReserve = totalNeeded + MINIMUM_WALLET_RESERVE;
+    
+    // Update values - mostrar claramente lo que quedará después
+    if (userWalletBalance === 0) {
+      userBalanceSpan.textContent = 'Verificar en Phantom';
+      remainingBalanceSpan.textContent = 'Phantom validará';
+    } else {
+      const remaining = userWalletBalance - totalNeeded;
+      userBalanceSpan.textContent = userWalletBalance.toFixed(6) + ' SOL';
+      
+      // Mostrar lo que quedará con indicador de reserva
+      if (remaining >= MINIMUM_WALLET_RESERVE) {
+        remainingBalanceSpan.textContent = `${remaining.toFixed(6)} SOL ✅`;
+        remainingBalanceSpan.style.color = 'var(--success)';
+      } else if (remaining >= 0) {
+        remainingBalanceSpan.textContent = `${remaining.toFixed(6)} SOL ⚠️`;
+        remainingBalanceSpan.style.color = 'var(--warning)';
+      } else {
+        remainingBalanceSpan.textContent = `${remaining.toFixed(6)} SOL ❌`;
+        remainingBalanceSpan.style.color = 'var(--error)';
+      }
+    }
+    
+    totalCostSpan.textContent = totalCost.toFixed(6) + ' SOL';
+    estimatedFeeSpan.textContent = estimatedFee.toFixed(6) + ' SOL';
+    
+    // Validar si tiene suficiente (incluyendo reserva)
+    const hasSufficientBalance = userWalletBalance >= totalWithReserve;
+    
+    if (hasSufficientBalance || userWalletBalance === 0) {
+      balanceIndicator.classList.remove('insufficient');
+      balanceIndicator.classList.add('sufficient');
+      insufficientWarning.style.display = 'none';
+      payBtn.disabled = false;
+      payBtn.style.opacity = '1';
+      payBtn.style.cursor = 'pointer';
+    } else {
+      balanceIndicator.classList.remove('sufficient');
+      balanceIndicator.classList.add('insufficient');
+      insufficientWarning.style.display = 'flex';
+      payBtn.disabled = true;
+      payBtn.style.opacity = '0.5';
+      payBtn.style.cursor = 'not-allowed';
+    }
+    
+    balanceIndicator.classList.add('visible');
+    
+    // Log informativo
+    if (userWalletBalance > 0) {
+      const willRemain = userWalletBalance - totalNeeded;
+      console.log(`💰 Balance actual: ${userWalletBalance.toFixed(6)} SOL`);
+      console.log(`💸 Total a pagar: ${totalNeeded.toFixed(6)} SOL (incluye fee)`);
+      console.log(`🔒 Reserva mínima: ${MINIMUM_WALLET_RESERVE.toFixed(3)} SOL`);
+      console.log(`📊 Quedará después: ${willRemain.toFixed(6)} SOL ${willRemain >= MINIMUM_WALLET_RESERVE ? '✅' : '⚠️'}`);
+    }
+  }
+
+  connectBtn.onclick = connectWallet;
+
+  // Selection events
+  canvas.addEventListener('mousedown', (e) => {
+    const { rawX, rawY } = getMousePosInCanvas(e);
+    startX = Math.floor(rawX / BLOCK_SIZE) * BLOCK_SIZE;
+    startY = Math.floor(rawY / BLOCK_SIZE) * BLOCK_SIZE;
+    isDragging = true;
+    selection = null;
+    selectionInfo.innerHTML = 'Drag to select pixels...';
+    selectionAmountSpan.textContent = '-';
+    selectionOverlay.style.display = 'none';
+    confirmBtn.disabled = true;
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    handleMove(e);
+    handleHover(e);
+  });
+
+  canvas.addEventListener('mouseup', handleUp);
+  canvas.addEventListener('mouseleave', () => { isDragging = false; });
+
+  function handleMove(e) {
+    if (!isDragging) return;
+    
+    const { rawX, rawY } = getMousePosInCanvas(e);
+    endX = Math.floor(rawX / BLOCK_SIZE) * BLOCK_SIZE;
+    endY = Math.floor(rawY / BLOCK_SIZE) * BLOCK_SIZE;
+    
+    const minX = Math.min(startX, endX);
+    const maxX = Math.max(startX, endX);
+    const minY = Math.min(startY, endY);
+    const maxY = Math.max(startY, endY);
+    
+    const width = maxX - minX + BLOCK_SIZE;
+    const height = maxY - minY + BLOCK_SIZE;
+    const blocksX = width / BLOCK_SIZE;
+    const blocksY = height / BLOCK_SIZE;
+    const blocksTotal = blocksX * blocksY;
+    
+    const minBlockX = minX / BLOCK_SIZE;
+    const minBlockY = minY / BLOCK_SIZE;
+    const maxBlockX = maxX / BLOCK_SIZE;
+    const maxBlockY = maxY / BLOCK_SIZE;
+    
+    const startZone = getZone(minBlockY);
+    const endZone = getZone(maxBlockY);
+    
+    let soldInSelection = 0;
+    for (let by = minBlockY; by <= maxBlockY; by++) {
+      for (let bx = minBlockX; bx <= maxBlockX; bx++) {
+        if (isBlockSold(bx, by)) soldInSelection++;
+      }
+    }
+    
+    const freeBlocks = blocksTotal - soldInSelection;
+    const pricePerBlock = getPriceForBlock(startZone);
+    const totalPrice = (freeBlocks * pricePerBlock).toFixed(4);
+    const totalPriceNum = freeBlocks * pricePerBlock;
+    
+    // Check if user has sufficient balance INCLUDING RESERVE (if wallet connected)
+    let balanceWarning = '';
+    let hasInsufficientBalance = false;
+    
+    if (userPublicKey && userWalletBalance > 0) {
+      const estimatedFee = 0.000005;
+      const totalNeeded = totalPriceNum + estimatedFee;
+      const totalWithReserve = totalNeeded + MINIMUM_WALLET_RESERVE;
+      
+      if (userWalletBalance < totalWithReserve) {
+        hasInsufficientBalance = true;
+        const shortage = totalWithReserve - userWalletBalance;
+        const willRemain = userWalletBalance - totalNeeded;
+        
+        if (willRemain < 0) {
+          // No tiene ni para el precio
+          balanceWarning = ` | <span style="color:var(--error); font-weight:700;">❌ Saldo insuficiente (faltan ${shortage.toFixed(6)} SOL)</span>`;
+        } else {
+          // Tiene para el precio pero no para mantener la reserva
+          balanceWarning = ` | <span style="color:var(--warning); font-weight:700;">⚠️ Quedarían solo ${willRemain.toFixed(6)} SOL (reserva: ${MINIMUM_WALLET_RESERVE.toFixed(3)} SOL)</span>`;
+        }
+      }
+    } else if (userPublicKey && userWalletBalance === 0) {
+      hasInsufficientBalance = true;
+      balanceWarning = ` | <span style="color:var(--warning); font-weight:700;">⚠️ Balance no detectado</span>`;
+    }
+    
+    if (startZone !== endZone) {
+      selectionAmountSpan.textContent = '-';
+      selectionInfo.innerHTML = `❌ Invalid selection: Cannot mix different zones`;
+      selectionOverlay.classList.add('selection-invalid');
+    } else if (soldInSelection > 0) {
+      selectionAmountSpan.textContent = (blocksTotal * pricePerBlock).toFixed(4);
+      selectionInfo.innerHTML = `⚠️ Selection: ${blocksX}×${blocksY} blocks (${getZoneName(startZone)}) | <span style="color:var(--error)">Occupied: ${soldInSelection}</span> | Available: ${freeBlocks} | Price: ${totalPrice} SOL${balanceWarning}`;
+      selectionOverlay.classList.add('selection-invalid');
+    } else if (hasInsufficientBalance) {
+      // NUEVO: Bloquear si no tiene suficiente balance (incluyendo reserva)
+      selectionAmountSpan.textContent = (blocksTotal * pricePerBlock).toFixed(4);
+      selectionInfo.innerHTML = `❌ Selection: ${blocksX}×${blocksY} blocks (${getZoneName(startZone)}) | Price: ${(blocksTotal * pricePerBlock).toFixed(4)} SOL${balanceWarning}`;
+      selectionOverlay.classList.add('selection-invalid');
+    } else {
+      selectionAmountSpan.textContent = (blocksTotal * pricePerBlock).toFixed(4);
+      selectionInfo.innerHTML = `✓ Selection: ${blocksX}×${blocksY} blocks (${getZoneName(startZone)}) | Price: <strong style="color:var(--primary)">${(blocksTotal * pricePerBlock).toFixed(4)} SOL</strong>`;
+      selectionOverlay.classList.remove('selection-invalid');
+    }
+    
+    const scale = canvas.getBoundingClientRect().width / CANVAS_SIZE;
+    selectionOverlay.style.display = 'block';
+    selectionOverlay.style.left = (minX * scale) + 'px';
+    selectionOverlay.style.top = (minY * scale) + 'px';
+    selectionOverlay.style.width = (width * scale) + 'px';
+    selectionOverlay.style.height = (height * scale) + 'px';
+  }
+
+  function handleUp(e) {
+    if (!isDragging) return;
+    isDragging = false;
+    
+    if (endX === undefined || endY === undefined) {
+      selection = null;
+      return;
+    }
+    
+    const minX = Math.min(startX, endX);
+    const maxX = Math.max(startX, endX);
+    const minY = Math.min(startY, endY);
+    const maxY = Math.max(startY, endY);
+    
+    const minBlockX = minX / BLOCK_SIZE;
+    const minBlockY = minY / BLOCK_SIZE;
+    const maxBlockX = maxX / BLOCK_SIZE;
+    const maxBlockY = maxY / BLOCK_SIZE;
+    
+    const startZone = getZone(minBlockY);
+    const endZone = getZone(maxBlockY);
+    
+    if (startZone !== endZone) {
+      alert(`❌ You cannot select blocks from different zones.`);
+      selection = null;
+      selectionOverlay.style.display = 'none';
+      selectionInfo.innerHTML = 'Drag to select pixels...';
+      selectionAmountSpan.textContent = '-';
+      confirmBtn.disabled = true;
+      return;
+    }
+    
+    let soldInSelection = 0;
+    for (let by = minBlockY; by <= maxBlockY; by++) {
+      for (let bx = minBlockX; bx <= maxBlockX; bx++) {
+        if (isBlockSold(bx, by)) soldInSelection++;
+      }
+    }
+    
+    selection = {
+      minBlockX,
+      minBlockY,
+      maxBlockX,
+      maxBlockY,
+      blocksX: maxBlockX - minBlockX + 1,
+      blocksY: maxBlockY - minBlockY + 1,
+      soldInSelection,
+      zone: startZone
+    };
+    
+    // Check balance INCLUYENDO RESERVA before enabling confirm button
+    let canConfirm = soldInSelection === 0;
+    
+    if (canConfirm && userPublicKey) {
+      const blocksTotal = selection.blocksX * selection.blocksY;
+      const pricePerBlock = getPriceForBlock(startZone);
+      const totalPrice = blocksTotal * pricePerBlock;
+      const estimatedFee = 0.000005;
+      const totalNeeded = totalPrice + estimatedFee;
+      const totalWithReserve = totalNeeded + MINIMUM_WALLET_RESERVE;
+      
+      // Bloquear si no tiene suficiente (incluyendo reserva)
+      if (userWalletBalance < totalWithReserve) {
+        canConfirm = false;
+        
+        // Mostrar mensaje explicativo
+        const shortage = totalWithReserve - userWalletBalance;
+        const willRemain = userWalletBalance - totalNeeded;
+        
+        if (willRemain < 0) {
+          console.warn(`❌ Saldo insuficiente: Faltan ${shortage.toFixed(6)} SOL`);
+        } else {
+          console.warn(`⚠️ Reserva insuficiente: Quedarían ${willRemain.toFixed(6)} SOL (mínimo: ${MINIMUM_WALLET_RESERVE.toFixed(3)} SOL)`);
+        }
+      }
+    }
+    
+    confirmBtn.disabled = !canConfirm;
+  }
+
+  function handleHover(e) {
+    if (isDragging) {
+      tooltip.style.display = 'none';
+      return;
+    }
+    
+    const { rawX, rawY, rect } = getMousePosInCanvas(e);
+    const bx = Math.floor(rawX / BLOCK_SIZE);
+    const by = Math.floor(rawY / BLOCK_SIZE);
+    
+    if (bx < 0 || by < 0 || bx >= BLOCKS_PER_SIDE || by >= BLOCKS_PER_SIDE) {
+      tooltip.style.display = 'none';
+      return;
+    }
+    
+    const data = blockData[blockIndex(bx, by)];
+    if (data) {
+      tooltip.textContent = `🚀 ${data.name}`;
+      const scale = rect.width / CANVAS_SIZE;
+      tooltip.style.left = (bx * BLOCK_SIZE * scale + 10) + 'px';
+      tooltip.style.top = (by * BLOCK_SIZE * scale - 30) + 'px';
+      tooltip.style.display = 'block';
+    } else {
+      tooltip.style.display = 'none';
+    }
+  }
+
+  // Confirm button
+  confirmBtn.addEventListener('click', async () => {
+    if (!selection) {
+      alert('Select an area first');
+      return;
+    }
+    if (selection.soldInSelection > 0) {
+      alert(`${selection.soldInSelection} blocks are already occupied`);
+      return;
+    }
+    
+    // Verificar que la wallet esté conectada
+    if (!userPublicKey) {
+      alert('❌ Por favor, conecta tu wallet primero');
+      return;
+    }
+    
+    const blocksTotal = selection.blocksX * selection.blocksY;
+    const pricePerBlock = getPriceForBlock(selection.zone);
+    const totalPrice = (blocksTotal * pricePerBlock).toFixed(4);
+    
+    document.getElementById('totalPrice').textContent = totalPrice;
+    
+    const ownerNote = document.getElementById('ownerPriceNote');
+    if (isOwner) {
+      ownerNote.style.display = 'block';
+    } else {
+      ownerNote.style.display = 'none';
+    }
+    
+    // Update wallet balance and validate BEFORE opening modal
+    // NOTA: Esta es una validación de respaldo, ya que el botón se deshabilita en tiempo real
+    if (userPublicKey) {
+      // ESPERAR a que se obtenga el balance actualizado
+      await updateWalletBalance();
+      
+      // Validación de respaldo (el botón ya debería estar deshabilitado si no tiene suficiente)
+      const estimatedFee = 0.000005;
+      const totalNeeded = parseFloat(totalPrice) + estimatedFee;
+      const totalNeededWithReserve = totalNeeded + MINIMUM_WALLET_RESERVE;
+      
+      if (userWalletBalance < totalNeededWithReserve) {
+        // Esto NO debería suceder porque el botón está deshabilitado
+        console.error('⚠️ Error: Botón de confirm habilitado sin balance suficiente');
+        const shortage = totalNeededWithReserve - userWalletBalance;
+        alert(
+          `❌ Saldo insuficiente\n\n` +
+          `Total necesario: ${totalNeededWithReserve.toFixed(6)} SOL\n` +
+          `Tienes: ${userWalletBalance.toFixed(6)} SOL\n` +
+          `Te faltan: ${shortage.toFixed(6)} SOL\n\n` +
+          `(Incluye reserva de ${MINIMUM_WALLET_RESERVE.toFixed(3)} SOL)`
+        );
+        return; // NO abrir el modal
+      }
+      
+      const willRemainAfter = userWalletBalance - totalNeeded;
+      console.log(`✅ Balance suficiente: ${userWalletBalance.toFixed(6)} SOL`);
+      console.log(`💰 Después del pago quedarán: ${willRemainAfter.toFixed(6)} SOL (>= ${MINIMUM_WALLET_RESERVE.toFixed(3)} SOL reserva)`);
+      updateBalanceIndicator(parseFloat(totalPrice));
+    }
+    
+    document.getElementById('modal').style.display = 'block';
+  });
+
+  // Cancel button
+  cancelBtn.addEventListener('click', () => {
+    selection = null;
+    selectionOverlay.style.display = 'none';
+    selectionInfo.innerHTML = 'Drag to select pixels...';
+    selectionAmountSpan.textContent = '-';
+    confirmBtn.disabled = true;
+  });
+
+  document.getElementById('closeModal').addEventListener('click', () => {
+    document.getElementById('modal').style.display = 'none';
+    document.getElementById('paymentStatus').textContent = '';
+  });
+
+  // Payment status
+  function showStatus(message, type = 'info') {
+    const statusEl = document.getElementById('paymentStatus');
+    statusEl.textContent = message;
+    statusEl.className = type;
+  }
+
+  // Pay button
+  document.getElementById('payBtn').addEventListener('click', async () => {
+    const name = document.getElementById('projectName').value.trim();
+    const url = document.getElementById('projectURL').value.trim();
+    const logoFile = document.getElementById('projectLogo').files[0];
+    const payBtn = document.getElementById('payBtn');
+    
+    if (!selection) {
+      alert('No selection');
+      return;
+    }
+    if (selection.soldInSelection > 0) {
+      alert('Occupied blocks');
+      return;
+    }
+    if (!name || !url || !logoFile) {
+      alert('Complete all fields');
+      return;
+    }
+    if (!window.solana || !userPublicKey) {
+      alert('Connect your wallet first');
+      return;
+    }
+    if (!MERCHANT_WALLET) {
+      alert('Server configuration error');
+      return;
+    }
+    
+    const savedSelection = {
+      minBlockX: selection.minBlockX,
+      minBlockY: selection.minBlockY,
+      maxBlockX: selection.maxBlockX,
+      maxBlockY: selection.maxBlockY,
+      blocksX: selection.blocksX,
+      blocksY: selection.blocksY,
+      zone: selection.zone,
+      soldInSelection: selection.soldInSelection
+    };
+    
+    try {
+      payBtn.disabled = true;
+      payBtn.textContent = 'Processing...';
+      showStatus('📤 Uploading logo...', 'warning');
+      
+      // 1. Upload logo
+      const fd = new FormData();
+      fd.append('file', logoFile);
+      
+      const uploadRes = await fetch(`${API_BASE}/api/upload-logo`, {
+        method: 'POST',
+        body: fd
+      });
+      
+      const uploadData = await uploadRes.json();
+      
+      if (!uploadRes.ok || !uploadData.ok) {
+        throw new Error(uploadData.error || 'Error uploading logo');
+      }
+      
+      const logoUrl = uploadData.url;
+      console.log('✅ Logo uploaded:', logoUrl);
+      
+      // 2. Prepare transaction
+      showStatus('💰 Preparing transaction...', 'warning');
+      
+      const blocksTotal = savedSelection.blocksX * savedSelection.blocksY;
+      const pricePerBlock = getPriceForBlock(savedSelection.zone);
+      const totalLamports = Math.floor(blocksTotal * pricePerBlock * solanaWeb3.LAMPORTS_PER_SOL);
+      
+      console.log(`💰 Price per block: ${pricePerBlock} SOL (${isOwner ? 'OWNER' : 'NORMAL'})`);
+      console.log(`💰 Total: ${(totalLamports / solanaWeb3.LAMPORTS_PER_SOL).toFixed(4)} SOL`);
+      
+      // NOTA: Validación de balance DESHABILITADA por problemas de red
+      // Phantom validará el balance automáticamente al intentar la transacción
+      console.log('⚠️ Saltando validación de balance - Phantom validará');
+      console.log(`💰 Total necesario: ${(totalLamports / solanaWeb3.LAMPORTS_PER_SOL).toFixed(6)} SOL`);
+      console.log(`💰 Wallet: ${userPublicKey.toString()}`);
+      
+      showStatus('💰 Preparando transacción (Phantom validará el balance)...', 'warning');
+      
+      const transaction = new solanaWeb3.Transaction().add(
+        solanaWeb3.SystemProgram.transfer({
+          fromPubkey: userPublicKey,
+          toPubkey: new solanaWeb3.PublicKey(MERCHANT_WALLET),
+          lamports: totalLamports,
+        })
+      );
+      
+      transaction.feePayer = userPublicKey;
+      
+      // 3. Get blockhash
+      showStatus('⏳ Getting blockhash...', 'warning');
+      const blockhashRes = await fetch(`${API_BASE}/api/get-latest-blockhash`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      const blockhashData = await blockhashRes.json();
+      if (!blockhashData.ok) {
+        throw new Error('Error getting blockhash');
+      }
+      
+      transaction.recentBlockhash = blockhashData.blockhash;
+      
+      console.log('📦 Blockhash:', blockhashData.blockhash);
+      
+      // 4. Sign and send
+      showStatus('✍️ Sign transaction in Phantom...', 'warning');
+      
+      const { signature } = await window.solana.signAndSendTransaction(transaction);
+      
+      console.log('✅ Transaction sent. Signature:', signature);
+      
+      // 5. Wait for confirmation
+      showStatus('⏳ Waiting for confirmation (may take up to 60s)...', 'warning');
+      
+      let confirmed = false;
+      let attempts = 0;
+      const maxAttempts = 60;
+      
+      while (!confirmed && attempts < maxAttempts) {
+        try {
+          const verifyRes = await fetch(`${API_BASE}/api/verify-transaction`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ signature })
+          });
+          
+          const verifyData = await verifyRes.json();
+          
+          if (verifyData.ok && verifyData.confirmed) {
+            confirmed = true;
+            
+            if (verifyData.status && verifyData.status.err) {
+              throw new Error('Transaction failed: ' + JSON.stringify(verifyData.status.err));
+            }
+            
+            console.log('✅ Transaction confirmed');
+            break;
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          attempts++;
+          
+          if (attempts % 5 === 0) {
+            console.log(`⏳ Waiting for confirmation... (${attempts}s)`);
+          }
+          
+        } catch (err) {
+          console.warn('Error verifying status:', err);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          attempts++;
+        }
+      }
+      
+      if (!confirmed) {
+        console.warn('⏳ Timeout reached');
+        showStatus('⏳ Timeout - Attempting to save...', 'warning');
+      }
+      
+      // 6. Save sale
+      showStatus('💾 Registering purchase...', 'warning');
+      
+      const saleData = {
+        signature,
+        buyer: userPublicKey.toString(),
+        metadata: {
+          name: name,
+          url: url,
+          logo: logoUrl,
+          selection: {
+            minBlockX: savedSelection.minBlockX,
+            minBlockY: savedSelection.minBlockY,
+            blocksX: savedSelection.blocksX,
+            blocksY: savedSelection.blocksY
+          }
+        },
+        amount: totalLamports / solanaWeb3.LAMPORTS_PER_SOL,
+        timestamp: Date.now(),
+        confirmed: confirmed
+      };
+      
+      const saveRes = await fetch(`${API_BASE}/api/save-sale`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(saleData)
+      });
+      
+      const saveJson = await saveRes.json();
+      
+      if (!saveRes.ok || !saveJson.ok) {
+        console.warn('⚠️ Error saving:', saveJson.error);
+        throw new Error(saveJson.error || 'Error saving sale');
+      }
+      
+      if (confirmed) {
+        showStatus('✅ Purchase confirmed and registered!', 'success');
+        
+        // Actualizar balance después del pago
+        await updateWalletBalance(true);
+        
+        const balanceAfter = userWalletBalance;
+        console.log(`💰 Balance actualizado: ${balanceAfter.toFixed(6)} SOL`);
+      } else {
+        showStatus('✅ Purchase registered! (Check in Phantom)', 'success');
+      }
+      
+      console.log('✅ Sale saved:', saveJson);
+      console.log('🔗 View on Solscan: https://solscan.io/tx/' + signature);
+      
+      // 7. Reload grid
+      setTimeout(async () => {
+        document.getElementById('modal').style.display = 'none';
+        selection = null;
+        selectionOverlay.style.display = 'none';
+        selectionInfo.innerHTML = 'Drag to select pixels...';
+        selectionAmountSpan.textContent = '-';
+        confirmBtn.disabled = true;
+        
+        document.getElementById('projectName').value = '';
+        document.getElementById('projectURL').value = '';
+        document.getElementById('projectLogo').value = '';
+        document.getElementById('paymentStatus').textContent = '';
+        
+        loadingEl.style.display = 'flex';
+        await loadGridFromServer();
+        
+        if (confirmed) {
+          const blocksCount = savedSelection.blocksX * savedSelection.blocksY;
+          alert(
+            '🎉 ¡Compra exitosa!\n\n' +
+            `✅ ${blocksCount} ${blocksCount === 1 ? 'pixel' : 'pixeles'} registrados\n` +
+            `💰 Balance restante: ${userWalletBalance.toFixed(6)} SOL\n` +
+            `🔒 Reserva mínima: ${MINIMUM_WALLET_RESERVE.toFixed(3)} SOL\n\n` +
+            `Tu proyecto ya está visible en el grid.\n` +
+            `Verifica la transacción en Solscan.`
+          );
+        } else {
+          alert('⏳ Compra registrada\n\nLa transacción puede tardar en confirmarse.\n\nVerifica en Phantom o Solscan.');
+        }
+      }, 2000);
+      
+    } catch (err) {
+      console.error('❌ Payment error:', err);
+      
+      let errorMsg = 'Payment error';
+      
+      if (err.message?.includes('User rejected')) {
+        errorMsg = '❌ Transacción cancelada por el usuario';
+      } else if (err.message?.includes('insuficiente') || err.message?.includes('faltan') || err.message?.includes('insufficient')) {
+        errorMsg = err.message.includes('faltan') 
+          ? `❌ ${err.message}` 
+          : '❌ Saldo insuficiente. Por favor, añade más SOL a tu wallet';
+      } else if (err.message?.includes('Timeout') || err.message?.includes('expired')) {
+        errorMsg = '⏳ Tiempo agotado - Verifica tu transacción en Phantom';
+      } else if (err.message) {
+        errorMsg = `❌ ${err.message}`;
+      }
+      
+      showStatus(errorMsg, 'error');
+      
+      payBtn.disabled = false;
+      payBtn.textContent = '💰 Pay & Register';
+      
+      alert(errorMsg);
+    }
+  });
+
+  // Admin Mode Toggle
+  adminModeBtn.addEventListener('click', () => {
+    adminMode = !adminMode;
+    
+    if (adminMode) {
+      adminModeBtn.classList.add('active');
+      adminModeText.textContent = 'Desactivar Admin';
+      adminModeBanner.classList.add('active');
+      document.body.classList.add('admin-mode');
+      console.log('🛡️ Admin Mode ACTIVATED');
+    } else {
+      adminModeBtn.classList.remove('active');
+      adminModeText.textContent = 'Admin Mode';
+      adminModeBanner.classList.remove('active');
+      document.body.classList.remove('admin-mode');
+      console.log('🛡️ Admin Mode DEACTIVATED');
+    }
+  });
+
+  // Function to find sale by block coordinates
+  function findSaleByBlock(bx, by) {
+    for (const sale of salesData) {
+      const sel = sale.metadata?.selection;
+      if (!sel) continue;
+      
+      if (bx >= sel.minBlockX && bx < sel.minBlockX + sel.blocksX &&
+          by >= sel.minBlockY && by < sel.minBlockY + sel.blocksY) {
+        return sale;
+      }
+    }
+    return null;
+  }
+
+  // Delete sale function
+  async function deleteSale(signature, projectName) {
+    if (!confirm(`⚠️ ¿Estás seguro de eliminar "${projectName}"?\n\nEsta acción NO se puede deshacer.`)) {
+      return;
+    }
+    
+    try {
+      console.log('🗑️ Deleting sale:');
+      console.log('   Signature:', signature);
+      console.log('   Project:', projectName);
+      console.log('   Owner:', userPublicKey.toString());
+      
+      const response = await fetch(`${API_BASE}/api/delete-sale`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          signature: signature,
+          ownerWallet: userPublicKey.toString()
+        })
+      });
+      
+      const result = await response.json();
+      
+      console.log('📡 Server response:', result);
+      
+      if (!response.ok || !result.ok) {
+        // Mostrar información de debug si está disponible
+        if (result.debug) {
+          console.error('🔍 Debug info:', result.debug);
+        }
+        throw new Error(result.error || 'Error al eliminar');
+      }
+      
+      console.log('✅ Sale deleted successfully:', result);
+      alert(`✅ "${projectName}" eliminado correctamente.\n\nRecargando grid...`);
+      
+      // Reload grid
+      loadingEl.style.display = 'flex';
+      await loadGridFromServer();
+      
+    } catch (error) {
+      console.error('❌ Error deleting sale:', error);
+      alert(`❌ Error al eliminar: ${error.message}\n\nRevisa la consola para más detalles.`);
+    }
+  }
+
+  // Click on canvas to open URL or delete (admin mode)
+  canvas.addEventListener('click', async (e) => {
+    if (isDragging) return;
+    
+    const { rawX, rawY } = getMousePosInCanvas(e);
+    const bx = Math.floor(rawX / BLOCK_SIZE);
+    const by = Math.floor(rawY / BLOCK_SIZE);
+    const data = blockData[blockIndex(bx, by)];
+    
+    if (!data) return;
+    
+    // ADMIN MODE: Delete logo
+    if (adminMode && isOwner) {
+      const sale = findSaleByBlock(bx, by);
+      
+      if (!sale) {
+        alert('⚠️ No se encontró la venta para este bloque');
+        return;
+      }
+      
+      const confirmMsg = `🗑️ ELIMINAR LOGO\n\n` +
+                        `Proyecto: ${sale.metadata?.name}\n` +
+                        `URL: ${sale.metadata?.url}\n` +
+                        `Bloques: ${sale.metadata?.selection?.blocksX}×${sale.metadata?.selection?.blocksY}\n` +
+                        `Monto: ${sale.amount?.toFixed(4)} SOL\n\n` +
+                        `¿Confirmar eliminación?`;
+      
+      if (confirm(confirmMsg)) {
+        await deleteSale(sale.signature, sale.metadata?.name);
+      }
+      
+      return;
+    }
+    
+    // NORMAL MODE: Open URL
+    if (data && confirm(`🚀 Visit ${data.name}?`)) {
+      window.open(data.url, '_blank');
+    }
+  });
+
+  // Initialize
+  console.log('🚀 Starting application...');
+  loadConfig().then(() => {
+    loadGridFromServer();
+  });
   </script>
 </body>
 </html>
