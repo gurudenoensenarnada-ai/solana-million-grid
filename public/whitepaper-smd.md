@@ -557,16 +557,14 @@ When launched, the $SMD token is intended to be a utility token for use within t
 
 ### Social Media
 
-- **Twitter/X**: @SolMillonDollar
+- **Twitter/X**: @solmillondollar
 - **Telegram**: t.me/solanamillondollar
-- **Discord**: Coming soon
-- **GitHub**: github.com/solanamillion
 
 ### Support
 
-- **Email**: support@solanamillondollar.com
-- **Technical**: tech@solanamillondollar.com
-- **Business**: business@solanamillondollar.com
+- **Email**: solanamillondollar@solanamillondollar.com
+- **Technical**: solanamillondollar@solanamillondollar.com
+- **Business**: solanamillondollar@solanamillondollar.com
 
 ---
 
@@ -599,4 +597,4 @@ Solana Million Dollar Grid is **LIVE and operational today**, offering a unique 
 
 ---
 
-© 2024 Solana Million Dollar Grid. All rights reserved.
+© 2025 Solana Million Dollar. All rights reserved.
