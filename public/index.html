@@ -39,7 +39,61 @@
       --error: #FF6B6B;
       --warning: #FFA726;
     }
+    <script>
+// Detectar código de referido al cargar
+document.addEventListener('DOMContentLoaded', () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const refCode = urlParams.get('ref');
+  
+  if (refCode) {
+    // Guardar en localStorage
+    localStorage.setItem('referralCode', refCode);
     
+    // Validar código
+    fetch(`/api/referrals/validate/${refCode}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          console.log('✅ Valid referral code:', refCode);
+          
+          // Mostrar mensaje al usuario (opcional)
+          const banner = document.createElement('div');
+          banner.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+            z-index: 9999;
+            font-weight: 600;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+          `;
+          banner.innerHTML = `
+            🎁 You were referred! Your purchase will help earn rewards for your referrer.
+            <button onclick="this.parentElement.remove()" style="
+              margin-left: 20px;
+              padding: 5px 15px;
+              background: white;
+              color: #667eea;
+              border: none;
+              border-radius: 5px;
+              cursor: pointer;
+              font-weight: 600;
+            ">Got it!</button>
+          `;
+          document.body.prepend(banner);
+        } else {
+          console.warn('❌ Invalid referral code');
+          localStorage.removeItem('referralCode');
+        }
+      })
+      .catch(err => console.error('Error validating referral:', err));
+  }
+});
+</script>
     body { 
       background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
       color: var(--text-primary); 
