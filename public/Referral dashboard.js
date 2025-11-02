@@ -17,30 +17,18 @@
 
 const REFERRAL_TIERS = {
   BRONZE: {
-    name: 'Bronze',
-    emoji: '🥉',
     minReferrals: 0,
-    commission: 0.08, // 8%
-    color: '#CD7F32',
-    nextTier: 'SILVER',
-    nextThreshold: 50
+    commission: 0.08,  // 8% - Cambia aquí
+    nextThreshold: 50  // 50 referrals para siguiente tier
   },
   SILVER: {
-    name: 'Silver',
-    emoji: '🥈',
     minReferrals: 50,
-    commission: 0.12, // 12%
-    color: '#C0C0C0',
-    nextTier: 'GOLD',
+    commission: 0.12,  // 12% - Cambia aquí
     nextThreshold: 150
   },
   GOLD: {
-    name: 'Gold',
-    emoji: '🥇',
     minReferrals: 150,
-    commission: 0.15, // 15%
-    color: '#FFD700',
-    nextTier: null,
+    commission: 0.15,  // 15% - Cambia aquí
     nextThreshold: null
   }
 };
