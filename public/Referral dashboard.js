@@ -259,7 +259,8 @@ class ReferralDashboard {
   // Render main stats
   renderStats() {
     const tier = this.getCurrentTier();
-    const smdEarned = (this.referralData.totalCommissions * 5).toFixed(2); // Assuming 1 SOL = 5 SMD
+    const smdEarned = (this.referralData.totalCommissions * 5).toFixed(2);
+// Cambia el "5" por tu ratio de conversión
 
     const statsHTML = `
       <div class="referral-header">
