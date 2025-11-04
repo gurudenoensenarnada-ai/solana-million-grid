@@ -779,5 +779,69 @@ const upload = multer({
 // ==========================================
 // ANALYTICS ENDPOINTS
 // ==========================================
-/* ...rest of file unchanged... (keeps existing logic as in original) */
+// ...rest of file unchanged...
+// ==========================================
+// Start Server (updated to respect Render's PORT and bind to 0.0.0.0)
+// ==========================================
+const PORT = process.env.PORT || config.port || 3000;
+const HOST = process.env.HOST || '0.0.0.0';
+
+const server = app.listen(PORT, HOST, () => {
+  console.log('\n🚀 ================================');
+  console.log('   SOLANA MILLION GRID');
+  console.log('   ================================\n');
+  console.log(`   🌐 Server listening on: http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
+  console.log(`   📦 Environment: ${config.nodeEnv}`);
+  console.log(`   🔗 Cluster: ${config.solana.cluster}`);
+  console.log(`   💼 Merchant: ${config.solana.merchantWallet.substring(0, 8)}...`);
+  console.log(`   👤 Owner: ${config.solana.ownerWallet.substring(0, 8)}...`);
+  
+  if (config.cloudinary.enabled) {
+    console.log(`   ☁️  Cloudinary: ✅ (${config.cloudinary.cloudName})`);
+  } else {
+    console.log(`   ☁️  Cloudinary: ❌`);
+  }
+  
+  if (config.telegram.enabled) {
+    console.log(`   📱 Telegram: ✅`);
+  } else {
+    console.log(`   📱 Telegram: ❌`);
+  }
+  
+  console.log('\n   ================================');
+  console.log('   ✅ Server is ready and listening!');
+  console.log('   📝 Logs will appear below');
+  console.log('   ================================\n');
+});
+
+// Keep server alive
+server.keepAliveTimeout = 120000;
+server.headersTimeout = 120000;
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('\n👋 SIGTERM received, shutting down gracefully...');
+  server.close(() => {
+    console.log('✅ Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('\n👋 SIGINT received, shutting down gracefully...');
+  server.close(() => {
+    console.log('✅ Server closed');
+    process.exit(0);
+  });
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
 module.exports = app;
