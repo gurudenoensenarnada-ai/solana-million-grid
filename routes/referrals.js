@@ -9,7 +9,7 @@ function adminAuth(req, res, next){
   next();
 }
 
-// Public: create/get a referrer (idempotent if wallet provided)
+// Create/get referrer
 router.post('/create', (req, res) => {
   try {
     const {name, wallet} = req.body || {};
@@ -21,7 +21,7 @@ router.post('/create', (req, res) => {
   }
 });
 
-// Public: track click (called from landing page when ?ref=CODE)
+// Track click
 router.post('/click', (req, res) => {
   try {
     const {code} = req.body;
@@ -34,7 +34,7 @@ router.post('/click', (req, res) => {
   }
 });
 
-// Public: record confirmed sale (idempotent by saleId)
+// Record sale (idempotent)
 router.post('/record-sale', (req, res) => {
   try {
     const {code, saleId, amountCents} = req.body || {};
@@ -46,13 +46,13 @@ router.post('/record-sale', (req, res) => {
   }
 });
 
-// Public: leaderboard
+// Leaderboard
 router.get('/leaderboard', (req, res) => {
   const list = referralService.getLeaderboard(25);
   res.json({list});
 });
 
-// Public: get referrer stats by code
+// Get referrer stats by code
 router.get('/stats/:code', (req, res) => {
   const code = req.params.code;
   const ref = referralService.getReferrerByCode(code);
@@ -61,25 +61,70 @@ router.get('/stats/:code', (req, res) => {
   res.json({stats});
 });
 
-// Admin: list all referrers
+// Admin list referrers & sales & tiers (protected)
 router.get('/admin/referrers', adminAuth, (req, res) => {
   const r = referralService.listReferrers();
   res.json({referrers: r});
 });
-
-// Admin: list sales
 router.get('/admin/sales', adminAuth, (req, res) => {
   const s = referralService.listSales();
   res.json({sales: s});
 });
-
-// Admin: tiers
 router.get('/admin/tiers', adminAuth, (req, res) => {
   res.json({tiers: referralService.getTiers()});
 });
 router.post('/admin/tiers/:id', adminAuth, (req, res) => {
   referralService.updateTier(req.params.id, req.body || {});
   res.json({ok: true});
+});
+
+// --- Gift code endpoints ---
+
+// Public: get latest gift code for a wallet (call this after user connects wallet)
+router.get('/gift/latest/:wallet', (req, res) => {
+  try {
+    const wallet = req.params.wallet;
+    if (!wallet) return res.status(400).json({error: 'wallet required'});
+    const gift = referralService.getLatestGiftForWallet(wallet);
+    res.json({gift});
+  } catch (err) {
+    res.status(500).json({error: err.message});
+  }
+});
+
+// Admin: create gift code (assign to wallet or generic)
+router.post('/admin/gift/create', adminAuth, (req, res) => {
+  try {
+    const { wallet, valueSol, code, expiresAt } = req.body || {};
+    if (!valueSol) return res.status(400).json({ error: 'valueSol required' });
+    const gift = referralService.createGiftCode({ code, wallet, valueSol, expiresAt });
+    res.json({ gift });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin: list gifts
+router.get('/admin/gifts', adminAuth, (req, res) => {
+  try {
+    const list = referralService.listGifts();
+    res.json({ gifts: list });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Redeem gift
+router.post('/gift/redeem', (req, res) => {
+  try {
+    const { code } = req.body || {};
+    if (!code) return res.status(400).json({ error: 'code required' });
+    const result = referralService.redeemGift(code);
+    if (!result) return res.status(404).json({ error: 'gift not found' });
+    res.json({ ok: true, result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;
