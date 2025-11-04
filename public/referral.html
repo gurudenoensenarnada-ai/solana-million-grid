@@ -1,0 +1,68 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Tu referido</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Roboto,Arial;padding:20px;max-width:720px;margin:auto}
+    input{padding:8px;width:70%}
+    button{padding:8px 12px;margin-left:8px}
+    .stats{margin-top:16px}
+  </style>
+</head>
+<body>
+  <h1>Tu link de referido</h1>
+  <div>
+    <input id="refLink" readonly />
+    <button id="copy">Copiar</button>
+  </div>
+
+  <div class="stats">
+    <h3>Estadísticas</h3>
+    <ul>
+      <li>Clicks: <span id="clicks">0</span></li>
+      <li>Ventas: <span id="sales">0</span></li>
+      <li>Ganancias: <span id="earn">0</span></li>
+    </ul>
+  </div>
+
+  <script>
+    const apiBase = '/api/referrals';
+
+    async function init(){
+      try {
+        let ref = localStorage.getItem('ref_code');
+        if (!ref) {
+          const name = prompt('Ingresa un nombre público para tus referidos (opcional)') || '';
+          // wallet integration: si tu app tiene wallet en localStorage úsalo
+          const wallet = localStorage.getItem('wallet') || '';
+          const res = await fetch(apiBase + '/create', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({name, wallet})
+          });
+          if (!res.ok) throw new Error('No se pudo crear referrer');
+          const data = await res.json();
+          ref = data.ref.code;
+          localStorage.setItem('ref_code', ref);
+        }
+        const link = location.origin + '/?ref=' + encodeURIComponent(ref);
+        document.getElementById('refLink').value = link;
+        document.getElementById('copy').onclick = () => navigator.clipboard.writeText(link);
+
+        // load stats
+        const statsRes = await fetch(apiBase + '/stats/' + encodeURIComponent(ref));
+        if (statsRes.ok){
+          const d = await statsRes.json();
+          document.getElementById('clicks').innerText = d.stats.clicks;
+          document.getElementById('sales').innerText = d.stats.sales_count;
+          document.getElementById('earn').innerText = (d.stats.commission_cents/100).toFixed(2) + ' USD';
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    init();
+  </script>
+</body>
+</html>
