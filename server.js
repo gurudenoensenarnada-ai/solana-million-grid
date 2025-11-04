@@ -20,6 +20,14 @@ if (!globalThis.fetch) {
 const config = require('./index.js');
 
 // Load new services
+// Añade al inicio con otros requires
+const referralRoutes = require('./routes/referrals');
+
+// ... después de app inicializado y app.use(express.json())
+app.use(express.json()); // ya suele existir; si no añádelo
+app.use('/api/referrals', referralRoutes);
+
+// Servir páginas públicas (si usas express.static ya servirá public/*)
 const rateLimiter = require('./middleware/rateLimiter');
 const Analytics = require('./services/Analytics');
 const PreviewSystem = require('./services/PreviewSystem');
