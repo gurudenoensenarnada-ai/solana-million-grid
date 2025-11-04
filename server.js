@@ -22,6 +22,8 @@ const config = require('./index.js');
 // Load new services
 // Añade al inicio con otros requires
 const referralRoutes = require('./routes/referrals');
+// Preferir usar el servicio de referidos directamente para operaciones (gift + record sale)
+const referralService = require('./services/referralService');
 
 const rateLimiter = require('./middleware/rateLimiter');
 const Analytics = require('./services/Analytics');
@@ -649,7 +651,7 @@ app.get('/api/stats', (req, res) => {
 });
 
 // ==========================================
-// Purchase Endpoint
+// Purchase Endpoint (UPDATED: records referral and generates gift codes)
 // ==========================================
 app.post('/api/purchase', rateLimiter.middleware('purchase'), async (req, res) => {
   try {
@@ -670,7 +672,12 @@ app.post('/api/purchase', rateLimiter.middleware('purchase'), async (req, res) =
     // Read current sales
     let salesData = { sales: [], stats: { totalSales: 0, totalBlocks: 0, totalRevenue: 0 } };
     if (fs.existsSync(SALES_FILE)) {
-      salesData = JSON.parse(fs.readFileSync(SALES_FILE, 'utf8'));
+      try {
+        salesData = JSON.parse(fs.readFileSync(SALES_FILE, 'utf8'));
+      } catch (e) {
+        console.warn('⚠️ sales.json parse failed, reinitializing', e.message);
+        salesData = { sales: [], stats: { totalSales: 0, totalBlocks: 0, totalRevenue: 0 } };
+      }
     }
 
     // Calculate blocks and amount
@@ -706,32 +713,71 @@ app.post('/api/purchase', rateLimiter.middleware('purchase'), async (req, res) =
       verified: true
     };
 
-    // Add to sales
+    // Add to sales and persist
     salesData.sales.push(sale);
     salesData.stats.totalSales++;
     salesData.stats.totalBlocks += blocks;
     salesData.stats.totalRevenue += amount;
 
-    // Save
     fs.writeFileSync(SALES_FILE, JSON.stringify(salesData, null, 2));
 
-    // Send Telegram notification
+    // Send Telegram notification (non-blocking)
+    try { await sendTelegramNotification(sale); } catch (e) { console.warn('Telegram failed:', e.message); }
+
+    // Track in analytics (best-effort)
     try {
-      await sendTelegramNotification(sale);
-    } catch (telegramError) {
-      console.error('⚠️ Telegram notification failed:', telegramError.message);
-      // Don't fail the sale if Telegram fails
+      analytics.trackSale(sale);
+      analytics.trackEvent('purchase', { signature, amount, blocks }, req);
+    } catch (e) { console.warn('Analytics failed:', e.message); }
+
+    // Process referral if provided (best-effort)
+    if (referralCode) {
+      try {
+        // Use referralService.recordSale for idempotent recording
+        if (referralService && referralService.recordSale) {
+          // amountCents: use micro-SOL (1e6) as integer unit for computations
+          const amountCents = Math.round(amount * 1e6);
+          const result = referralService.recordSale({ referrerCode: referralCode, saleId: signature, amountCents });
+          console.log('Referral record result:', result && result.sale ? 'recorded' : result);
+        } else if (referralSystem && referralSystem.recordReferral) {
+          referralSystem.recordReferral(referralCode, sale);
+        } else {
+          // fallback: call the route
+          await fetch(`${req.protocol}://${req.get('host')}/api/referrals/record-sale`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: referralCode, saleId: signature, amountCents: Math.round(amount * 1e6) })
+          }).catch(err=>console.warn('record-sale fetch failed', err.message));
+        }
+      } catch (refErr) {
+        console.warn('Referral processing failed:', refErr.message);
+      }
     }
 
-    console.log('✅ Purchase recorded successfully');
-    console.log(`  Blocks: ${blocks}`);
-    console.log(`  Amount: ${amount} SOL`);
+    // Create gift code if eligible (amount thresholds: 1 SOL => 1.0, 0.5 SOL => 0.5)
+    let generatedGift = null;
+    try {
+      if (referralService && referralService.createGiftIfEligible) {
+        generatedGift = referralService.createGiftIfEligible(buyer, amount);
+      } else if (referralSystem && referralSystem.createGiftIfEligible) {
+        generatedGift = referralSystem.createGiftIfEligible(buyer, amount);
+      }
+    } catch (giftErr) {
+      console.warn('Gift generation failed:', giftErr.message);
+    }
 
-    res.status(201).json({
+    const responsePayload = {
       ok: true,
       message: 'Purchase recorded successfully',
       sale
-    });
+    };
+
+    if (generatedGift) {
+      responsePayload.gift = generatedGift;
+      console.log('🎁 Gift code generated for buyer:', generatedGift.code || generatedGift.code, 'value:', generatedGift.value_sol || generatedGift.valueSol || 'n/a');
+    }
+
+    res.status(201).json(responsePayload);
   } catch (error) {
     console.error('❌ Error processing purchase:', error);
     res.status(500).json({
