@@ -19,7 +19,7 @@ if (!globalThis.fetch) {
 // Load configuration
 const config = require('./index.js');
 
-// Load new services
+// Load new services / routes
 const referralRoutes = require('./routes/referrals');
 const referralService = require('./services/referralService');
 
@@ -32,6 +32,9 @@ const ReferralSystem = require('./ReferralSystem.js');
 const analytics = new Analytics(__dirname);
 const previewSystem = new PreviewSystem(__dirname);
 const referralSystem = new ReferralSystem(__dirname);
+
+// Define publicDir early to avoid "before initialization" issues
+const publicDir = path.join(__dirname, 'public');
 
 // ==========================================
 // Telegram Notification Service
@@ -84,9 +87,42 @@ async function sendTelegramNotification(saleData) {
 
     let message;
     if (isOwner) {
-      message = `🎉 *NEW PURCHASE ON SOLANA MILLION GRID\\!*\n\n🥇 *Zone:* ${zone}\n⭐ *OWNER PURCHASE \\- SPECIAL PRICE*\n\n📊 *Purchase Details:*\n• Project: *${safeName}*\n• URL: ${safeUrl}\n• Blocks: *${safeBlocksTotal}* \\(${safeBlocksX}×${safeBlocksY}\\)\n• Position: Row ${safeRow}, Column ${safeCol}\n\n💰 *Payment:*\n• Amount: *${safeAmount} SOL*\n\n🔗 *Transaction:*\n[View on Solscan](https://solscan\\.io/tx/${safeSignature})\n\n⏰ ${safeDate}`;
+      message = `🎉 *NEW PURCHASE ON SOLANA MILLION GRID\\!*
+
+${zone === '🥇 GOLD' ? '🥇' : ''} *Zone:* ${zone}
+⭐ *OWNER PURCHASE \\- SPECIAL PRICE*
+
+📊 *Purchase Details:*
+• Project: *${safeName}*
+• URL: ${safeUrl}
+• Blocks: *${safeBlocksTotal}* \\(${safeBlocksX}×${safeBlocksY}\\)
+• Position: Row ${safeRow}, Column ${safeCol}
+
+💰 *Payment:*
+• Amount: *${safeAmount} SOL*
+
+🔗 *Transaction:*
+[View on Solscan](https://solscan\\.io/tx/${safeSignature})
+
+⏰ ${safeDate}`;
     } else {
-      message = `🎉 *NEW PURCHASE ON SOLANA MILLION GRID\\!*\n\n${zone} *Zone: ${zone}*\n\n📊 *Purchase Details:*\n• Project: *${safeName}*\n• URL: ${safeUrl}\n• Blocks: *${safeBlocksTotal}* \\(${safeBlocksX}×${safeBlocksY}\\)\n• Position: Row ${safeRow}, Column ${safeCol}\n\n💰 *Payment:*\n• Amount: *${safeAmount} SOL*\n\n🔗 *Transaction:*\n[View on Solscan](https://solscan\\.io/tx/${safeSignature})\n\n⏰ ${safeDate}`;
+      message = `🎉 *NEW PURCHASE ON SOLANA MILLION GRID\\!*
+
+${zone} *Zone:* ${zone}
+
+📊 *Purchase Details:*
+• Project: *${safeName}*
+• URL: ${safeUrl}
+• Blocks: *${safeBlocksTotal}* \\(${safeBlocksX}×${safeBlocksY}\\)
+• Position: Row ${safeRow}, Column ${safeCol}
+
+💰 *Payment:*
+• Amount: *${safeAmount} SOL*
+
+🔗 *Transaction:*
+[View on Solscan](https://solscan\\.io/tx/${safeSignature})
+
+⏰ ${safeDate}`;
     }
 
     let logoUrl = meta.logo || '';
@@ -128,12 +164,6 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Logging middleware
-app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
-  next();
-});
-
 // ==========================================
 // Create necessary directories
 // ==========================================
@@ -150,7 +180,7 @@ if (config.storage.persistentDir) {
 }
 
 // ==========================================
-// Multer storage and upload middleware (DEFINED BEFORE upload routes)
+// Multer storage + upload middleware
 // ==========================================
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -190,35 +220,33 @@ if (fs.existsSync(publicDir)) app.use(express.static(publicDir));
 app.use('/api/referrals', referralRoutes);
 
 // ==========================================
-// Root and misc routes (index, whitepaper, health, config)
+// Root + misc routes
 // ==========================================
-const publicDir = path.join(__dirname, 'public');
-
 app.get('/', (req, res) => {
   const indexPath = path.join(publicDir, 'index.html');
   if (fs.existsSync(indexPath)) return res.sendFile(indexPath);
-  res.status(404).json({ ok: false, error: 'Index not found' });
+  return res.status(404).json({ ok: false, error: 'Index not found' });
 });
 
 app.get('/whitepaper.html', (req, res) => {
-  const p = path.join(publicDir, 'whitepaper.html');
-  if (fs.existsSync(p)) return res.sendFile(p);
-  res.status(404).json({ ok: false, error: 'Whitepaper not found' });
+  const whitepaperPath = path.join(publicDir, 'whitepaper.html');
+  if (fs.existsSync(whitepaperPath)) return res.sendFile(whitepaperPath);
+  return res.status(404).json({ ok: false, error: 'Whitepaper not found' });
 });
 
 app.get('/whitepaper', (req, res) => {
-  const p = path.join(publicDir, 'whitepaper.html');
-  if (fs.existsSync(p)) return res.sendFile(p);
-  res.status(404).json({ ok: false, error: 'Whitepaper not found' });
+  const whitepaperPath = path.join(publicDir, 'whitepaper.html');
+  if (fs.existsSync(whitepaperPath)) return res.sendFile(whitepaperPath);
+  return res.status(404).json({ ok: false, error: 'Whitepaper not found' });
 });
 
 app.get('/whitepaper-smd.md', (req, res) => {
-  const p = path.join(publicDir, 'whitepaper-smd.md');
-  if (fs.existsSync(p)) {
+  const mdPath = path.join(publicDir, 'whitepaper-smd.md');
+  if (fs.existsSync(mdPath)) {
     res.setHeader('Content-Type', 'text/markdown');
-    return res.sendFile(p);
+    return res.sendFile(mdPath);
   }
-  res.status(404).json({ ok: false, error: 'Whitepaper markdown not found' });
+  return res.status(404).json({ ok: false, error: 'Whitepaper markdown not found' });
 });
 
 app.get('/health', (req, res) => {
@@ -240,7 +268,7 @@ app.get('/api/config', (req, res) => {
 });
 
 // ==========================================
-// SALES_FILE init and /api/sales
+// SALES_FILE init + /api/sales
 // ==========================================
 const SALES_FILE = config.storage.persistentDir ? path.join(persistentDir, 'sales.json') : path.join(__dirname, 'sales.json');
 console.log('📊 Sales file location:', SALES_FILE);
@@ -260,7 +288,7 @@ app.get('/api/sales', (req, res) => {
     const raw = fs.readFileSync(SALES_FILE, 'utf8');
     let data = {};
     try { data = JSON.parse(raw); } catch (err) {
-      console.warn('⚠️ /api/sales parse error', err.message);
+      console.warn('⚠️ /api/sales: parse error', err.message);
       return res.json({ ok: true, sales: [], stats: { totalSales: 0, totalBlocks: 0, totalRevenue: 0 } });
     }
     if (Array.isArray(data)) data = { sales: data, stats: { totalSales: data.length, totalBlocks: 0, totalRevenue: 0 } };
@@ -274,7 +302,7 @@ app.get('/api/sales', (req, res) => {
 });
 
 // ==========================================
-// Solana endpoints and sales handlers (verify, save-sale, purchase)
+// Solana endpoints and sales handling
 // ==========================================
 app.post('/api/get-latest-blockhash', async (req, res) => {
   try {
@@ -424,17 +452,15 @@ app.post('/api/purchase', rateLimiter.middleware('purchase'), async (req, res) =
   }
 });
 
-// ==========================================
-// File upload endpoints (upload defined above)
-// ==========================================
+// File upload endpoints
 app.post('/api/upload', rateLimiter.middleware('upload'), upload.single('file'), (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ ok: false, error: 'No file uploaded' });
     const fileUrl = `/uploads/${req.file.filename}`;
-    res.status(201).json({ ok: true, url: fileUrl, filename: req.file.filename, path: req.file.path });
+    return res.status(201).json({ ok: true, url: fileUrl, filename: req.file.filename, path: req.file.path });
   } catch (error) {
     console.error('❌ Error uploading file:', error);
-    res.status(500).json({ ok: false, error: 'Failed to upload file: ' + error.message });
+    return res.status(500).json({ ok: false, error: 'Failed to upload file: ' + error.message });
   }
 });
 
@@ -442,20 +468,14 @@ app.post('/api/upload-logo', upload.single('file'), (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ ok: false, error: 'No file uploaded' });
     const fileUrl = `/uploads/${req.file.filename}`;
-    res.status(201).json({ ok: true, url: fileUrl, filename: req.file.filename, path: req.file.path });
+    return res.status(201).json({ ok: true, url: fileUrl, filename: req.file.filename, path: req.file.path });
   } catch (error) {
     console.error('❌ Error uploading file:', error);
-    res.status(500).json({ ok: false, error: 'Failed to upload file: ' + error.message });
+    return res.status(500).json({ ok: false, error: 'Failed to upload file: ' + error.message });
   }
 });
 
-// ==========================================
-// Admin & referrals routes are mounted earlier (routes/referrals)
-// ==========================================
-
-// ==========================================
 // Error handling & 404
-// ==========================================
 app.use((err, req, res, next) => {
   console.error('❌ Error:', err && err.message);
   res.status(err.status || 500).json({ ok: false, error: err.message || 'Internal server error' });
@@ -464,9 +484,7 @@ app.use((req, res) => {
   res.status(404).json({ ok: false, error: 'Not found: ' + req.path });
 });
 
-// ==========================================
-// Start Server
-// ==========================================
+// Start server
 const PORT = process.env.PORT || config.port || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 
