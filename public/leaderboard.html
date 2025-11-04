@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Leaderboard Referidos</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Roboto,Arial;padding:20px;max-width:820px;margin:auto}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:8px;border-bottom:1px solid #eee;text-align:left}
+  </style>
+</head>
+<body>
+  <h1>Top Referidores</h1>
+  <table>
+    <thead><tr><th>#</th><th>Code</th><th>Nombre</th><th>Ventas</th><th>Ganancias</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+
+  <script>
+    async function load(){
+      const res = await fetch('/api/referrals/leaderboard');
+      if (!res.ok) return;
+      const d = await res.json();
+      const rows = document.getElementById('rows');
+      rows.innerHTML = '';
+      d.list.forEach((r, i) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${i+1}</td><td>${r.code}</td><td>${r.name || ''}</td><td>${r.total_sales}</td><td>${(r.total_earnings_cents/100).toFixed(2)} USD</td>`;
+        rows.appendChild(tr);
+      });
+    }
+    load();
+  </script>
+</body>
+</html>
