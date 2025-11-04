@@ -36,7 +36,6 @@ const referralSystem = new ReferralSystem(__dirname);
 // ==========================================
 // Telegram Notification Service
 // ==========================================
-
 function escapeMarkdownV2(text) {
   return String(text).replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, '\\$1');
 }
@@ -59,14 +58,8 @@ async function sendTelegramNotification(saleData) {
     const sel = meta.selection || { minBlockY: 0, blocksX: 1, blocksY: 1, minBlockX: 0 };
 
     let zone = '🥉 BRONZE';
-    let zoneEmoji = '🥉';
-    if (sel.minBlockY <= (config.grid?.zones?.goldEnd ?? 24)) {
-      zone = '🥇 GOLD';
-      zoneEmoji = '🥇';
-    } else if (sel.minBlockY >= (config.grid?.zones?.silverStart ?? 25) && sel.minBlockY <= (config.grid?.zones?.silverEnd ?? 59)) {
-      zone = '🥈 SILVER';
-      zoneEmoji = '🥈';
-    }
+    if (sel.minBlockY <= (config.grid?.zones?.goldEnd ?? 24)) zone = '🥇 GOLD';
+    else if (sel.minBlockY >= (config.grid?.zones?.silverStart ?? 25) && sel.minBlockY <= (config.grid?.zones?.silverEnd ?? 59)) zone = '🥈 SILVER';
 
     const blocksTotal = (sel.blocksX || 1) * (sel.blocksY || 1);
     const amount = (typeof saleData.amount === 'number') ? saleData.amount.toFixed(4) : String(saleData.amount || 0);
@@ -91,45 +84,10 @@ async function sendTelegramNotification(saleData) {
 
     let message;
     if (isOwner) {
-      message = `🎉 *NEW PURCHASE ON SOLANA MILLION GRID\\!*
-
-${zoneEmoji} *Zone:* ${zone}
-⭐ *OWNER PURCHASE \\- SPECIAL PRICE*
-
-📊 *Purchase Details:*
-• Project: *${safeName}*
-• URL: ${safeUrl}
-• Blocks: *${safeBlocksTotal}* \\(${safeBlocksX}×${safeBlocksY}\\)
-• Position: Row ${safeRow}, Column ${safeCol}
-
-💰 *Payment:*
-• Amount: *${safeAmount} SOL*
-
-🔗 *Transaction:*
-[View on Solscan](https://solscan\\.io/tx/${safeSignature})
-
-⏰ ${safeDate}`;
+      message = `🎉 *NEW PURCHASE ON SOLANA MILLION GRID\\!*\n\n🥇 *Zone:* ${zone}\n⭐ *OWNER PURCHASE \\- SPECIAL PRICE*\n\n📊 *Purchase Details:*\n• Project: *${safeName}*\n• URL: ${safeUrl}\n• Blocks: *${safeBlocksTotal}* \\(${safeBlocksX}×${safeBlocksY}\\)\n• Position: Row ${safeRow}, Column ${safeCol}\n\n💰 *Payment:*\n• Amount: *${safeAmount} SOL*\n\n🔗 *Transaction:*\n[View on Solscan](https://solscan\\.io/tx/${safeSignature})\n\n⏰ ${safeDate}`;
     } else {
-      message = `🎉 *NEW PURCHASE ON SOLANA MILLION GRID\\!*
-
-${zoneEmoji} *Zone:* ${zone}
-
-📊 *Purchase Details:*
-• Project: *${safeName}*
-• URL: ${safeUrl}
-• Blocks: *${safeBlocksTotal}* \\(${safeBlocksX}×${safeBlocksY}\\)
-• Position: Row ${safeRow}, Column ${safeCol}
-
-💰 *Payment:*
-• Amount: *${safeAmount} SOL*
-
-🔗 *Transaction:*
-[View on Solscan](https://solscan\\.io/tx/${safeSignature})
-
-⏰ ${safeDate}`;
+      message = `🎉 *NEW PURCHASE ON SOLANA MILLION GRID\\!*\n\n${zone} *Zone: ${zone}*\n\n📊 *Purchase Details:*\n• Project: *${safeName}*\n• URL: ${safeUrl}\n• Blocks: *${safeBlocksTotal}* \\(${safeBlocksX}×${safeBlocksY}\\)\n• Position: Row ${safeRow}, Column ${safeCol}\n\n💰 *Payment:*\n• Amount: *${safeAmount} SOL*\n\n🔗 *Transaction:*\n[View on Solscan](https://solscan\\.io/tx/${safeSignature})\n\n⏰ ${safeDate}`;
     }
-
-    console.log('📝 Message prepared (length:', message.length, 'chars)');
 
     let logoUrl = meta.logo || '';
     if (logoUrl && !logoUrl.startsWith('http')) {
@@ -170,17 +128,14 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Mount referrals routes
-app.use('/api/referrals', referralRoutes);
-
-// Simple logging
+// Logging middleware
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
   next();
 });
 
 // ==========================================
-// Directories and static serving
+// Create necessary directories
 // ==========================================
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
@@ -194,19 +149,51 @@ if (config.storage.persistentDir) {
   if (!fs.existsSync(persistentUploadsDir)) fs.mkdirSync(persistentUploadsDir, { recursive: true });
 }
 
+// ==========================================
+// Multer storage and upload middleware (DEFINED BEFORE upload routes)
+// ==========================================
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = config.storage.persistentDir ? path.join(persistentDir, 'uploads') : uploadsDir;
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|gif|webp/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    if (mimetype && extname) return cb(null, true);
+    cb(new Error('Only image files are allowed (JPEG, PNG, GIF, WEBP)'));
+  }
+});
+
+// ==========================================
+// Static Files
+// ==========================================
 app.use(express.static(__dirname));
 app.use('/uploads', express.static(uploadsDir));
 if (config.storage.persistentDir && fs.existsSync(persistentUploadsDir)) {
   app.use('/uploads', express.static(persistentUploadsDir));
   console.log('✅ Serving uploads from persistent directory:', persistentUploadsDir);
 }
-
-const publicDir = path.join(__dirname, 'public');
 if (fs.existsSync(publicDir)) app.use(express.static(publicDir));
 
+// Mount referrals routes
+app.use('/api/referrals', referralRoutes);
+
 // ==========================================
-// Root routes
+// Root and misc routes (index, whitepaper, health, config)
 // ==========================================
+const publicDir = path.join(__dirname, 'public');
+
 app.get('/', (req, res) => {
   const indexPath = path.join(publicDir, 'index.html');
   if (fs.existsSync(indexPath)) return res.sendFile(indexPath);
@@ -234,18 +221,8 @@ app.get('/whitepaper-smd.md', (req, res) => {
   res.status(404).json({ ok: false, error: 'Whitepaper markdown not found' });
 });
 
-// ==========================================
-// Health & Config
-// ==========================================
 app.get('/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    environment: config.nodeEnv,
-    cluster: config.solana.cluster,
-    version: '2.0.0'
-  });
+  res.json({ status: 'ok', timestamp: new Date().toISOString(), uptime: process.uptime(), environment: config.nodeEnv, cluster: config.solana.cluster, version: '2.0.0' });
 });
 
 app.get('/api/config', (req, res) => {
@@ -263,7 +240,7 @@ app.get('/api/config', (req, res) => {
 });
 
 // ==========================================
-// SALES_FILE initialization
+// SALES_FILE init and /api/sales
 // ==========================================
 const SALES_FILE = config.storage.persistentDir ? path.join(persistentDir, 'sales.json') : path.join(__dirname, 'sales.json');
 console.log('📊 Sales file location:', SALES_FILE);
@@ -277,18 +254,13 @@ function initSalesFile() {
 }
 initSalesFile();
 
-// Minimal /api/sales handler — placed after initSalesFile()
 app.get('/api/sales', (req, res) => {
   try {
-    if (!fs.existsSync(SALES_FILE)) {
-      return res.json({ ok: true, sales: [], stats: { totalSales: 0, totalBlocks: 0, totalRevenue: 0 } });
-    }
+    if (!fs.existsSync(SALES_FILE)) return res.json({ ok: true, sales: [], stats: { totalSales: 0, totalBlocks: 0, totalRevenue: 0 } });
     const raw = fs.readFileSync(SALES_FILE, 'utf8');
     let data = {};
-    try {
-      data = JSON.parse(raw);
-    } catch (err) {
-      console.warn('⚠️ /api/sales: sales.json parse error, returning empty dataset', err.message);
+    try { data = JSON.parse(raw); } catch (err) {
+      console.warn('⚠️ /api/sales parse error', err.message);
       return res.json({ ok: true, sales: [], stats: { totalSales: 0, totalBlocks: 0, totalRevenue: 0 } });
     }
     if (Array.isArray(data)) data = { sales: data, stats: { totalSales: data.length, totalBlocks: 0, totalRevenue: 0 } };
@@ -302,7 +274,7 @@ app.get('/api/sales', (req, res) => {
 });
 
 // ==========================================
-// Solana endpoints and sales handling
+// Solana endpoints and sales handlers (verify, save-sale, purchase)
 // ==========================================
 app.post('/api/get-latest-blockhash', async (req, res) => {
   try {
@@ -338,7 +310,7 @@ app.post('/api/verify-transaction', async (req, res) => {
 app.post('/api/save-sale', async (req, res) => {
   try {
     const { signature, buyer, metadata, amount, timestamp, confirmed } = req.body;
-    if (!signature || !buyer || !metadata) return res.status(400).json({ ok: false, error: 'Missing required fields: signature, buyer, metadata' });
+    if (!signature || !buyer || !metadata) return res.status(400).json({ ok: false, error: 'Missing required fields' });
 
     let salesData = { sales: [], stats: { totalSales: 0, totalBlocks: 0, totalRevenue: 0 } };
     try {
@@ -348,10 +320,7 @@ app.post('/api/save-sale', async (req, res) => {
         if (!salesData.stats) salesData.stats = { totalSales: 0, totalBlocks: 0, totalRevenue: 0 };
         if (!salesData.sales) salesData.sales = [];
       }
-    } catch (e) {
-      console.warn('⚠️ Error reading sales, reinitializing:', e.message);
-      salesData = { sales: [], stats: { totalSales: 0, totalBlocks: 0, totalRevenue: 0 } };
-    }
+    } catch (e) { console.warn('⚠️ Error reading sales file', e.message); salesData = { sales: [], stats: { totalSales: 0, totalBlocks: 0, totalRevenue: 0 } }; }
 
     const existingSale = salesData.sales.find(s => s.signature === signature);
     if (existingSale) return res.json({ ok: true, message: 'Sale already registered', sale: existingSale });
@@ -360,25 +329,20 @@ app.post('/api/save-sale', async (req, res) => {
     if (metadata.selection) blocks = metadata.selection.blocksX * metadata.selection.blocksY;
 
     const sale = { signature, buyer, metadata, amount: amount || 0, blocks, timestamp: timestamp || Date.now(), verified: confirmed || false };
-
     salesData.sales.push(sale);
     salesData.stats.totalSales++;
     salesData.stats.totalBlocks += blocks;
     salesData.stats.totalRevenue += (amount || 0);
     fs.writeFileSync(SALES_FILE, JSON.stringify(salesData, null, 2));
 
-    try { await sendTelegramNotification(sale); } catch (e) { console.warn('Telegram failed:', e.message); }
-    try { analytics.trackSale(sale); analytics.trackEvent('purchase', { signature, amount, blocks }, req); } catch (e) { console.warn('Analytics failed:', e.message); }
+    try { await sendTelegramNotification(sale); } catch (e) { console.warn('Telegram failed', e.message); }
+    try { analytics.trackSale(sale); analytics.trackEvent('purchase', { signature, amount, blocks }, req); } catch (e) { console.warn('Analytics failed', e.message); }
 
     const referralCode = req.body.referralCode || req.query.referralCode;
     if (referralCode) {
       try {
-        if (referralService && referralService.recordSale) {
-          const amountCents = Math.round((amount || 0) * 1e6);
-          referralService.recordSale({ referrerCode: referralCode, saleId: signature, amountCents });
-        } else if (referralSystem && referralSystem.recordReferral) {
-          referralSystem.recordReferral(referralCode, sale);
-        }
+        if (referralService && referralService.recordSale) referralService.recordSale({ referrerCode: referralCode, saleId: signature, amountCents: Math.round((amount || 0) * 1e6) });
+        else if (referralSystem && referralSystem.recordReferral) referralSystem.recordReferral(referralCode, sale);
       } catch (e) { console.warn('Referral processing failed:', e.message); }
     }
 
@@ -389,14 +353,14 @@ app.post('/api/save-sale', async (req, res) => {
   }
 });
 
-// Purchase endpoint (creates gifts for GOLD/SILVER selections)
+// Purchase endpoint (creates gifts for GOLD/SILVER)
 app.post('/api/purchase', rateLimiter.middleware('purchase'), async (req, res) => {
   try {
     const { signature, buyer, metadata, referralCode } = req.body;
-    if (!signature || !buyer || !metadata) return res.status(400).json({ ok: false, error: 'Missing required fields: signature, buyer, metadata' });
+    if (!signature || !buyer || !metadata) return res.status(400).json({ ok: false, error: 'Missing required fields' });
 
     let salesData = { sales: [], stats: { totalSales: 0, totalBlocks: 0, totalRevenue: 0 } };
-    try { if (fs.existsSync(SALES_FILE)) salesData = JSON.parse(fs.readFileSync(SALES_FILE, 'utf8')); } catch (e) { console.warn('⚠️ sales.json parse failed, reinitializing', e.message); }
+    try { if (fs.existsSync(SALES_FILE)) salesData = JSON.parse(fs.readFileSync(SALES_FILE, 'utf8')); } catch (e) { console.warn('⚠️ sales.json parse failed', e.message); salesData = { sales: [], stats: { totalSales: 0, totalBlocks: 0, totalRevenue: 0 } }; }
 
     let blocks = 1;
     let amount = 0;
@@ -411,28 +375,22 @@ app.post('/api/purchase', rateLimiter.middleware('purchase'), async (req, res) =
     }
 
     const sale = { signature, buyer, metadata, amount, blocks, timestamp: Date.now(), verified: true };
-
     salesData.sales.push(sale);
     salesData.stats.totalSales++;
     salesData.stats.totalBlocks += blocks;
     salesData.stats.totalRevenue += amount;
     fs.writeFileSync(SALES_FILE, JSON.stringify(salesData, null, 2));
 
-    try { await sendTelegramNotification(sale); } catch (e) { console.warn('Telegram failed:', e.message); }
-    try { analytics.trackSale(sale); analytics.trackEvent('purchase', { signature, amount, blocks }, req); } catch (e) { console.warn('Analytics failed:', e.message); }
+    try { await sendTelegramNotification(sale); } catch (e) { console.warn('Telegram failed', e.message); }
+    try { analytics.trackSale(sale); analytics.trackEvent('purchase', { signature, amount, blocks }, req); } catch (e) { console.warn('Analytics failed', e.message); }
 
     if (referralCode) {
       try {
-        if (referralService && referralService.recordSale) {
-          const amountCents = Math.round(amount * 1e6);
-          referralService.recordSale({ referrerCode: referralCode, saleId: signature, amountCents });
-        } else if (referralSystem && referralSystem.recordReferral) {
-          referralSystem.recordReferral(referralCode, sale);
-        }
+        if (referralService && referralService.recordSale) referralService.recordSale({ referrerCode: referralCode, saleId: signature, amountCents: Math.round(amount * 1e6) });
+        else if (referralSystem && referralSystem.recordReferral) referralSystem.recordReferral(referralCode, sale);
       } catch (e) { console.warn('Referral processing failed:', e.message); }
     }
 
-    // Generate gift by zone
     let generatedGift = null;
     try {
       if (metadata.selection) {
@@ -442,26 +400,20 @@ app.post('/api/purchase', rateLimiter.middleware('purchase'), async (req, res) =
         else if (row >= (config.grid?.zones?.silverStart ?? 25) && row <= (config.grid?.zones?.silverEnd ?? 59)) giftValue = 0.5;
 
         if (giftValue > 0) {
-          if (referralService && referralService.createGiftCode) {
-            generatedGift = referralService.createGiftCode({ wallet: buyer, valueSol: giftValue });
-          } else {
+          if (referralService && referralService.createGiftCode) generatedGift = referralService.createGiftCode({ wallet: buyer, valueSol: giftValue });
+          else {
             try {
               const resp = await fetch(`${req.protocol}://${req.get('host')}/api/referrals/admin/gift/create?admin_password=${encodeURIComponent(process.env.ADMIN_PASSWORD || 'changeme')}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ wallet: buyer, valueSol: giftValue })
               });
-              if (resp.ok) {
-                const body = await resp.json();
-                generatedGift = body.gift || null;
-              }
+              if (resp.ok) { const body = await resp.json(); generatedGift = body.gift || null; }
             } catch (e) { console.warn('Fallback gift creation failed:', e.message); }
           }
         }
       }
-    } catch (giftErr) {
-      console.warn('Gift generation failed:', giftErr.message);
-    }
+    } catch (giftErr) { console.warn('Gift generation failed:', giftErr.message); }
 
     const responsePayload = { ok: true, message: 'Purchase recorded successfully', sale };
     if (generatedGift) responsePayload.gift = generatedGift;
@@ -473,7 +425,7 @@ app.post('/api/purchase', rateLimiter.middleware('purchase'), async (req, res) =
 });
 
 // ==========================================
-// File upload endpoints
+// File upload endpoints (upload defined above)
 // ==========================================
 app.post('/api/upload', rateLimiter.middleware('upload'), upload.single('file'), (req, res) => {
   try {
@@ -498,9 +450,8 @@ app.post('/api/upload-logo', upload.single('file'), (req, res) => {
 });
 
 // ==========================================
-// Analytics / Preview endpoints (assumed present)
+// Admin & referrals routes are mounted earlier (routes/referrals)
 // ==========================================
-// Keep your existing analytics and preview handlers here (unchanged).
 
 // ==========================================
 // Error handling & 404
@@ -514,7 +465,7 @@ app.use((req, res) => {
 });
 
 // ==========================================
-// Start server
+// Start Server
 // ==========================================
 const PORT = process.env.PORT || config.port || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
